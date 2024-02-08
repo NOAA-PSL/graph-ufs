@@ -8,8 +8,9 @@ Repository for training and evaluating
 To install from source in development mode:
 
 ```bash
-git clone git@github.com:NOAA-PSL/graph-ufs.git
+git clone --recursive git@github.com:NOAA-PSL/graph-ufs.git
 cd graph-ufs
+git checkout develop
 conda env create -f conda/gpu-workaround.yaml
 pip install -e --no-deps .
 ```
