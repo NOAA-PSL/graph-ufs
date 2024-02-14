@@ -17,3 +17,16 @@ pip install -e --no-deps .
 
 Using conda to install dependencies will make sure that packages work on the
 GPU.
+
+Please note that you will need to replace the correct paths below and run this command for your python environment to work correctly:
+```bash
+export PYTHONPATH=$PYTHONPATH:/path/to/graph-ufs:/path/to/graph-ufs/graphcast:/path/to/ufs2arco
+```
+
+### Submodules
+Currently `graphcast` (from Google) and `ufs2arco` (from NOAA) are pulled in as submodules if you do a recursive clone of the repository.
+If you do not use the `--recursive` clone when you clone the repo, then you can do a `git submodule --init` later.
+If you already have an existing installation of one of these that you would prefer to use, you can just create a symlink between the top
+directory of `graphufs` and your installed location.  You will need to add the location to the `PYTHONPATH` environment variable as above,
+but a symlink should ensure you can use the same paths as if the submodules were pulled recursively.
+
