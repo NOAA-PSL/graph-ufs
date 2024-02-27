@@ -1,71 +1,172 @@
-
 from functools import partial
 import xarray as xr
 from jax import jit
 from jax.random import PRNGKey
 import optax
+import numpy as np
+import argparse
+import threading
 
 from ufs2arco.timer import Timer
 
 from simple_emulator import P0Emulator
 from graphufs import optimize, run_forward
+from graphcast import rollout
 
 
-if __name__ == "__main__":
+def get_chunk_data(ds: xr.Dataset, data, n_batches: int = 4, batch_size: int = 1):
+    """Get multiple training batches
+    Args:
+        ds (xr.Dataset): xarray dataset
+        data (List[3]): A list containing the [inputs, targets, forcings]
+        n_batches (int): Number of batches we want to read
+        batch_size (int): batch size
+    """
+    print("Preparing Batches from Replay on GCS")
 
-    walltime = Timer()
-    localtime = Timer()
-
-    walltime.start("Starting Training")
-
-    localtime.start("Extracting Training Batches from Replay on GCS")
-
-    gufs = P0Emulator()
-
-    ds = xr.open_zarr(gufs.data_url, storage_options={"token": "anon"})
     inputs, targets, forcings = gufs.get_training_batches(
         xds=ds,
-        n_batches=5,
-        batch_size=1,
+        n_batches=n_batches,
+        batch_size=batch_size,
         delta_t="6h",
         target_lead_time="18h",
     )
-    localtime.stop()
 
-    localtime.start("Loading Training Batches into Memory")
-
+    # load into ram
     inputs.load()
     targets.load()
     forcings.load()
 
-    localtime.stop()
+    data[0] = inputs
+    data[1] = targets
+    data[2] = forcings
+    print("Finished preparing batches")
 
 
-    localtime.start("Initializing Optimizer and Parameters")
+def parse_args():
+    """Parse arguments"""
 
-    init_jitted = jit( run_forward.init )
-    params, state = init_jitted(
-        rng=PRNGKey(gufs.init_rng_seed),
-        emulator=gufs,
-        inputs=inputs.sel(batch=[0]),
-        targets_template=targets.sel(batch=[0]),
-        forcings=forcings.sel(batch=[0]),
+    # parse arguments
+    parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument(
+        "--train",
+        dest="train",
+        action="store_true",
+        required=False,
+        help="Train model",
     )
-    optimizer = optax.adam(learning_rate=1e-4)
-    localtime.stop()
-
-    localtime.start("Starting Optimization")
-
-    params, loss, diagnostics, opt_state, grads = optimize(
-        params=params,
-        state=state,
-        optimizer=optimizer,
-        emulator=gufs,
-        input_batches=inputs,
-        target_batches=targets,
-        forcing_batches=forcings,
+    parser.add_argument(
+        "--test", dest="test", action="store_true", required=False, help="Test model"
     )
+    parser.add_argument(
+        "--steps",
+        dest="steps",
+        required=False,
+        type=int,
+        default=1,
+        help="Number of training steps.",
+    )
+    parser.add_argument(
+        "--batch-size",
+        "-b",
+        dest="batch_size",
+        required=False,
+        type=int,
+        default=32,
+        help="Training batch size.",
+    )
+    args = parser.parse_args()
+    return args
 
-    localtime.stop()
 
+if __name__ == "__main__":
+
+    # parse arguments
+    args = parse_args()
+
+    # initialize emulator and open dataset
+    walltime = Timer()
+    localtime = Timer()
+    gufs = P0Emulator()
+    ds = xr.open_zarr(gufs.data_url, storage_options={"token": "anon"})
+
+    # initialize training
+    if args.train:
+        walltime.start("Starting Training")
+
+        # get the first chunk of data
+        data_0 = [None] * 3
+        input_thread = threading.Thread(target=get_chunk_data, args=(ds, data_0))
+        input_thread.start()
+        input_thread.join()
+
+        # initialize optimizer
+        localtime.start("Initializing Optimizer and Parameters")
+
+        init_jitted = jit(run_forward.init)
+        params, state = init_jitted(
+            rng=PRNGKey(gufs.init_rng_seed),
+            emulator=gufs,
+            inputs=data_0[0].sel(batch=[0]),
+            targets_template=data_0[1].sel(batch=[0]),
+            forcings=data_0[2].sel(batch=[0]),
+        )
+        optimizer = optax.adam(learning_rate=1e-4)
+
+        localtime.stop()
+
+        # training loop
+        for it in range(args.steps):
+
+            # get chunk of data in parallel with NN optimization
+            input_thread.join()
+
+            data = [data_0[i] for i in range(3)]
+
+            data_0 = [None] * 3
+            input_thread = threading.Thread(target=get_chunk_data, args=(ds, data_0))
+            input_thread.start()
+
+            # optimize
+            localtime.start("Starting Optimization")
+
+            params, loss, diagnostics, opt_state, grads = optimize(
+                params=params,
+                state=state,
+                optimizer=optimizer,
+                emulator=gufs,
+                input_batches=data[0],
+                target_batches=data[1],
+                forcing_batches=data[2],
+            )
+
+            localtime.stop()
+
+    else:
+        walltime.start("Starting Testing")
+
+        # prediction
+
+        data = [None] * 3
+        input_thread = threading.Thread(target=get_chunk_data, args=(ds, data))
+        input_thread.start()
+        input_thread.join()
+
+        localtime.start("Run predictiion")
+
+        apply_jitted = jit(run_forward.apply)
+
+        predictions = apply_jitted(
+            params=params,
+            state=state,
+            rng=PRNGKey(0),
+            emulator=gufs,
+            inputs=data[0].sel(batch=[0]),
+            targets_template=data[1].sel(batch=[0]),
+            forcings=data[2].sel(batch=[0]),
+        )
+
+        localtime.stop()
+
+    # total walltime
     walltime.stop("Total Walltime")
