@@ -112,7 +112,14 @@ class ReplayEmulator:
         bds = bds.expand_dims({
             "batch": [batch_index],
         })
-        bds = bds.set_coords(["datetime", "cftime", "ftime"])
+        bds = bds.set_coords(["datetime"])
+
+        # cftime is a data_var not a coordinate, but if it's made to be a coordinate
+        # it causes crazy JAX problems when making predictions with graphufs.training.run_forward.apply
+        # because it thinks something is wrong when the input/output cftime object values are different
+        # (even though... of course they will be for prediction)
+        # safest to drop here to avoid confusion, along with ftime since it is also not used
+        bds = bds.drop(["cftime", "ftime"])
         return bds
 
 
