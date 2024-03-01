@@ -138,14 +138,14 @@ class ReplayEmulator:
             Here we're using target_lead_time as a single value, see graphcast.data_utils.extract ... where it could be multi valued. However, since we are using it to compute the total forecast time per batch soit seems more straightforward as a scalar.
 
         Note:
-            It's really unclear how the graphcast.data_utils.extract... function used in this method creates samples/batches... it's also unclear how optax expects the data in order to do minibatches.
+            Right now there are separate batches initialized from each data point that is separated from the next by ``delta_t``. If ``target_lead_time > delta_t``, then for batch ``n`` and batch ``n+1`` the initial condition for batch ``n+1`` will be between the initial condition and target time of batch ``n`` - i.e., the windows overlap.
 
         Args:
             xds (xarray.Dataset): the Replay dataset
             n_batches (int): number of training batches to grab
             batch_size (int): number of samples viewed per mini batch
             delta_t (Timedeltalike): timestep of the desired emulator, e.g. "3h" or "6h". Has to be an integer multiple of the data timestep.
-            target_lead_times (str or slice, optional): the lead time to use in the cost function, see graphcast.data_utils.extract_input_target_lead_times
+            target_lead_time (str or slice, optional): the lead time to use in the cost function, see graphcast.data_utils.extract_input_target_lead_times
 
         Returns:
             inputs, targets, forcings (xarray.Dataset): with new dimension "batch"
@@ -155,7 +155,9 @@ class ReplayEmulator:
 
             Create training 100 batches, each batch has a single sample,
             where each sample is made up of error from a 12h forecast,
-            where the emulator operates on 6 hour timesteps
+            where the emulator operates on 6 hour timesteps with a 24h input duration
+            (i.e., like graphcast it takes the initial condition and the previous time step to initialize)
+            Note that the print values below are modified to be more easily readable
 
 
             >>> gufs = ReplayEmulator()
@@ -165,8 +167,32 @@ class ReplayEmulator:
                     n_batches=100,
                     batch_size=1,
                     delta_t="6h",
-                    target_lead_time="12h",
+                    target_lead_time="24h",
                 )
+            >>> for batch in [0, 1]:
+            ...:    print("Batch number: ", batch)
+            ...:    for lbl, xds in zip(["inputs", "targets", "forcings"], [inputs, targets, forcings]):
+            ...:        print(f"{lbl} time (hours): ", xds.sel(batch=batch).time.values / 1e9 / 3600)
+            ...:        print(f"{lbl} cftime: ", xds.sel(batch=batch).cftime.values)
+            ...:    print("---")
+            Batch number:  0
+            inputs time (hours):  [-6  0]
+            inputs cftime:  [cftime.DatetimeJulian(1993, 12, 31, 18, 0, 0, 0, has_year_zero=False)
+             cftime.DatetimeJulian(1994, 1, 1, 0, 0, 0, 0, has_year_zero=False)]
+            targets time (hours):  [24]
+            targets cftime:  [cftime.DatetimeJulian(1994, 1, 2, 0, 0, 0, 0, has_year_zero=False)]
+            forcings time (hours):  [24]
+            forcings cftime:  [cftime.DatetimeJulian(1994, 1, 2, 0, 0, 0, 0, has_year_zero=False)]
+            ---
+            Batch number:  1
+            inputs time (hours):  [-6  0]
+            inputs cftime:  [cftime.DatetimeJulian(1994, 1, 1, 0, 0, 0, 0, has_year_zero=False)
+             cftime.DatetimeJulian(1994, 1, 1, 6, 0, 0, 0, has_year_zero=False)]
+            targets time (hours):  [24]
+            targets cftime:  [cftime.DatetimeJulian(1994, 1, 2, 6, 0, 0, 0, has_year_zero=False)]
+            forcings time (hours):  [24]
+            forcings cftime:  [cftime.DatetimeJulian(1994, 1, 2, 6, 0, 0, 0, has_year_zero=False)]
+
         """
 
         inputs = []
@@ -179,6 +205,9 @@ class ReplayEmulator:
         delta_t = pd.Timedelta(delta_t)
         input_duration = pd.Timedelta(self.input_duration)
 
+        if pd.Timedelta(target_lead_time) > delta_t:
+            warnings.warn("need to rework this to pull targets for all steps at delta_t intervals between initial conditions and target_lead times, at least in part because we need the forcings at each delta_t time step, and the data extraction code only pulls this at each specified target_lead_time")
+
         time_per_sample = target_lead_time + input_duration
         time_per_batch = batch_size * time_per_sample
 
@@ -189,10 +218,17 @@ class ReplayEmulator:
             freq=delta_t,
             inclusive="both",
         )
+
+        # Create a vector of initialization times, currently equal to new_time
+        # but see below
+        # - freq=delta_t, the ML timestep? if target_lead_time > delta_t, then target windows overlap
+        #   ^^ this is what's implemented
+        # - freq=target_lead_time?
+        # - freq=time_per_batch, so target_lead_time + the input duration (going beyond the extra step(s) needed to initialize)
         batch_initial_times = pd.date_range(
             start=new_time[0],
             end=new_time[-1],
-            freq=time_per_batch,
+            freq=delta_t,
             inclusive="both",
         )
         if n_batches > len(batch_initial_times)-1:
@@ -203,24 +239,23 @@ class ReplayEmulator:
 
             timestamps_in_this_batch = pd.date_range(
                 start=batch_initial_times[i],
-                end=batch_initial_times[i+1],
+                end=batch_initial_times[i]+time_per_batch,
                 freq=delta_t,
-                inclusive="both",
+                inclusive="left",
             )
-
             batch = self.preprocess(
                 xds.sel(time=timestamps_in_this_batch),
                 batch_index=i,
             )
 
-            i, t, f = extract_inputs_targets_forcings(
+            this_input, this_target, this_forcing = extract_inputs_targets_forcings(
                 batch,
                 target_lead_times=target_lead_time,
                 **dataclasses.asdict(self.task_config),
             )
-            inputs.append(i)
-            targets.append(t)
-            forcings.append(f)
+            inputs.append(this_input)
+            targets.append(this_target)
+            forcings.append(this_forcing)
 
         inputs = xr.concat(inputs, dim="batch")
         targets = xr.concat(targets, dim="batch")
