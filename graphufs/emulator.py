@@ -23,7 +23,7 @@ class ReplayEmulator:
         "std": "",
         "stddiff": "",
     }
-    local_store_path = ""
+    local_store_path = None
 
     # these could be moved to a yaml file later
     # task config options
@@ -49,7 +49,7 @@ class ReplayEmulator:
 
     def __init__(self):
 
-        if self.local_store_path == "":
+        if self.local_store_path is None:
             warnings.warng("ReplayEmulator.__init__: no local_store_path set, data will always be accessed remotely. Proceed with patience.")
 
         pfull = self._get_replay_vertical_levels()
@@ -202,14 +202,15 @@ class ReplayEmulator:
         """
 
         # check for local data first
-        inputs_path = os.path.join(self.local_store_path, "training-inputs.zarr")
-        targets_path = os.path.join(self.local_store_path, "training-targets.zarr")
-        forcings_path = os.path.join(self.local_store_path, "training-forcings.zarr")
-        if all(os.path.exists(x) for x in [inputs_path, targets_path, forcings_path]):
-            inputs = xr.open_zarr(inputs_path)
-            targets = xr.open_zarr(targets_path)
-            forcings = xr.open_zarr(forcings_path)
-            return inputs, targets, forcings
+        if self.local_store_path is not None:
+            inputs_path = os.path.join(self.local_store_path, "training-inputs.zarr")
+            targets_path = os.path.join(self.local_store_path, "training-targets.zarr")
+            forcings_path = os.path.join(self.local_store_path, "training-forcings.zarr")
+            if all(os.path.exists(x) for x in [inputs_path, targets_path, forcings_path]):
+                inputs = xr.open_zarr(inputs_path)
+                targets = xr.open_zarr(targets_path)
+                forcings = xr.open_zarr(forcings_path)
+                return inputs, targets, forcings
 
         # build time vector based on the model, not the data
         delta_t = pd.Timedelta(delta_t)
@@ -275,9 +276,10 @@ class ReplayEmulator:
         inputs = xr.merge(inputs)
         targets = xr.merge(targets)
         forcings = xr.merge(forcings)
-        inputs.to_zarr(os.path.join(self.local_store_path, "training-inputs.zarr"))
-        targets.to_zarr(os.path.join(self.local_store_path, "training-targets.zarr"))
-        forcings.to_zarr(os.path.join(self.local_store_path, "training-forcings.zarr"))
+        if self.local_store_path is not None:
+            inputs.to_zarr(os.path.join(self.local_store_path, "training-inputs.zarr"))
+            targets.to_zarr(os.path.join(self.local_store_path, "training-targets.zarr"))
+            forcings.to_zarr(os.path.join(self.local_store_path, "training-forcings.zarr"))
         return inputs, targets, forcings
 
 
@@ -294,11 +296,15 @@ class ReplayEmulator:
         def open_normalization(component, **kwargs):
 
             # try to read locally first
-            local_path = os.path.join(self.local_store_path, os.path.basename(self.norm_urls[component]))
-            if os.path.isdir(local_path):
-                xds = xr.open_zarr(local_path)
-                xds = xds.load()
-            else:
+            if self.local_store_path is not None:
+                local_path = os.path.join(self.local_store_path, os.path.basename(self.norm_urls[component]))
+
+                foundit = False
+                if os.path.isdir(local_path):
+                    xds = xr.open_zarr(local_path)
+                    xds = xds.load()
+                    foundit = True
+            if not foundit:
                 xds = xr.open_zarr(self.norm_urls[component], **kwargs)
                 myvars = list(x for x in self.all_variables if x in xds)
                 xds = xds[myvars]
