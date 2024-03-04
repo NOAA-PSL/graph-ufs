@@ -73,7 +73,16 @@ def parse_args():
         required=False,
         type=int,
         default=32,
-        help="Training batch size.",
+        help="batch size.",
+    )
+    parser.add_argument(
+        "--num-batches",
+        "-n",
+        dest="num_batches",
+        required=False,
+        type=int,
+        default=32,
+        help="Number of batches to read and load into RAM.",
     )
     args = parser.parse_args()
     return args
@@ -96,7 +105,9 @@ if __name__ == "__main__":
 
         # get the first chunk of data
         data_0 = [None] * 3
-        input_thread = threading.Thread(target=get_chunk_data, args=(ds, data_0))
+        input_thread = threading.Thread(
+            target=get_chunk_data, args=(ds, data_0, args.num_batches, args.batch_size)
+        )
         input_thread.start()
         input_thread.join()
 
@@ -124,7 +135,10 @@ if __name__ == "__main__":
             data = [data_0[i] for i in range(3)]
 
             data_0 = [None] * 3
-            input_thread = threading.Thread(target=get_chunk_data, args=(ds, data_0))
+            input_thread = threading.Thread(
+                target=get_chunk_data,
+                args=(ds, data_0, args.num_batches, args.batch_size),
+            )
             input_thread.start()
 
             # optimize
