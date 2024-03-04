@@ -23,6 +23,7 @@ class ReplayEmulator:
         "std": "",
         "stddiff": "",
     }
+    local_store_path = ""
 
     # these could be moved to a yaml file later
     # task config options
@@ -47,6 +48,9 @@ class ReplayEmulator:
     init_rng_seed = None
 
     def __init__(self):
+
+        if self.local_store_path == "":
+            warnings.warng("ReplayEmulator.__init__: no local_store_path set, data will always be accessed remotely. Proceed with patience.")
 
         pfull = self._get_replay_vertical_levels()
         levels = pfull.sel(
@@ -277,17 +281,25 @@ class ReplayEmulator:
             mean_by_level, stddev_by_level, diffs_stddev_by_level (xarray.Dataset): with normalization fields
         """
 
-        def open_normalization(fname, **kwargs):
-            xds = xr.open_zarr(fname, **kwargs)
-            myvars = list(x for x in self.all_variables if x in xds)
-            xds = xds[myvars]
-            xds = xds.load()
-            xds = xds.rename({"pfull": "level"})
+        def open_normalization(component, **kwargs):
+
+            # try to read locally first
+            local_path = os.path.join(self.local_store_path, os.path.basename(self.norm_urls[component]))
+            if os.path.isdir(local_path):
+                xds = xr.open_zarr(local_path)
+                xds = xds.load()
+            else:
+                xds = xr.open_zarr(self.norm_urls[component], **kwargs)
+                myvars = list(x for x in self.all_variables if x in xds)
+                xds = xds[myvars]
+                xds = xds.load()
+                xds = xds.rename({"pfull": "level"})
+                xds.to_zarr(local_path)
             return xds
 
-        mean_by_level = open_normalization(self.norm_urls["mean"])
-        stddev_by_level = open_normalization(self.norm_urls["std"])
-        diffs_stddev_by_level = open_normalization(self.norm_urls["stddiff"])
+        mean_by_level = open_normalization("mean")
+        stddev_by_level = open_normalization("std")
+        diffs_stddev_by_level = open_normalization("stddiff")
 
         # hacky, just copying these from graphcast demo to get moving
         mean_by_level['year_progress'] = 0.49975101137533784
