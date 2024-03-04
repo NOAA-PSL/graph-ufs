@@ -201,13 +201,17 @@ class ReplayEmulator:
 
         """
 
-        inputs = []
-        targets = []
-        forcings = []
+        # check for local data first
+        inputs_path = os.path.join(self.local_store_path, "training-inputs.zarr")
+        targets_path = os.path.join(self.local_store_path, "training-targets.zarr")
+        forcings_path = os.path.join(self.local_store_path, "training-forcings.zarr")
+        if all(os.path.exists(x) for x in [inputs_path, targets_path, forcings_path]):
+            inputs = xr.open_zarr(inputs_path)
+            targets = xr.open_zarr(targets_path)
+            forcings = xr.open_zarr(forcings_path)
+            return inputs, targets, forcings
 
-        if batch_size > 1:
-            warnings.warn("it's not clear how the batch/sample time slices are defined in graphcast or how they are used by optax")
-
+        # build time vector based on the model, not the data
         delta_t = pd.Timedelta(delta_t)
         input_duration = pd.Timedelta(self.input_duration)
 
@@ -241,6 +245,9 @@ class ReplayEmulator:
             n_optim_steps = len(batch_initial_times)-1
             warnings.warn(f"There's less data than the number of batches requested, reducing n_optim_steps to {n_optim_steps}")
 
+        inputs = []
+        targets = []
+        forcings = []
         for i, (k, b) in enumerate(
             itertools.product(range(n_optim_steps), range(batch_size))
         ):
@@ -268,6 +275,9 @@ class ReplayEmulator:
         inputs = xr.merge(inputs)
         targets = xr.merge(targets)
         forcings = xr.merge(forcings)
+        inputs.to_zarr(os.path.join(self.local_store_path, "training-inputs.zarr"))
+        targets.to_zarr(os.path.join(self.local_store_path, "training-targets.zarr"))
+        forcings.to_zarr(os.path.join(self.local_store_path, "training-forcings.zarr"))
         return inputs, targets, forcings
 
 
