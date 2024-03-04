@@ -1,3 +1,5 @@
+import os
+import yaml
 import warnings
 import dataclasses
 import pandas as pd
@@ -45,11 +47,8 @@ class ReplayEmulator:
 
     def __init__(self):
 
-        ds = xr.open_zarr(
-            self.data_url,
-            storage_options={"token": "anon"},
-        )
-        levels = ds["pfull"].sel(
+        pfull = self._get_replay_vertical_levels()
+        levels = pfull.sel(
             pfull=list(self.pressure_levels),
             method="nearest",
         )
@@ -76,7 +75,6 @@ class ReplayEmulator:
 
         self.norm = {}
         self.norm["mean"], self.norm["std"], self.norm["stddiff"] = self.load_normalization()
-        ds.close()
 
 
     def preprocess(self, xds, batch_index=0, drop_cftime=True):
@@ -263,7 +261,6 @@ class ReplayEmulator:
         return inputs, targets, forcings
 
 
-
     def load_normalization(self, **kwargs):
         """Load the normalization fields into memory
 
@@ -309,6 +306,14 @@ class ReplayEmulator:
         diffs_stddev_by_level['day_progress_cos'] = 1.0
 
         return mean_by_level, stddev_by_level, diffs_stddev_by_level
+
+
+    @staticmethod
+    def _get_replay_vertical_levels():
+        pfull_path = os.path.join(os.path.dirname(__file__), "replay_vertical_levels.yaml")
+        with open(pfull_path, "r") as f:
+            pfull = yaml.safe_load(f)["pfull"]
+        return xr.DataArray(pfull, coords={"pfull": pfull}, dims="pfull")
 
 
     def _tree_flatten(self):
