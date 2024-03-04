@@ -26,8 +26,8 @@ if __name__ == "__main__":
     ds = xr.open_zarr(gufs.data_url, storage_options={"token": "anon"})
     inputs, targets, forcings = gufs.get_training_batches(
         xds=ds,
-        n_batches=2,
-        batch_size=1,
+        n_optim_steps=2,
+        batch_size=3,
         delta_t="6h",
         target_lead_time="12h",
     )
@@ -48,9 +48,9 @@ if __name__ == "__main__":
     params, state = init_jitted(
         rng=PRNGKey(gufs.init_rng_seed),
         emulator=gufs,
-        inputs=inputs.sel(batch=[0]),
-        targets_template=targets.sel(batch=[0]),
-        forcings=forcings.sel(batch=[0]),
+        inputs=inputs.sel(optim_step=0),
+        targets_template=targets.sel(optim_step=0),
+        forcings=forcings.sel(optim_step=0),
     )
     localtime.stop()
 
@@ -59,9 +59,9 @@ if __name__ == "__main__":
     fwd_jitted = jit( run_forward.apply )
     predictions, state = fwd_jitted(
         emulator=gufs,
-        inputs=inputs,
-        targets_template=targets * np.nan,
-        forcings=forcings,
+        inputs=inputs.sel(optim_step=0),
+        targets_template=targets.sel(optim_step=0) * np.nan,
+        forcings=forcings.sel(optim_step=0),
         rng=PRNGKey(0),
         params=params,
         state=state,

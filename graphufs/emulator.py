@@ -1,6 +1,7 @@
 import os
 import yaml
 import warnings
+import itertools
 import dataclasses
 import pandas as pd
 import xarray as xr
@@ -125,10 +126,11 @@ class ReplayEmulator:
 
     def get_training_batches(self,
         xds,
-        n_batches,
+        n_optim_steps,
         batch_size,
         delta_t,
-        target_lead_time="6h"
+        target_lead_time="6h",
+        drop_cftime=True,
         ):
         """Get a dataset with all the batches of data necessary for training
 
@@ -140,7 +142,7 @@ class ReplayEmulator:
 
         Args:
             xds (xarray.Dataset): the Replay dataset
-            n_batches (int): number of training batches to grab
+            n_optim_steps (int): number of training batches to grab ... number of times we will update the parameters during optimization
             batch_size (int): number of samples viewed per mini batch
             delta_t (Timedeltalike): timestep of the desired emulator, e.g. "3h" or "6h". Has to be an integer multiple of the data timestep.
             target_lead_time (str or slice, optional): the lead time to use in the cost function, see graphcast.data_utils.extract_input_target_lead_times
@@ -155,17 +157,19 @@ class ReplayEmulator:
             where each sample is made up of error from a 12h forecast,
             where the emulator operates on 6 hour timesteps with a 24h input duration
             (i.e., like graphcast it takes the initial condition and the previous time step to initialize)
-            Note that the print values below are modified to be more easily readable
+            The cftime coordinate is kept here to make things clear.
+
 
 
             >>> gufs = ReplayEmulator()
             >>> xds = #... replay data
             >>> inputs, targets, forcings = gufs.get_training_batches(
                     xds=xds,
-                    n_batches=100,
+                    n_optim_steps=100,
                     batch_size=1,
                     delta_t="6h",
                     target_lead_time="24h",
+                    drop_cftime=False,
                 )
             >>> for batch in [0, 1]:
             ...:    print("Batch number: ", batch)
@@ -229,11 +233,13 @@ class ReplayEmulator:
             freq=delta_t,
             inclusive="both",
         )
-        if n_batches > len(batch_initial_times)-1:
-            n_batches = len(batch_initial_times)-1
-            warnings.warn(f"There's less data than the number of batches requested, reducing n_batches to {n_batches}")
+        if n_optim_steps > len(batch_initial_times)-1:
+            n_optim_steps = len(batch_initial_times)-1
+            warnings.warn(f"There's less data than the number of batches requested, reducing n_optim_steps to {n_optim_steps}")
 
-        for i in range(n_batches):
+        for i, (k, b) in enumerate(
+            itertools.product(range(n_optim_steps), range(batch_size))
+        ):
 
             timestamps_in_this_batch = pd.date_range(
                 start=batch_initial_times[i],
@@ -243,7 +249,7 @@ class ReplayEmulator:
             )
             batch = self.preprocess(
                 xds.sel(time=timestamps_in_this_batch),
-                batch_index=i,
+                batch_index=b,
             )
 
             this_input, this_target, this_forcing = extract_inputs_targets_forcings(
@@ -251,13 +257,13 @@ class ReplayEmulator:
                 target_lead_times=target_lead_time,
                 **dataclasses.asdict(self.task_config),
             )
-            inputs.append(this_input)
-            targets.append(this_target)
-            forcings.append(this_forcing)
+            inputs.append(this_input.expand_dims({"optim_step": [k]}))
+            targets.append(this_target.expand_dims({"optim_step": [k]}))
+            forcings.append(this_forcing.expand_dims({"optim_step": [k]}))
 
-        inputs = xr.concat(inputs, dim="batch")
-        targets = xr.concat(targets, dim="batch")
-        forcings = xr.concat(forcings, dim="batch")
+        inputs = xr.merge(inputs)
+        targets = xr.merge(targets)
+        forcings = xr.merge(forcings)
         return inputs, targets, forcings
 
 
@@ -329,9 +335,11 @@ class ReplayEmulator:
         aux_data = dict() # in the future could be {"config_filename": self.config_filename}
         return (children, aux_data)
 
+
     @classmethod
     def _tree_unflatten(cls, aux_data, children):
         return cls(*children, **aux_data)
+
 
 tree_util.register_pytree_node(
     ReplayEmulator,

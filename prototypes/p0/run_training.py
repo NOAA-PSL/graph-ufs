@@ -8,7 +8,7 @@ import optax
 from ufs2arco.timer import Timer
 
 from simple_emulator import P0Emulator
-from graphufs import optimize, run_forward
+from graphufs import optimize, run_forward, loss_fn
 
 
 if __name__ == "__main__":
@@ -25,10 +25,10 @@ if __name__ == "__main__":
     ds = xr.open_zarr(gufs.data_url, storage_options={"token": "anon"})
     inputs, targets, forcings = gufs.get_training_batches(
         xds=ds,
-        n_batches=5,
-        batch_size=1,
+        n_optim_steps=4,
+        batch_size=2,
         delta_t="6h",
-        target_lead_time="18h",
+        target_lead_time="6h",
     )
     localtime.stop()
 
@@ -47,12 +47,25 @@ if __name__ == "__main__":
     params, state = init_jitted(
         rng=PRNGKey(gufs.init_rng_seed),
         emulator=gufs,
-        inputs=inputs.sel(batch=[0]),
-        targets_template=targets.sel(batch=[0]),
-        forcings=forcings.sel(batch=[0]),
+        inputs=inputs.sel(optim_step=0),
+        targets_template=targets.sel(optim_step=0),
+        forcings=forcings.sel(optim_step=0),
     )
     optimizer = optax.adam(learning_rate=1e-4)
     localtime.stop()
+
+    loss_jitted = jit( loss_fn.apply )
+    loss_val = loss_jitted(
+        rng=PRNGKey(gufs.init_rng_seed),
+        params=params,
+        state=state,
+        emulator=gufs,
+        inputs=inputs.sel(optim_step=0),
+        targets=targets.sel(optim_step=0),
+        forcings=forcings.sel(optim_step=0),
+    )
+    print(loss_val)
+
 
     localtime.start("Starting Optimization")
 
