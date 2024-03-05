@@ -3,6 +3,7 @@ import yaml
 import warnings
 import itertools
 import dataclasses
+import numpy as np
 import pandas as pd
 import xarray as xr
 from jax import tree_util
@@ -32,7 +33,11 @@ class ReplayEmulator:
     forcing_variables = tuple()
     all_variables = tuple() # this is created in __init__
     pressure_levels = tuple()
-    input_duration = None
+
+    # time related
+    delta_t = None              # the model time step
+    input_duration = None       # time covered by initial condition(s)
+    training_dates = tuple()    # bounds of training data (inclusive)
 
     # model config options
     resolution = None
@@ -129,27 +134,28 @@ class ReplayEmulator:
 
 
     def get_training_batches(self,
-        xds,
         n_optim_steps,
         batch_size,
-        delta_t,
         target_lead_time="6h",
         drop_cftime=True,
+        random_seed=None,
         ):
         """Get a dataset with all the batches of data necessary for training
+
+        TODO:
+            - should these options stay here, or go in the emulator definition?
 
         Note:
             Here we're using target_lead_time as a single value, see graphcast.data_utils.extract ... where it could be multi valued. However, since we are using it to compute the total forecast time per batch soit seems more straightforward as a scalar.
 
         Note:
-            Right now there are separate batches initialized from each data point that is separated from the next by ``delta_t``. If ``target_lead_time > delta_t``, then for batch ``n`` and batch ``n+1`` the initial condition for batch ``n+1`` will be between the initial condition and target time of batch ``n`` - i.e., the windows overlap.
+            Right now there are separate batches initialized from each data point that is separated from the next by :attr:`delta_t`. If ``target_lead_time > delta_t``, then for batch ``n`` and batch ``n+1`` the initial condition for batch ``n+1`` will be between the initial condition and target time of batch ``n`` - i.e., the windows overlap.
 
         Args:
-            xds (xarray.Dataset): the Replay dataset
             n_optim_steps (int): number of training batches to grab ... number of times we will update the parameters during optimization
             batch_size (int): number of samples viewed per mini batch
-            delta_t (Timedeltalike): timestep of the desired emulator, e.g. "3h" or "6h". Has to be an integer multiple of the data timestep.
             target_lead_time (str or slice, optional): the lead time to use in the cost function, see graphcast.data_utils.extract_input_target_lead_times
+            random_seed (int, optional): seed the RNG before randomly sampling the forecast initial conditions
 
         Returns:
             inputs, targets, forcings (xarray.Dataset): with new dimension "batch"
@@ -166,22 +172,19 @@ class ReplayEmulator:
 
 
             >>> gufs = ReplayEmulator()
-            >>> xds = #... replay data
             >>> inputs, targets, forcings = gufs.get_training_batches(
-                    xds=xds,
                     n_optim_steps=100,
                     batch_size=1,
-                    delta_t="6h",
                     target_lead_time="24h",
                     drop_cftime=False,
                 )
-            >>> for batch in [0, 1]:
-            ...:    print("Batch number: ", batch)
+            >>> for optim_step in [0, 1]:
+            ...:    print("optim_step number: ", optim_step)
             ...:    for lbl, xds in zip(["inputs", "targets", "forcings"], [inputs, targets, forcings]):
-            ...:        print(f"{lbl} time (hours): ", xds.sel(batch=batch).time.values / 1e9 / 3600)
-            ...:        print(f"{lbl} cftime: ", xds.sel(batch=batch).cftime.values)
+            ...:        print(f"{lbl} time (hours): ", xds.sel(optim_step=optim_step).time.values / 1e9 / 3600)
+            ...:        print(f"{lbl} cftime: ", xds.sel(optim_step=optim_step).cftime.values)
             ...:    print("---")
-            Batch number:  0
+            optim_step number:  0
             inputs time (hours):  [-6  0]
             inputs cftime:  [cftime.DatetimeJulian(1993, 12, 31, 18, 0, 0, 0, has_year_zero=False)
              cftime.DatetimeJulian(1994, 1, 1, 0, 0, 0, 0, has_year_zero=False)]
@@ -190,7 +193,7 @@ class ReplayEmulator:
             forcings time (hours):  [24]
             forcings cftime:  [cftime.DatetimeJulian(1994, 1, 2, 0, 0, 0, 0, has_year_zero=False)]
             ---
-            Batch number:  1
+            optim_step number:  1
             inputs time (hours):  [-6  0]
             inputs cftime:  [cftime.DatetimeJulian(1994, 1, 1, 0, 0, 0, 0, has_year_zero=False)
              cftime.DatetimeJulian(1994, 1, 1, 6, 0, 0, 0, has_year_zero=False)]
@@ -212,39 +215,49 @@ class ReplayEmulator:
                 forcings = xr.open_zarr(forcings_path)
                 return inputs, targets, forcings
 
-        # build time vector based on the model, not the data
-        delta_t = pd.Timedelta(delta_t)
-        input_duration = pd.Timedelta(self.input_duration)
+        # grab the dataset and subsample training portion
+        xds = xr.open_zarr(self.data_url, storage_options={"token": "anon"})
+        xds = xds.sel(time=slice(self.training_dates[0], self.training_dates[1]))
 
+        # build time vector based on the model, not the data
+        delta_t = pd.Timedelta(self.delta_t)
+        input_duration = pd.Timedelta(self.input_duration)
+        time_per_forecast = target_lead_time + input_duration
+        training_duration = pd.Timedelta(xds.time.isel(time=-1).values - xds.time.isel(time=0).values)
+
+        n_max_forecasts = (training_duration - input_duration) // delta_t
+        n_max_optim_steps = n_max_forecasts // batch_size
+        n_optim_steps = n_max_optim_steps if n_optim_steps is None else n_optim_steps
+        n_forecasts = n_optim_steps * batch_size
+
+        # note that this max can be violated if we sample with replacement ...
+        # but I'd rather just work with epochs and use all the data
+        if n_optim_steps > n_max_optim_steps:
+            n_optim_steps = n_max_optim_steps
+            warnings.warn(f"There's less data than the number of batches requested, reducing n_optim_steps to {n_optim_steps}")
+
+        # create a new time vector with desired delta_t
+        # this has to end such that we can pull an entire forecast from the training data
+        all_initial_times = pd.date_range(
+            start=xds["time"].isel(time=0).values,
+            end=xds["time"].isel(time=-1).values - time_per_forecast,
+            freq=delta_t,
+            inclusive="both",
+        )
+
+        # randomly sample without replacement
+        # note that GraphCast samples with replacement
+        rstate = np.random.RandomState(seed=random_seed)
+        forecast_initial_times = rstate.choice(
+            all_initial_times,
+            size=(n_forecasts,),
+            replace=False
+        )
+
+        # warnings before we get started
         if pd.Timedelta(target_lead_time) > delta_t:
             warnings.warn("need to rework this to pull targets for all steps at delta_t intervals between initial conditions and target_lead times, at least in part because we need the forcings at each delta_t time step, and the data extraction code only pulls this at each specified target_lead_time")
 
-        time_per_sample = target_lead_time + input_duration
-        time_per_batch = batch_size * time_per_sample
-
-        # create a new time vector with desired delta_t
-        new_time = pd.date_range(
-            start=xds["time"].isel(time=0).values,
-            end=xds["time"].isel(time=-1).values,
-            freq=delta_t,
-            inclusive="both",
-        )
-
-        # Create a vector of initialization times, currently equal to new_time
-        # but see below
-        # - freq=delta_t, the ML timestep? if target_lead_time > delta_t, then target windows overlap
-        #   ^^ this is what's implemented
-        # - freq=target_lead_time?
-        # - freq=time_per_batch, so target_lead_time + the input duration (going beyond the extra step(s) needed to initialize)
-        batch_initial_times = pd.date_range(
-            start=new_time[0],
-            end=new_time[-1],
-            freq=delta_t,
-            inclusive="both",
-        )
-        if n_optim_steps > len(batch_initial_times)-1:
-            n_optim_steps = len(batch_initial_times)-1
-            warnings.warn(f"There's less data than the number of batches requested, reducing n_optim_steps to {n_optim_steps}")
 
         inputs = []
         targets = []
@@ -253,14 +266,14 @@ class ReplayEmulator:
             itertools.product(range(n_optim_steps), range(batch_size))
         ):
 
-            timestamps_in_this_batch = pd.date_range(
-                start=batch_initial_times[i],
-                end=batch_initial_times[i]+time_per_batch,
+            timestamps_in_this_forecast = pd.date_range(
+                start=forecast_initial_times[i],
+                end=forecast_initial_times[i]+time_per_forecast,
                 freq=delta_t,
-                inclusive="left",
+                inclusive="both",
             )
             batch = self.preprocess(
-                xds.sel(time=timestamps_in_this_batch),
+                xds.sel(time=timestamps_in_this_forecast),
                 batch_index=b,
             )
 

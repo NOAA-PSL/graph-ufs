@@ -43,7 +43,14 @@ class P0Emulator(ReplayEmulator):
         500,
         1000,
     )
-    input_duration = "12h"
+
+    # time related
+    delta_t = "6h"              # the model time step
+    input_duration = "6h 1s"    # time covered by initial condition(s), note the 1s is necessary for GraphCast code
+    training_dates = (          # bounds of training data (inclusive)
+        "1993-12-31",           # start
+        "1994"                  # stop, includes all of 1994
+    )
 
     # model config options
     resolution = 1.0
