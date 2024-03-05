@@ -134,8 +134,8 @@ class ReplayEmulator:
 
 
     def get_training_batches(self,
-        n_optim_steps,
         batch_size,
+        n_optim_steps=None,
         target_lead_time="6h",
         drop_cftime=True,
         random_seed=None,
