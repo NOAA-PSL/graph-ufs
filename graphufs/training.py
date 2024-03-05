@@ -117,18 +117,18 @@ def optimize(params, state, optimizer, emulator, input_batches, target_batches, 
         optim_step
     ) )
 
-    for i in input_batches["batch"].values:
+    for k in input_batches["optim_step"].values:
 
         params, loss, diagnostics, opt_state, grads = optim_step_jitted(
             opt_state=opt_state,
             emulator=emulator,
-            inputs=input_batches.sel(batch=[i]),
-            targets=target_batches.sel(batch=[i]),
-            forcings=forcing_batches.sel(batch=[i]),
+            inputs=input_batches.sel(optim_step=[k]),
+            targets=target_batches.sel(optim_step=[k]),
+            forcings=forcing_batches.sel(optim_step=[k]),
         )
         mean_grad = np.mean(tree_util.tree_flatten(tree_util.tree_map(lambda x: np.abs(x).mean(), grads))[0])
-        if verbose or i == input_batches["batch"].values[-1]:
-            print(f"Step = {i}, loss = {loss}, mean(|grad|) = {mean_grad}")
+        if verbose or k == input_batches["optim_step"].values[-1]:
+            print(f"Step = {k+1}, loss = {loss}, mean(|grad|) = {mean_grad}")
             print("diagnostics: ")
             print(diagnostics)
             print()
