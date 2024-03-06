@@ -1,5 +1,6 @@
 
 import os
+import io
 from functools import partial
 import xarray as xr
 from jax import jit
@@ -8,6 +9,8 @@ import optax
 
 from ufs2arco.timer import Timer
 
+from graphcast.checkpoint import dump, load
+from graphcast import graphcast
 from simple_emulator import P0Emulator
 from graphufs import optimize, run_forward, loss_fn
 
@@ -24,7 +27,7 @@ if __name__ == "__main__":
     gufs = P0Emulator()
 
     inputs, targets, forcings = gufs.get_training_batches(
-        n_optim_steps=20,
+        n_optim_steps=2,
         batch_size=16,
         target_lead_time="6h",
         random_seed=100,
@@ -50,12 +53,39 @@ if __name__ == "__main__":
         targets_template=targets.sel(optim_step=0),
         forcings=forcings.sel(optim_step=0),
     )
-    optimizer = optax.adam(learning_rate=1e-4)
+
+    # linearly increase learning rate
+    n_linear = len(inputs.optim_step) // 10
+    schedule_1 = optax.linear_schedule(
+        init_value=0.0,
+        end_value=1e-3,
+        transition_steps=n_linear,
+    )
+    schedule_2 = optax.cosine_decay_schedule(
+        init_value=1e-3,
+        decay_steps = len(inputs.optim_step) - n_linear,
+    )
+    # curriculum and parameters as in GraphCast
+    optimizer = optax.chain(
+        optax.clip_by_global_norm(32),
+        optax.adamw(
+            learning_rate=schedule_1,
+            b1=0.9,
+            b2=0.95,
+            weight_decay=0.1,
+        ),
+        optax.adamw(
+            learning_rate=schedule_2,
+            b1=0.9,
+            b2=0.95,
+            weight_decay=0.1,
+        ),
+    )
     localtime.stop()
 
     localtime.start("Starting Optimization")
 
-    params, results, opt_state, grads = optimize(
+    params, loss, opt_state, grads = optimize(
         params=params,
         state=state,
         optimizer=optimizer,
@@ -63,10 +93,19 @@ if __name__ == "__main__":
         input_batches=inputs,
         target_batches=targets,
         forcing_batches=forcings,
-        verbose=True,
     )
-    print("results: ", results)
-    results.to_netcdf(os.path.join(gufs.local_store_path, "optim_results.nc"))
+    loss.to_netcdf(os.path.join(gufs.local_store_path, "loss.nc"))
+
+    # store parameters with graphcast.graphcast.CheckPoint
+    ckpt = graphcast.CheckPoint(
+        params=params,
+        model_config=gufs.model_config,
+        task_config=gufs.task_config,
+        description="p0 optimized parameters",
+        license="",
+    )
+    with open(os.path.join(gufs.local_store_path, "optim_graphcast.ckpt"), "wb") as f:
+        dump(f, ckpt)
 
     localtime.stop()
 

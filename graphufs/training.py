@@ -134,14 +134,12 @@ def optimize(params, state, optimizer, emulator, input_batches, target_batches, 
         for key, val in diagnostics.items():
             loss_by_var[key].append(val)
 
-        if verbose or k == input_batches["optim_step"].values[-1]:
+        if verbose:
             mean_grad = np.mean(tree_util.tree_flatten(tree_util.tree_map(lambda x: np.abs(x).mean(), grads))[0])
             print(f"Step = {k+1}, loss = {loss}, mean(|grad|) = {mean_grad}")
             print("diagnostics: ")
             print(diagnostics)
             print()
-
-    print("final params", params)
 
     results = xr.Dataset()
     results["optim_step"] = input_batches["optim_step"]
