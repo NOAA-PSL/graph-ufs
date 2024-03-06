@@ -1,4 +1,5 @@
 
+import os
 from functools import partial
 import xarray as xr
 from jax import jit
@@ -23,9 +24,10 @@ if __name__ == "__main__":
     gufs = P0Emulator()
 
     inputs, targets, forcings = gufs.get_training_batches(
-        n_optim_steps=4,
-        batch_size=3,
+        n_optim_steps=20,
+        batch_size=16,
         target_lead_time="6h",
+        random_seed=100,
     )
     localtime.stop()
 
@@ -51,22 +53,9 @@ if __name__ == "__main__":
     optimizer = optax.adam(learning_rate=1e-4)
     localtime.stop()
 
-    loss_jitted = jit( loss_fn.apply )
-    loss_val = loss_jitted(
-        rng=PRNGKey(gufs.init_rng_seed),
-        params=params,
-        state=state,
-        emulator=gufs,
-        inputs=inputs.sel(optim_step=0),
-        targets=targets.sel(optim_step=0),
-        forcings=forcings.sel(optim_step=0),
-    )
-    print(loss_val)
-
-
     localtime.start("Starting Optimization")
 
-    params, loss, diagnostics, opt_state, grads = optimize(
+    params, results, opt_state, grads = optimize(
         params=params,
         state=state,
         optimizer=optimizer,
@@ -74,7 +63,10 @@ if __name__ == "__main__":
         input_batches=inputs,
         target_batches=targets,
         forcing_batches=forcings,
+        verbose=True,
     )
+    print("results: ", results)
+    results.to_netcdf(os.path.join(gufs.local_store_path, "optim_results.nc"))
 
     localtime.stop()
 

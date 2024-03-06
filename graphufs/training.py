@@ -15,6 +15,7 @@ Regarding pytree, see the last few methods and lines of simple_emulatory.py, fol
 
 from functools import partial
 import numpy as np
+import xarray as xr
 from jax import jit, value_and_grad, tree_util
 from jax.random import PRNGKey
 import optax
@@ -118,6 +119,7 @@ def optimize(params, state, optimizer, emulator, input_batches, target_batches, 
     ) )
 
     loss_values = []
+    loss_by_var = {k: list() for k in target_batches.data_vars}
 
     for k in input_batches["optim_step"].values:
 
@@ -128,12 +130,37 @@ def optimize(params, state, optimizer, emulator, input_batches, target_batches, 
             targets=target_batches.sel(optim_step=[k]),
             forcings=forcing_batches.sel(optim_step=[k]),
         )
-        mean_grad = np.mean(tree_util.tree_flatten(tree_util.tree_map(lambda x: np.abs(x).mean(), grads))[0])
         loss_values.append(loss)
+        for key, val in diagnostics.items():
+            loss_by_var[key].append(val)
+
         if verbose or k == input_batches["optim_step"].values[-1]:
+            mean_grad = np.mean(tree_util.tree_flatten(tree_util.tree_map(lambda x: np.abs(x).mean(), grads))[0])
             print(f"Step = {k+1}, loss = {loss}, mean(|grad|) = {mean_grad}")
             print("diagnostics: ")
             print(diagnostics)
             print()
 
-    return params, loss_values, diagnostics, opt_state, grads
+    print("final params", params)
+
+    results = xr.Dataset()
+    results["optim_step"] = input_batches["optim_step"]
+    results.attrs["batch_size"] = len(input_batches["batch"])
+    results["varname"] = xr.DataArray(
+        list(loss_by_var.keys()),
+        coords={"varname": list(loss_by_var.keys())},
+        dims=("varname",),
+    )
+    results["loss"] = xr.DataArray(
+        loss_values,
+        coords={"optim_step": results["optim_step"]},
+        dims=("optim_step",),
+        attrs={"long_name": "loss function value"},
+    )
+    results["loss_by_var"] = xr.DataArray(
+        np.vstack(list(loss_by_var.values())),
+        coords={"varname": results["varname"], "optim_step": results["optim_step"]},
+        dims=("varname", "optim_step"),
+    )
+
+    return params, results, opt_state, grads
