@@ -10,6 +10,7 @@ from jax import tree_util
 
 from graphcast.graphcast import ModelConfig, TaskConfig
 from graphcast.data_utils import extract_inputs_targets_forcings
+from ufs2arco import Timer
 
 class ReplayEmulator:
     """An emulator based on UFS Replay data. This manages all model configuration settings and normalization fields. Currently it is designed to be inherited for a specific use-case, and this could easily be generalized to read in settings via a configuration file (yaml, json, etc). Be sure to register any inherited class as a pytree for it to work with JAX.
@@ -204,6 +205,8 @@ class ReplayEmulator:
 
         """
 
+        timer = Timer()
+
         # check for local data first
         if self.local_store_path is not None:
             inputs_path = os.path.join(self.local_store_path, "training-inputs.zarr")
@@ -215,20 +218,33 @@ class ReplayEmulator:
                 forcings = xr.open_zarr(forcings_path)
                 return inputs, targets, forcings
 
-        # grab the dataset and subsample training portion
+        # grab the dataset and subsample training portion at desired model time step
         xds = xr.open_zarr(self.data_url, storage_options={"token": "anon"})
-        xds = xds.sel(time=slice(self.training_dates[0], self.training_dates[1]))
 
         # build time vector based on the model, not the data
         delta_t = pd.Timedelta(self.delta_t)
+        start = self.training_dates[ 0] if self.training_dates[ 0] is not None else xds["time"].values[ 0]
+        end   = self.training_dates[-1] if self.training_dates[-1] is not None else xds["time"].values[-1]
+        start = pd.Timestamp(start)
+        end   = pd.Timestamp(end)
+        new_time = pd.date_range(
+            start=start,
+            end=end,
+            freq=delta_t,
+            inclusive="both",
+        )
+
+        # figure out duration of IC(s), forecast, all of training
         input_duration = pd.Timedelta(self.input_duration)
         time_per_forecast = target_lead_time + input_duration
-        training_duration = pd.Timedelta(xds.time.isel(time=-1).values - xds.time.isel(time=0).values)
+        training_duration = end - start
 
         n_max_forecasts = (training_duration - input_duration) // delta_t
         n_max_optim_steps = n_max_forecasts // batch_size
         n_optim_steps = n_max_optim_steps if n_optim_steps is None else n_optim_steps
         n_forecasts = n_optim_steps * batch_size
+        print("n_forecasts, n_max_forecasts: ", n_forecasts, n_max_forecasts)
+        print("n_optim_steps, n_max_optim_steps: ", n_optim_steps, n_max_optim_steps)
 
         # note that this max can be violated if we sample with replacement ...
         # but I'd rather just work with epochs and use all the data
@@ -239,8 +255,8 @@ class ReplayEmulator:
         # create a new time vector with desired delta_t
         # this has to end such that we can pull an entire forecast from the training data
         all_initial_times = pd.date_range(
-            start=xds["time"].isel(time=0).values,
-            end=xds["time"].isel(time=-1).values - time_per_forecast,
+            start=start,
+            end=end - time_per_forecast,
             freq=delta_t,
             inclusive="both",
         )
@@ -258,10 +274,24 @@ class ReplayEmulator:
         if pd.Timedelta(target_lead_time) > delta_t:
             warnings.warn("need to rework this to pull targets for all steps at delta_t intervals between initial conditions and target_lead times, at least in part because we need the forcings at each delta_t time step, and the data extraction code only pulls this at each specified target_lead_time")
 
+        # load the dataset in to avoid lots of calls... need to figure out how to do this best
+
+        # subsample in time
+        xds = xds.sel(time=new_time)
+
+        # now just get the levels and variables we care about
+        xds = xds.sel(pfull=list(self.pressure_levels), method="nearest")
+        myvars = list(x for x in self.all_variables if x in xds)
+        xds = xds[myvars]
+
+        timer.start("Loading the dataset at subsampled time")
+        xds = xds.load();
+        timer.stop("... done")
 
         inputs = []
         targets = []
         forcings = []
+        timer.start("Extracting inputs, targets, and forcings")
         for i, (k, b) in enumerate(
             itertools.product(range(n_optim_steps), range(batch_size))
         ):
@@ -285,14 +315,25 @@ class ReplayEmulator:
             inputs.append(this_input.expand_dims({"optim_step": [k]}))
             targets.append(this_target.expand_dims({"optim_step": [k]}))
             forcings.append(this_forcing.expand_dims({"optim_step": [k]}))
+            if b == batch_size and k // 10 ==  k / 10:
+                print(f" ... done with {k} optim steps")
 
-        inputs = xr.merge(inputs)
-        targets = xr.merge(targets)
-        forcings = xr.merge(forcings)
-        if self.local_store_path is not None:
-            inputs.to_zarr(os.path.join(self.local_store_path, "training-inputs.zarr"))
-            targets.to_zarr(os.path.join(self.local_store_path, "training-targets.zarr"))
-            forcings.to_zarr(os.path.join(self.local_store_path, "training-forcings.zarr"))
+        timer.stop()
+
+        def combine_chunk_store(ds_list, zname):
+            timer.start(f"Combining and storing {zname[:-4]}")
+            newds = xr.combine_by_coords(ds_list)#, concat_dim=["optim_step", "batch"])
+            chunksize = {"optim_step": 1, "batch": -1, "time": -1, "level": -1, "lat": -1, "lon": -1}
+            chunksize = {k:v for k,v in chunksize.items() if k in newds}
+            newds = newds.chunk(chunksize)
+            if self.local_store_path is not None:
+                newds.to_zarr(os.path.join(self.local_store_path, zname))
+            timer.stop()
+            return newds
+
+        inputs = combine_chunk_store(inputs, "training-inputs.zarr")
+        targets = combine_chunk_store(targets, "training-targets.zarr")
+        forcings = combine_chunk_store(forcings, "training-forcings.zarr")
         return inputs, targets, forcings
 
 
