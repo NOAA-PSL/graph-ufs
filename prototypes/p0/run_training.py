@@ -3,7 +3,7 @@ import os
 import io
 from functools import partial
 import xarray as xr
-from jax import jit
+from jax import jit, profiler
 from jax.random import PRNGKey
 import optax
 
@@ -13,6 +13,15 @@ from graphcast.checkpoint import dump, load
 from graphcast import graphcast
 from simple_emulator import P0Emulator
 from graphufs import optimize, run_forward, loss_fn
+
+# Note that adding these slows things down on PSL GPU
+#os.environ['XLA_FLAGS'] = (
+#    '--xla_gpu_enable_triton_softmax_fusion=true '
+#    '--xla_gpu_triton_gemm_any=True '
+#    '--xla_gpu_enable_async_collectives=true '
+#    '--xla_gpu_enable_latency_hiding_scheduler=true '
+#    '--xla_gpu_enable_highest_priority_async_stream=true '
+#)
 
 
 if __name__ == "__main__":
@@ -27,7 +36,6 @@ if __name__ == "__main__":
     gufs = P0Emulator()
 
     inputs, targets, forcings = gufs.get_training_batches(
-        n_optim_steps=2,
         batch_size=16,
         target_lead_time="6h",
         random_seed=100,
@@ -55,15 +63,11 @@ if __name__ == "__main__":
     )
 
     # linearly increase learning rate
-    n_linear = len(inputs.optim_step) // 10
+    n_linear = len(inputs.optim_step)
     schedule_1 = optax.linear_schedule(
         init_value=0.0,
         end_value=1e-3,
         transition_steps=n_linear,
-    )
-    schedule_2 = optax.cosine_decay_schedule(
-        init_value=1e-3,
-        decay_steps = len(inputs.optim_step) - n_linear,
     )
     # curriculum and parameters as in GraphCast
     optimizer = optax.chain(
@@ -74,25 +78,20 @@ if __name__ == "__main__":
             b2=0.95,
             weight_decay=0.1,
         ),
-        optax.adamw(
-            learning_rate=schedule_2,
-            b1=0.9,
-            b2=0.95,
-            weight_decay=0.1,
-        ),
     )
     localtime.stop()
 
     localtime.start("Starting Optimization")
 
+    #with profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
     params, loss, opt_state, grads = optimize(
-        params=params,
-        state=state,
         optimizer=optimizer,
         emulator=gufs,
         input_batches=inputs,
         target_batches=targets,
         forcing_batches=forcings,
+        params=params,
+        state=state,
     )
     loss.to_netcdf(os.path.join(gufs.local_store_path, "loss.nc"))
 

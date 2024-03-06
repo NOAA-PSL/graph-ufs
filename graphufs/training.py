@@ -111,12 +111,7 @@ def optimize(params, state, optimizer, emulator, input_batches, target_batches, 
         params = optax.apply_updates(params, updates)
         return params, loss, diagnostics, opt_state, grads
 
-    def with_params(fn):
-        return partial(fn, params=params, state=state)
-
-    optim_step_jitted = with_params( jit(
-        optim_step
-    ) )
+    optim_step_jitted = jit( optim_step )
 
     loss_values = []
     loss_by_var = {k: list() for k in target_batches.data_vars}
@@ -126,9 +121,11 @@ def optimize(params, state, optimizer, emulator, input_batches, target_batches, 
         params, loss, diagnostics, opt_state, grads = optim_step_jitted(
             opt_state=opt_state,
             emulator=emulator,
-            inputs=input_batches.sel(optim_step=[k]),
-            targets=target_batches.sel(optim_step=[k]),
-            forcings=forcing_batches.sel(optim_step=[k]),
+            inputs=input_batches.sel(optim_step=k),
+            targets=target_batches.sel(optim_step=k),
+            forcings=forcing_batches.sel(optim_step=k),
+            params=params,
+            state=state,
         )
         loss_values.append(loss)
         for key, val in diagnostics.items():
