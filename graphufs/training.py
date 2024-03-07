@@ -156,10 +156,14 @@ def optimize(params, state, optimizer, emulator, input_batches, target_batches, 
     loss_ds = xr.Dataset()
     loss_ds["optim_step"] = input_batches["optim_step"]
     loss_ds.attrs["batch_size"] = len(input_batches["batch"])
-    loss_ds["varname"] = xr.DataArray(
+    loss_ds["var_index"] = xr.DataArray(
+        np.arange(len(loss_by_var)),
+        coords={"var_index": np.arange(len(loss_by_var))},
+        dims=("var_index",),
+    )
+    loss_ds["var_names"] = xr.DataArray(
         list(loss_by_var.keys()),
-        coords={"varname": list(loss_by_var.keys())},
-        dims=("varname",),
+        dims=("var_index",),
     )
     loss_ds["loss"] = xr.DataArray(
         loss_values,
@@ -169,8 +173,7 @@ def optimize(params, state, optimizer, emulator, input_batches, target_batches, 
     )
     loss_ds["loss_by_var"] = xr.DataArray(
         np.vstack(list(loss_by_var.values())),
-        coords={"varname": loss_ds["varname"], "optim_step": loss_ds["optim_step"]},
-        dims=("varname", "optim_step"),
+        dims=("var_index", "optim_step"),
     )
 
     return params, loss_ds
