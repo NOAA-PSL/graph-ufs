@@ -3,7 +3,7 @@ import os
 import io
 from functools import partial
 import xarray as xr
-from jax import jit, profiler
+from jax import jit
 from jax.random import PRNGKey
 import optax
 
@@ -35,11 +35,7 @@ if __name__ == "__main__":
 
     gufs = P0Emulator()
 
-    inputs, targets, forcings = gufs.get_training_batches(
-        batch_size=16,
-        target_lead_time="6h",
-        random_seed=100,
-    )
+    inputs, targets, forcings = gufs.get_training_batches()
     localtime.stop()
 
     localtime.start("Loading Training Batches into Memory")
@@ -83,15 +79,14 @@ if __name__ == "__main__":
 
     localtime.start("Starting Optimization")
 
-    #with profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
-    params, loss, opt_state, grads = optimize(
+    params, loss = optimize(
+        params=params,
+        state=state,
         optimizer=optimizer,
         emulator=gufs,
         input_batches=inputs,
         target_batches=targets,
         forcing_batches=forcings,
-        params=params,
-        state=state,
     )
     loss.to_netcdf(os.path.join(gufs.local_store_path, "loss.nc"))
 

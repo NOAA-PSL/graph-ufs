@@ -87,6 +87,21 @@ def grads_fn(params, state, emulator, inputs, targets, forcings):
 
 
 def optimize(params, state, optimizer, emulator, input_batches, target_batches, forcing_batches, verbose=False):
+    """Optimize the model parameters by running through all optim_steps in data
+
+    Args:
+        params (dict): with the initialized model parameters
+        state (dict): this is empty, but for now has to be here
+        optimizer (Callable, optax.optimizer): see `here <https://optax.readthedocs.io/en/latest/api/optimizers.html>`_
+        emulator (ReplayEmulator): the emulator object
+        input_batches, training_batches, forcing_batches (xarray.Dataset): with data needed for training
+        verbose (bool, optional): if True, print loss and mean(|gradient|) at each step
+
+    Returns:
+        params (dict): optimized model parameters
+        loss_ds (xarray.Dataset): with the total loss function and loss per variable for each optim_step
+            this doesn't have gradient info, but we could add that
+    """
 
     opt_state = optimizer.init(params)
 
@@ -138,24 +153,24 @@ def optimize(params, state, optimizer, emulator, input_batches, target_batches, 
             print(diagnostics)
             print()
 
-    results = xr.Dataset()
-    results["optim_step"] = input_batches["optim_step"]
-    results.attrs["batch_size"] = len(input_batches["batch"])
-    results["varname"] = xr.DataArray(
+    loss_ds = xr.Dataset()
+    loss_ds["optim_step"] = input_batches["optim_step"]
+    loss_ds.attrs["batch_size"] = len(input_batches["batch"])
+    loss_ds["varname"] = xr.DataArray(
         list(loss_by_var.keys()),
         coords={"varname": list(loss_by_var.keys())},
         dims=("varname",),
     )
-    results["loss"] = xr.DataArray(
+    loss_ds["loss"] = xr.DataArray(
         loss_values,
-        coords={"optim_step": results["optim_step"]},
+        coords={"optim_step": loss_ds["optim_step"]},
         dims=("optim_step",),
         attrs={"long_name": "loss function value"},
     )
-    results["loss_by_var"] = xr.DataArray(
+    loss_ds["loss_by_var"] = xr.DataArray(
         np.vstack(list(loss_by_var.values())),
-        coords={"varname": results["varname"], "optim_step": results["optim_step"]},
+        coords={"varname": loss_ds["varname"], "optim_step": loss_ds["optim_step"]},
         dims=("varname", "optim_step"),
     )
 
-    return params, results, opt_state, grads
+    return params, loss_ds

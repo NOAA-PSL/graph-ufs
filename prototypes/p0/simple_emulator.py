@@ -47,10 +47,14 @@ class P0Emulator(ReplayEmulator):
     # time related
     delta_t = "6h"              # the model time step
     input_duration = "6h 1s"    # time covered by initial condition(s), note the 1s is necessary for GraphCast code
+    target_lead_time = "6h"     # how long is the forecast ... at what point do we compare model to targets
     training_dates = (          # bounds of training data (inclusive)
         "1993-12-31T18",        # start
         "1994-12-31T18"         # stop, includes all of 1994
     )
+
+    # training protocol
+    batch_size = 16
 
     # model config options
     resolution = 1.0
@@ -64,6 +68,7 @@ class P0Emulator(ReplayEmulator):
     # this is used for initializing the state in the gradient computation
     grad_rng_seed = 0
     init_rng_seed = 0
+    training_batch_rng_seed = 100
 
 tree_util.register_pytree_node(
     P0Emulator,
