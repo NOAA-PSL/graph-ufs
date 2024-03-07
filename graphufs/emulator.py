@@ -165,14 +165,11 @@ class ReplayEmulator:
         ):
         """Get a dataset with all the batches of data necessary for training
 
-        TODO:
-            - should these options stay here, or go in the emulator definition?
-
         Note:
             Here we're using target_lead_time as a single value, see graphcast.data_utils.extract ... where it could be multi valued. However, since we are using it to compute the total forecast time per batch soit seems more straightforward as a scalar.
 
         Args:
-            n_optim_steps (int): number of training batches to grab ... number of times we will update the parameters during optimization
+            n_optim_steps (int, optional): number of training batches to grab ... number of times we will update the parameters during optimization. If not specified, use as many as are available based on the available training data.
             drop_cftime (bool, optional): may be useful for debugging
 
         Returns:
