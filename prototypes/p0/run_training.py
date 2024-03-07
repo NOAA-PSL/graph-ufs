@@ -6,12 +6,13 @@ import optax
 import numpy as np
 import argparse
 import threading
+import os
 
 from ufs2arco.timer import Timer
 
 from simple_emulator import P0Emulator
 from graphufs import optimize, run_forward
-from graphcast import rollout
+from graphcast import rollout, checkpoint, graphcast
 
 
 def get_chunk_data(ds: xr.Dataset, data, n_batches: int = 4, batch_size: int = 1):
@@ -84,6 +85,31 @@ def parse_args():
         default=32,
         help="Number of batches to read and load into RAM.",
     )
+    parser.add_argument(
+        "--id",
+        "-i",
+        dest="id",
+        required=False,
+        type=int,
+        default=0,
+        help="ID of neural networks to load.",
+    )  
+    parser.add_argument(
+        "--checkpoint-steps",
+        "-c",
+        dest="checkpoint_steps",
+        required=False,
+        type=int,
+        default=1,
+        help="Save weights after this many steps.",
+    )
+    parser.add_argument(
+        "--checkpoint-dir",
+        dest="checkpoint_dir",
+        required=False,
+        default="nets",
+        help="Path to network files",
+    )
     args = parser.parse_args()
     return args
 
@@ -126,6 +152,10 @@ if __name__ == "__main__":
 
         localtime.stop()
 
+        # create checkpoint directory
+        if not os.path.exists(args.checkpoint_dir):
+            os.mkdir(args.checkpoint_dir)
+
         # training loop
         for it in range(args.steps):
 
@@ -156,11 +186,35 @@ if __name__ == "__main__":
 
             localtime.stop()
 
+            # save weights
+            if it % args.checkpoint_steps == 0:
+                ckpt_id = it // args.checkpoint_steps
+                with open(f"{args.checkpoint_dir}/model_{ckpt_id}.npz", "wb") as f:
+                    ckpt = graphcast.CheckPoint(
+                        params=params,
+                        model_config=gufs.model_config,
+                        task_config=gufs.task_config,
+                        description="GraphCast model trained on UFS data",
+                        license="Public domain",
+                    )
+                    checkpoint.dump(f, ckpt)
+
     else:
         walltime.start("Starting Testing")
 
-        # prediction
+        # load weights
+        print("Loading weights ...")
+        ckpt_id = args.id
+        with open(f"{args.checkpoint_dir}/model_{ckpt_id}.npz", "rb") as f:
+          ckpt = checkpoint.load(f, graphcast.CheckPoint)
+        params = ckpt.params
+        state = {}
+        model_config = ckpt.model_config
+        task_config = ckpt.task_config
+        print("Model description:\n", ckpt.description, "\n")
+        print("Model license:\n", ckpt.license, "\n")
 
+        # prediction
         data = [None] * 3
         input_thread = threading.Thread(target=get_chunk_data, args=(ds, data))
         input_thread.start()
