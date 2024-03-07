@@ -125,17 +125,17 @@ if __name__ == "__main__":
     gufs = P0Emulator()
     ds = xr.open_zarr(gufs.data_url, storage_options={"token": "anon"})
 
+    # get the first chunk of data
+    data_0 = [None] * 3
+    input_thread = threading.Thread(
+        target=get_chunk_data, args=(ds, data_0, args.num_batches, args.batch_size)
+    )
+    input_thread.start()
+    input_thread.join()
+
     # initialize training
     if args.train:
         walltime.start("Starting Training")
-
-        # get the first chunk of data
-        data_0 = [None] * 3
-        input_thread = threading.Thread(
-            target=get_chunk_data, args=(ds, data_0, args.num_batches, args.batch_size)
-        )
-        input_thread.start()
-        input_thread.join()
 
         # initialize optimizer
         localtime.start("Initializing Optimizer and Parameters")
@@ -161,15 +161,14 @@ if __name__ == "__main__":
 
             # get chunk of data in parallel with NN optimization
             input_thread.join()
-
             data = [data_0[i] for i in range(3)]
-
-            data_0 = [None] * 3
-            input_thread = threading.Thread(
-                target=get_chunk_data,
-                args=(ds, data_0, args.num_batches, args.batch_size),
-            )
-            input_thread.start()
+            if it < args.steps - 1:
+                data_0 = [None] * 3
+                input_thread = threading.Thread(
+                    target=get_chunk_data,
+                    args=(ds, data_0, args.num_batches, args.batch_size),
+                )
+                input_thread.start()
 
             # optimize
             localtime.start("Starting Optimization")
@@ -203,36 +202,60 @@ if __name__ == "__main__":
         walltime.start("Starting Testing")
 
         # load weights
-        print("Loading weights ...")
-        ckpt_id = args.id
-        with open(f"{args.checkpoint_dir}/model_{ckpt_id}.npz", "rb") as f:
-          ckpt = checkpoint.load(f, graphcast.CheckPoint)
-        params = ckpt.params
-        state = {}
-        model_config = ckpt.model_config
-        task_config = ckpt.task_config
-        print("Model description:\n", ckpt.description, "\n")
-        print("Model license:\n", ckpt.license, "\n")
+        if False:
+            print("Loading weights ...")
+            ckpt_id = args.id
+            with open(f"{args.checkpoint_dir}/model_{ckpt_id}.npz", "rb") as f:
+              ckpt = checkpoint.load(f, graphcast.CheckPoint)
+            params = ckpt.params
+            state = {}
+            model_config = ckpt.model_config
+            task_config = ckpt.task_config
+            print("Model description:\n", ckpt.description, "\n")
+            print("Model license:\n", ckpt.license, "\n")
+        # initialize random network for testing
+        else:
+            localtime.start("Initializing Optimizer and Parameters")
 
-        # prediction
-        data = [None] * 3
-        input_thread = threading.Thread(target=get_chunk_data, args=(ds, data))
-        input_thread.start()
-        input_thread.join()
+            init_jitted = jit(run_forward.init)
+            params, state = init_jitted(
+                rng=PRNGKey(gufs.init_rng_seed),
+                emulator=gufs,
+                inputs=data_0[0].sel(batch=[0]),
+                targets_template=data_0[1].sel(batch=[0]),
+                forcings=data_0[2].sel(batch=[0]),
+            )
 
+            localtime.stop()
+
+        # prediction loop
         localtime.start("Run predictiion")
 
-        apply_jitted = jit(run_forward.apply)
+        for it in range(args.steps):
 
-        predictions = apply_jitted(
-            params=params,
-            state=state,
-            rng=PRNGKey(0),
-            emulator=gufs,
-            inputs=data[0].sel(batch=[0]),
-            targets_template=data[1].sel(batch=[0]),
-            forcings=data[2].sel(batch=[0]),
-        )
+            # get chunk of data in parallel with inference
+            input_thread.join()
+            data = [data_0[i] for i in range(3)]
+            if it < args.steps - 1:
+                data_0 = [None] * 3
+                input_thread = threading.Thread(
+                    target=get_chunk_data,
+                    args=(ds, data_0, args.num_batches, args.batch_size),
+                )
+                input_thread.start()
+
+            # run predictions
+            apply_jitted = jit(run_forward.apply)
+
+            predictions = apply_jitted(
+                params=params,
+                state=state,
+                rng=PRNGKey(0),
+                emulator=gufs,
+                inputs=data[0].sel(batch=[0]),
+                targets_template=data[1].sel(batch=[0]),
+                forcings=data[2].sel(batch=[0]),
+            )
 
         localtime.stop()
 
