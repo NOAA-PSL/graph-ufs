@@ -12,10 +12,10 @@ from ufs2arco.timer import Timer
 
 from simple_emulator import P0Emulator
 from graphufs import optimize, run_forward
-from graphcast import rollout, checkpoint, graphcast
+from graphcast import checkpoint, graphcast
 
 
-def get_chunk_data(ds: xr.Dataset, data, n_batches: int = 4, batch_size: int = 1):
+def get_chunk_data(ds: xr.Dataset, data: list, n_batches: int = 4, batch_size: int = 1):
     """Get multiple training batches
     Args:
         ds (xr.Dataset): xarray dataset
@@ -93,7 +93,7 @@ def parse_args():
         type=int,
         default=0,
         help="ID of neural networks to load.",
-    )  
+    )
     parser.add_argument(
         "--checkpoint-steps",
         "-c",
@@ -133,11 +133,21 @@ if __name__ == "__main__":
     input_thread.start()
     input_thread.join()
 
-    # initialize training
-    if args.train:
-        walltime.start("Starting Training")
+    # load weights: this doesn't work at the moment
+    if False:
+        print("Loading weights ...")
+        ckpt_id = args.id
+        with open(f"{args.checkpoint_dir}/model_{ckpt_id}.npz", "rb") as f:
+            ckpt = checkpoint.load(f, graphcast.CheckPoint)
+        params = ckpt.params
+        state = {}
+        model_config = ckpt.model_config
+        task_config = ckpt.task_config
+        print("Model description:\n", ckpt.description, "\n")
+        print("Model license:\n", ckpt.license, "\n")
 
-        # initialize optimizer
+    # initialize random network for testing
+    else:
         localtime.start("Initializing Optimizer and Parameters")
 
         init_jitted = jit(run_forward.init)
@@ -148,9 +158,12 @@ if __name__ == "__main__":
             targets_template=data_0[1].sel(batch=[0]),
             forcings=data_0[2].sel(batch=[0]),
         )
-        optimizer = optax.adam(learning_rate=1e-4)
 
         localtime.stop()
+
+    # initialize training
+    if args.train:
+        walltime.start("Starting Training")
 
         # create checkpoint directory
         if not os.path.exists(args.checkpoint_dir):
@@ -201,36 +214,7 @@ if __name__ == "__main__":
     else:
         walltime.start("Starting Testing")
 
-        # load weights
-        if False:
-            print("Loading weights ...")
-            ckpt_id = args.id
-            with open(f"{args.checkpoint_dir}/model_{ckpt_id}.npz", "rb") as f:
-              ckpt = checkpoint.load(f, graphcast.CheckPoint)
-            params = ckpt.params
-            state = {}
-            model_config = ckpt.model_config
-            task_config = ckpt.task_config
-            print("Model description:\n", ckpt.description, "\n")
-            print("Model license:\n", ckpt.license, "\n")
-        # initialize random network for testing
-        else:
-            localtime.start("Initializing Optimizer and Parameters")
-
-            init_jitted = jit(run_forward.init)
-            params, state = init_jitted(
-                rng=PRNGKey(gufs.init_rng_seed),
-                emulator=gufs,
-                inputs=data_0[0].sel(batch=[0]),
-                targets_template=data_0[1].sel(batch=[0]),
-                forcings=data_0[2].sel(batch=[0]),
-            )
-
-            localtime.stop()
-
-        # prediction loop
-        localtime.start("Run predictiion")
-
+        predictions_list = []
         for it in range(args.steps):
 
             # get chunk of data in parallel with inference
@@ -247,17 +231,20 @@ if __name__ == "__main__":
             # run predictions
             apply_jitted = jit(run_forward.apply)
 
-            predictions = apply_jitted(
+            predictions, _ = apply_jitted(
                 params=params,
                 state=state,
                 rng=PRNGKey(0),
                 emulator=gufs,
-                inputs=data[0].sel(batch=[0]),
-                targets_template=data[1].sel(batch=[0]),
-                forcings=data[2].sel(batch=[0]),
+                inputs=data[0],
+                targets_template=data[1],
+                forcings=data[2],
             )
+            predictions_list.append(predictions)
 
-        localtime.stop()
+        predictions = xr.concat(predictions_list, dim='time')
+        predictions.to_netcdf("graphufs_predict.nc")
+
 
     # total walltime
     walltime.stop("Total Walltime")
