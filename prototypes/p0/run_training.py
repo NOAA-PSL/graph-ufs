@@ -1,18 +1,18 @@
+import argparse
+import os
+import threading
 from functools import partial
+
+import numpy as np
+import optax
 import xarray as xr
+from graphcast import checkpoint, graphcast
+from graphufs import optimize, predict, run_forward
 from jax import jit
 from jax.random import PRNGKey
-import optax
-import numpy as np
-import argparse
-import threading
-import os
-
 from ufs2arco.timer import Timer
 
 from simple_emulator import P0Emulator
-from graphufs import optimize, predict, run_forward
-from graphcast import checkpoint, graphcast
 
 
 def get_chunk_data(ds: xr.Dataset, data: list, n_batches: int = 4, batch_size: int = 1):
@@ -41,11 +41,12 @@ def get_chunk_data(ds: xr.Dataset, data: list, n_batches: int = 4, batch_size: i
     data[0] = inputs
     data[1] = targets
     data[2] = forcings
+
     print("Finished preparing batches")
 
 
 def parse_args():
-    """Parse arguments"""
+    """Parse arguments."""
 
     # parse arguments
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
@@ -65,7 +66,15 @@ def parse_args():
         required=False,
         type=int,
         default=1,
-        help="Number of training steps. A step is one chunk of training data).",
+        help="Number of steps (chunks) per epoch.",
+    )
+    parser.add_argument(
+        "--epochs",
+        dest="epochs",
+        required=False,
+        type=int,
+        default=1,
+        help="Number of epochs.",
     )
     parser.add_argument(
         "--batch-size",
@@ -134,10 +143,13 @@ if __name__ == "__main__":
     input_thread.join()
 
     # load weights: this doesn't work at the moment
-    if False:
-        print("Loading weights ...")
-        ckpt_id = args.id
-        with open(f"{args.checkpoint_dir}/model_{ckpt_id}.npz", "rb") as f:
+    ckpt_id = args.id
+    ckpt_path = f"{args.checkpoint_dir}/model_{ckpt_id}.npz"
+
+    if os.path.exists(ckpt_path):
+        localtime.start("Loading weights")
+
+        with open(ckpt_path, "rb") as f:
             ckpt = checkpoint.load(f, graphcast.CheckPoint)
         params = ckpt.params
         state = {}
@@ -145,6 +157,8 @@ if __name__ == "__main__":
         task_config = ckpt.task_config
         print("Model description:\n", ckpt.description, "\n")
         print("Model license:\n", ckpt.license, "\n")
+
+        localtime.stop()
 
     # initialize random network for testing
     else:
@@ -169,47 +183,50 @@ if __name__ == "__main__":
         if not os.path.exists(args.checkpoint_dir):
             os.mkdir(args.checkpoint_dir)
 
+        optimizer = optax.adam(learning_rate=1e-4)
+
         # training loop
-        for it in range(args.steps):
+        for e in range(args.epochs):
+            for it in range(args.steps):
 
-            # get chunk of data in parallel with NN optimization
-            input_thread.join()
-            data = [data_0[i] for i in range(3)]
-            if it < args.steps - 1:
-                data_0 = [None] * 3
-                input_thread = threading.Thread(
-                    target=get_chunk_data,
-                    args=(ds, data_0, args.num_batches, args.batch_size),
-                )
-                input_thread.start()
-
-            # optimize
-            localtime.start("Starting Optimization")
-
-            params, loss, diagnostics, opt_state, grads = optimize(
-                params=params,
-                state=state,
-                optimizer=optimizer,
-                emulator=gufs,
-                input_batches=data[0],
-                target_batches=data[1],
-                forcing_batches=data[2],
-            )
-
-            localtime.stop()
-
-            # save weights
-            if it % args.checkpoint_steps == 0:
-                ckpt_id = it // args.checkpoint_steps
-                with open(f"{args.checkpoint_dir}/model_{ckpt_id}.npz", "wb") as f:
-                    ckpt = graphcast.CheckPoint(
-                        params=params,
-                        model_config=gufs.model_config,
-                        task_config=gufs.task_config,
-                        description="GraphCast model trained on UFS data",
-                        license="Public domain",
+                # get chunk of data in parallel with NN optimization
+                input_thread.join()
+                data = [data_0[i] for i in range(3)]
+                if it < args.steps - 1:
+                    data_0 = [None] * 3
+                    input_thread = threading.Thread(
+                        target=get_chunk_data,
+                        args=(ds, data_0, args.num_batches, args.batch_size),
                     )
-                    checkpoint.dump(f, ckpt)
+                    input_thread.start()
+
+                # optimize
+                localtime.start("Starting Optimization")
+
+                params, loss, diagnostics, opt_state, grads = optimize(
+                    params=params,
+                    state=state,
+                    optimizer=optimizer,
+                    emulator=gufs,
+                    input_batches=data[0],
+                    target_batches=data[1],
+                    forcing_batches=data[2],
+                )
+
+                localtime.stop()
+
+                # save weights
+                if it % args.checkpoint_steps == 0:
+                    ckpt_id = it // args.checkpoint_steps
+                    with open(f"{args.checkpoint_dir}/model_{ckpt_id}.npz", "wb") as f:
+                        ckpt = graphcast.CheckPoint(
+                            params=params,
+                            model_config=gufs.model_config,
+                            task_config=gufs.task_config,
+                            description="GraphCast model trained on UFS data",
+                            license="Public domain",
+                        )
+                        checkpoint.dump(f, ckpt)
 
     # testing
     else:
@@ -238,10 +255,10 @@ if __name__ == "__main__":
                 target_batches=data[1],
                 forcing_batches=data[2],
             )
+            # append datasets
             predictions_list.append(predictions)
 
         ds_o = xr.concat(predictions_list, dim="batch")
-        ds_o = ds_o.drop_dims("batch")
         ds_o.to_netcdf("graphufs_predict.nc")
 
     # total walltime
