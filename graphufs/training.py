@@ -19,6 +19,7 @@ from jax import jit, value_and_grad, tree_util
 from jax.random import PRNGKey
 import optax
 import haiku as hk
+import xarray as xr
 
 from graphcast.graphcast import GraphCast
 from graphcast.casting import Bfloat16Cast
@@ -26,6 +27,7 @@ from graphcast.autoregressive import Predictor
 from graphcast.xarray_tree import map_structure
 from graphcast.normalization import InputsAndResiduals
 from graphcast.xarray_jax import unwrap_data
+from graphcast import rollout
 
 
 def construct_wrapped_graphcast(emulator):
@@ -134,3 +136,39 @@ def optimize(params, state, optimizer, emulator, input_batches, target_batches, 
             print()
 
     return params, loss, diagnostics, opt_state, grads
+
+
+def predict(
+    params,
+    state,
+    emulator,
+    input_batches,
+    target_batches,
+    forcing_batches,
+) -> xr.Dataset:
+
+    @hk.transform_with_state
+    def run_forward_loc(inputs, targets_template, forcings):
+        predictor = construct_wrapped_graphcast(emulator)
+        return predictor(
+            inputs,
+            targets_template=targets_template,
+            forcings=forcings
+        )
+
+    def with_params(fn):
+        return partial(fn, params=params, state=state)
+
+    def drop_state(fn):
+        return lambda **kw: fn(**kw)[0]
+
+    apply_jitted = drop_state(with_params(jit(run_forward_loc.apply)))
+
+    predictions = rollout.chunked_prediction(
+        apply_jitted,
+        rng=PRNGKey(0),
+        inputs=input_batches,
+        targets_template=target_batches,
+        forcings=forcing_batches,
+    )
+    return predictions

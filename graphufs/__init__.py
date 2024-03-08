@@ -4,4 +4,5 @@ from .training import (
     loss_fn,
     grads_fn,
     optimize,
+    predict,
 )

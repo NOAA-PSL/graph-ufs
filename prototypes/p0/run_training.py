@@ -11,7 +11,7 @@ import os
 from ufs2arco.timer import Timer
 
 from simple_emulator import P0Emulator
-from graphufs import optimize, run_forward
+from graphufs import optimize, predict, run_forward
 from graphcast import checkpoint, graphcast
 
 
@@ -65,7 +65,7 @@ def parse_args():
         required=False,
         type=int,
         default=1,
-        help="Number of training steps.",
+        help="Number of training steps. A step is one chunk of training data).",
     )
     parser.add_argument(
         "--batch-size",
@@ -161,7 +161,7 @@ if __name__ == "__main__":
 
         localtime.stop()
 
-    # initialize training
+    # training
     if args.train:
         walltime.start("Starting Training")
 
@@ -211,6 +211,7 @@ if __name__ == "__main__":
                     )
                     checkpoint.dump(f, ckpt)
 
+    # testing
     else:
         walltime.start("Starting Testing")
 
@@ -229,22 +230,19 @@ if __name__ == "__main__":
                 input_thread.start()
 
             # run predictions
-            apply_jitted = jit(run_forward.apply)
-
-            predictions, _ = apply_jitted(
+            predictions = predict(
                 params=params,
                 state=state,
-                rng=PRNGKey(0),
                 emulator=gufs,
-                inputs=data[0],
-                targets_template=data[1],
-                forcings=data[2],
+                input_batches=data[0],
+                target_batches=data[1],
+                forcing_batches=data[2],
             )
             predictions_list.append(predictions)
 
-        predictions = xr.concat(predictions_list, dim='time')
-        predictions.to_netcdf("graphufs_predict.nc")
-
+        ds_o = xr.concat(predictions_list, dim="batch")
+        ds_o = ds_o.drop_dims("batch")
+        ds_o.to_netcdf("graphufs_predict.nc")
 
     # total walltime
     walltime.stop("Total Walltime")
