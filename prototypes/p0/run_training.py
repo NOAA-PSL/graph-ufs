@@ -232,6 +232,7 @@ if __name__ == "__main__":
     else:
         walltime.start("Starting Testing")
 
+        stats = {}
         predictions_list = []
         for it in range(args.steps):
 
@@ -255,8 +256,30 @@ if __name__ == "__main__":
                 target_batches=data[1],
                 forcing_batches=data[2],
             )
+
+            # Compute rmse and bias comparing targets and predictions
+            targets = data[1]
+            diff = predictions - targets
+            rmse = np.sqrt((diff ** 2).mean())
+            bias = diff.mean()
+
+            # compute running average of mean and rmse?
+            for var_name, _ in rmse.data_vars.items():
+                r = rmse[var_name].values
+                b = bias[var_name].values
+                if var_name in stats.keys():
+                    rmse_o = stats[var_name][0]
+                    bias_o = stats[var_name][1]
+                    r = rmse_o + (r - rmse_o) / (it + 1)
+                    b = bias_o + (b - bias_o) / (it + 1)
+                stats[var_name] = [r, b]
+
             # append datasets
             predictions_list.append(predictions)
+
+        print("--------- Statistiscs ---------")
+        for k,v in stats.items():
+            print(f"{k:32s}: RMSE: {v[0]} BIAS: {v[1]}")
 
         ds_o = xr.concat(predictions_list, dim="batch")
         ds_o.to_netcdf("graphufs_predict.nc")
