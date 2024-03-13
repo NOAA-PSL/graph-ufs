@@ -9,7 +9,6 @@ import optax
 
 from ufs2arco.timer import Timer
 
-from graphcast.checkpoint import dump, load
 from graphcast import graphcast
 from simple_emulator import P0Emulator
 from graphufs import optimize, run_forward, loss_fn
@@ -87,19 +86,9 @@ if __name__ == "__main__":
         input_batches=inputs,
         target_batches=targets,
         forcing_batches=forcings,
+        store_results=True,
+        description="P0 Optimized Parameters",
     )
-    loss.to_netcdf(os.path.join(gufs.local_store_path, "loss.nc"))
-
-    # store parameters with graphcast.graphcast.CheckPoint
-    ckpt = graphcast.CheckPoint(
-        params=params,
-        model_config=gufs.model_config,
-        task_config=gufs.task_config,
-        description="p0 optimized parameters",
-        license="",
-    )
-    with open(os.path.join(gufs.local_store_path, "optim_graphcast.ckpt"), "wb") as f:
-        dump(f, ckpt)
 
     localtime.stop()
 
