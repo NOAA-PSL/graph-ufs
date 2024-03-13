@@ -232,8 +232,12 @@ if __name__ == "__main__":
     else:
         walltime.start("Starting Testing")
 
+        # create predictions zarr file
+        zarr_name = "zarr-stores/graphufs_predict.zarr"
+        if os.path.exists(zarr_name):
+            os.rmdir(zarr_name)
+
         stats = {}
-        predictions_list = []
         for it in range(args.steps):
 
             # get chunk of data in parallel with inference
@@ -274,15 +278,13 @@ if __name__ == "__main__":
                     b = bias_o + (b - bias_o) / (it + 1)
                 stats[var_name] = [r, b]
 
-            # append datasets
-            predictions_list.append(predictions)
+            # Write chunk by chunk to avoid storing all of it in memory
+            predictions.to_zarr(zarr_name,mode="a")
+
 
         print("--------- Statistiscs ---------")
         for k,v in stats.items():
             print(f"{k:32s}: RMSE: {v[0]} BIAS: {v[1]}")
-
-        ds_o = xr.concat(predictions_list, dim="batch")
-        ds_o.to_netcdf("graphufs_predict.nc")
 
     # total walltime
     walltime.stop("Total Walltime")
