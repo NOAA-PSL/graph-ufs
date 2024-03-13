@@ -8,5 +8,5 @@
     branch = main
 [submodule "weatherbench2"]
     patch = weatherbench2
-    url = https://github.com/google-research/weatherbench2.git
+    url = git@github.com:google-research/weatherbench2.git
     branch = main
