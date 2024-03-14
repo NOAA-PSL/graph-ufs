@@ -12,7 +12,9 @@ class P0Emulator(ReplayEmulator):
         "std": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/03h-freq/normalization/stddev_by_level.p0.zarr",
         "stddiff": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/03h-freq/normalization/diffs_stddev_by_level.p0.zarr",
     }
+    wb2_obs_url = "gs://weatherbench2/datasets/era5/1959-2022-6h-64x32_equiangular_conservative.zarr"
 
+    local_store_path = "./zarr-stores"
 
     # these could be moved to a yaml file later
     # task config options

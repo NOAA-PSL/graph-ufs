@@ -20,6 +20,9 @@ class ReplayEmulator:
         "std": "",
         "stddiff": "",
     }
+    wb2_obs_url = ""
+    
+    local_store_path = None
 
     # these could be moved to a yaml file later
     # task config options
