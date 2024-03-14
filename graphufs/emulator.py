@@ -218,6 +218,11 @@ class ReplayEmulator:
                 target_lead_times=target_lead_time,
                 **dataclasses.asdict(self.task_config),
             )
+
+            # fix this later for batch_size != 1
+            times = batch.datetime.isel(time=0).values
+            t = t.assign_coords(inittime=times)
+
             inputs.append(i)
             targets.append(t)
             forcings.append(f)

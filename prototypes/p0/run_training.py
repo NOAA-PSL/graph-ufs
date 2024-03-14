@@ -13,6 +13,7 @@ from jax.random import PRNGKey
 from ufs2arco.timer import Timer
 
 from simple_emulator import P0Emulator
+import shutil
 
 
 def get_chunk_data(ds: xr.Dataset, data: list, n_batches: int = 4, batch_size: int = 1):
@@ -232,10 +233,10 @@ if __name__ == "__main__":
     else:
         walltime.start("Starting Testing")
 
-        # create predictions zarr file
-        zarr_name = "zarr-stores/graphufs_predict.zarr"
-        if os.path.exists(zarr_name):
-            os.rmdir(zarr_name)
+        # create predictions and targets zarr file for WB2
+        predictions_zarr_name = "zarr-stores/graphufs_predictions.zarr"
+        if os.path.exists(predictions_zarr_name):
+            shutil.rmtree(predictions_zarr_name)
 
         stats = {}
         for it in range(args.steps):
@@ -267,7 +268,7 @@ if __name__ == "__main__":
             rmse = np.sqrt((diff ** 2).mean())
             bias = diff.mean()
 
-            # compute running average of mean and rmse?
+            # compute running average of rmse and bias
             for var_name, _ in rmse.data_vars.items():
                 r = rmse[var_name].values
                 b = bias[var_name].values
@@ -278,12 +279,27 @@ if __name__ == "__main__":
                     b = bias_o + (b - bias_o) / (it + 1)
                 stats[var_name] = [r, b]
 
-            # Write chunk by chunk to avoid storing all of it in memory
-            predictions.to_zarr(zarr_name,mode="a")
+            # convert predictions to wb2 format
+            def convert_wb2_format(ds):
+                ds = ds.rename({"time": "t", "batch": "b"})
+                ds = ds.stack(time=("b", "t"), create_index=False)
+                ds = ds.drop_vars(["b", "t"])
+                init_times = targets["inittime"].values
+                lead_times = targets["time"].values
+                ds = ds.assign_coords(
+                    {"lead_time": lead_times, "temp_coord": init_times}
+                )
+                ds = ds.rename(
+                    {"temp_coord": "time", "lat": "latitude", "lon": "longitude"}
+                )
+                return ds
 
+            # write chunk by chunk to avoid storing all of it in memory
+            predictions = convert_wb2_format(predictions)
+            predictions.to_zarr(predictions_zarr_name, mode="a")
 
         print("--------- Statistiscs ---------")
-        for k,v in stats.items():
+        for k, v in stats.items():
             print(f"{k:32s}: RMSE: {v[0]} BIAS: {v[1]}")
 
     # total walltime
