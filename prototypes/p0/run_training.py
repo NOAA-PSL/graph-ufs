@@ -204,12 +204,12 @@ if __name__ == "__main__":
 
         # training loop
         for e in range(args.epochs):
-            for it in range(args.steps):
+            for it in range(args.chunks):
 
                 # get chunk of data in parallel with NN optimization
                 input_thread.join()
                 data = [data_0[i] for i in range(3)]
-                if it < args.steps - 1:
+                if it < args.chunks - 1:
                     data_0 = [None] * 3
                     input_thread = threading.Thread(
                         target=get_chunk_data,
@@ -233,8 +233,8 @@ if __name__ == "__main__":
                 localtime.stop()
 
                 # save weights
-                if it % args.checkpoint_steps == 0:
-                    ckpt_id = it // args.checkpoint_steps
+                if it % args.checkpoint_chunks == 0:
+                    ckpt_id = it // args.checkpoint_chunks
                     with open(f"{args.checkpoint_dir}/model_{ckpt_id}.npz", "wb") as f:
                         ckpt = graphcast.CheckPoint(
                             params=params,
@@ -255,12 +255,12 @@ if __name__ == "__main__":
             shutil.rmtree(predictions_zarr_name)
 
         stats = {}
-        for it in range(args.steps):
+        for it in range(args.chunks):
 
             # get chunk of data in parallel with inference
             input_thread.join()
             data = [data_0[i] for i in range(3)]
-            if it < args.steps - 1:
+            if it < args.chunks - 1:
                 data_0 = [None] * 3
                 input_thread = threading.Thread(
                     target=get_chunk_data,
