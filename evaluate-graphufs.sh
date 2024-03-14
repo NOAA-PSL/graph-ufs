@@ -8,12 +8,12 @@ python weatherbench2/scripts/evaluate.py \
   --forecast_path=$GRAPHUFS_ZARR/graphufs_predictions.zarr \
   --obs_path=gs://weatherbench2/datasets/era5/1959-2022-6h-64x32_equiangular_conservative.zarr \
   --climatology_path=gs://weatherbench2/datasets/era5-hourly-climatology/1990-2019_6h_64x32_equiangular_conservative.zarr \
-  --by_init=True \
+  --by_init=False \
   --output_dir=./ \
   --output_file_prefix=hres_vs_era_2020_ \
   --input_chunks=init_time=1 \
   --eval_configs=deterministic \
-  --variables="2m_temperature" \
+  --time_start=1993-01-01 \
+  --time_stop=1994-12-31 \
+  --variables="temperature" \
   --levels=100,500,100
-#  --time_start=2020-01-01 \
-#  --time_stop=2020-12-31 \

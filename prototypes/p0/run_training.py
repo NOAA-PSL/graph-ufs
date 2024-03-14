@@ -309,7 +309,7 @@ if __name__ == "__main__":
                 # rename variables
                 ds = ds.rename_vars({
                     "pressfc": "geopotential",
-                    "tmp": "2m_temperature",
+                    "tmp": "temperature",
                     "ugrd10m":"10m_u_component_of_wind",
                     "vgrd10m":"10m_v_component_of_wind",
                 })
