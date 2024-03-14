@@ -251,8 +251,11 @@ if __name__ == "__main__":
 
         # create predictions and targets zarr file for WB2
         predictions_zarr_name = "zarr-stores/graphufs_predictions.zarr"
+        targets_zarr_name = "zarr-stores/graphufs_targets.zarr"
         if os.path.exists(predictions_zarr_name):
             shutil.rmtree(predictions_zarr_name)
+        if os.path.exists(targets_zarr_name):
+            shutil.rmtree(targets_zarr_name)
 
         stats = {}
         for it in range(args.chunks):
@@ -341,14 +344,21 @@ if __name__ == "__main__":
                 ds = ds.assign_coords({"lead_time": lead_times, "time": init_times})
                 ds = ds.rename({"lat": "latitude", "lon": "longitude"})
 
-                # transpose the time dimension
+                # transpose the dimensions, and insert lead_time
                 ds = ds.transpose("time", ..., "longitude", "latitude")
+                for var in ds.data_vars:
+                    ds[var] = ds[var].expand_dims({"lead_time": ds.lead_time}, axis=1)
 
                 return ds
 
             # write chunk by chunk to avoid storing all of it in memory
             predictions = convert_wb2_format(predictions)
             predictions.to_zarr(predictions_zarr_name, mode="a")
+
+            # write also targets to compute metrics against it with wb2
+            targets = convert_wb2_format(targets)
+            targets.to_zarr(targets_zarr_name, mode="a")
+
 
         print("--------- Statistiscs ---------")
         for k, v in stats.items():
