@@ -15,6 +15,8 @@ from ufs2arco.timer import Timer
 from simple_emulator import P0Emulator
 import shutil
 
+import xesmf as xe
+
 
 def get_chunk_data(ds: xr.Dataset, data: list, n_batches: int = 4, batch_size: int = 1):
     """Get multiple training batches
@@ -279,18 +281,53 @@ if __name__ == "__main__":
                     b = bias_o + (b - bias_o) / (it + 1)
                 stats[var_name] = [r, b]
 
+
             # convert predictions to wb2 format
             def convert_wb2_format(ds):
+
+                # regrid to the obs coordinates
+                ds_obs = xr.open_zarr(
+                    "gs://weatherbench2/datasets/era5/1959-2022-6h-64x32_equiangular_conservative.zarr",
+                    storage_options={"token": "anon"},
+                )
+                ds_out = xr.Dataset(
+                    {
+                        "lat": (["lat"], ds_obs["latitude"].values),
+                        "lon": (["lon"], ds_obs["longitude"].values),
+                    }
+                )
+                regridder = xe.Regridder(
+                    ds,
+                    ds_out,
+                    "bilinear",
+                    periodic=True,
+                    reuse_weights=False,
+                    filename="graphufs_regridder",
+                )
+                ds = regridder(ds)
+
+                # rename variables
+                ds = ds.rename_vars({
+                    "pressfc": "geopotential",
+                    "tmp": "2m_temperature",
+                    "ugrd10m":"10m_u_component_of_wind",
+                    "vgrd10m":"10m_v_component_of_wind",
+                })
+
+                # fix pressure levels to match obs
+                ds["level"] = np.array(list(gufs.pressure_levels), dtype=np.float32)
+
+                # remove batch dimension
                 ds = ds.rename({"time": "t", "batch": "b"})
                 ds = ds.stack(time=("b", "t"), create_index=False)
                 ds = ds.drop_vars(["b", "t"])
                 init_times = targets["inittime"].values
                 lead_times = targets["time"].values
                 ds = ds.assign_coords(
-                    {"lead_time": lead_times, "temp_coord": init_times}
+                    {"lead_time": lead_times, "time": init_times}
                 )
                 ds = ds.rename(
-                    {"temp_coord": "time", "lat": "latitude", "lon": "longitude"}
+                    {"lat": "latitude", "lon": "longitude"}
                 )
                 return ds
 
