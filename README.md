@@ -33,4 +33,4 @@ but a symlink should ensure you can use the same paths as if the submodules were
 ### WeatherBench2 evaluation
 The official weatherbench2 evaluation results are computed with a script `scripts/evaluate.py`.
 Command line scripts can be found here: https://weatherbench2.readthedocs.io/en/latest/official-evaluation.html
-A sample evaluation script for Pangu weather data can be found in `evaluate.sh`.
+A sample evaluation script for Pangu weather data can be found in `evaluate-pangu.sh`.

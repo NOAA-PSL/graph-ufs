@@ -1,11 +1,13 @@
 import argparse
 import os
+import shutil
 import threading
 from functools import partial
 
 import numpy as np
 import optax
 import xarray as xr
+import xesmf as xe
 from graphcast import checkpoint, graphcast
 from graphufs import optimize, predict, run_forward
 from jax import jit
@@ -13,9 +15,21 @@ from jax.random import PRNGKey
 from ufs2arco.timer import Timer
 
 from simple_emulator import P0Emulator
-import shutil
 
-import xesmf as xe
+"""
+Script to train and test graphufs over multiple chunks and epochs
+
+Example usage:
+
+    python3 run_training.py --chunks 10 --batch-size 1 --num-batches 16 --train
+
+    This will train networks over 10 chunks where each chunk goes through 16 steps
+    with a batch size of 1. You should get 10 checkpoints after training completes.
+
+    Later, you can evaluate a specific model by specifying model id
+
+    python3 run_training.py --chunks 10 --batch-size 1 --num-batches 16 --test --id 8
+"""
 
 
 def get_chunk_data(ds: xr.Dataset, data: list, n_batches: int = 4, batch_size: int = 1):
@@ -64,12 +78,12 @@ def parse_args():
         "--test", dest="test", action="store_true", required=False, help="Test model"
     )
     parser.add_argument(
-        "--steps",
-        dest="steps",
+        "--chunks",
+        dest="chunks",
         required=False,
         type=int,
         default=1,
-        help="Number of steps (chunks) per epoch.",
+        help="Number of chunks per epoch.",
     )
     parser.add_argument(
         "--epochs",
@@ -107,13 +121,13 @@ def parse_args():
         help="ID of neural networks to load.",
     )
     parser.add_argument(
-        "--checkpoint-steps",
+        "--checkpoint-chunks",
         "-c",
-        dest="checkpoint_steps",
+        dest="checkpoint_chunks",
         required=False,
         type=int,
         default=1,
-        help="Save weights after this many steps.",
+        help="Save weights after this many chunks are processed.",
     )
     parser.add_argument(
         "--checkpoint-dir",
@@ -281,7 +295,6 @@ if __name__ == "__main__":
                     b = bias_o + (b - bias_o) / (it + 1)
                 stats[var_name] = [r, b]
 
-
             # convert predictions to wb2 format
             def convert_wb2_format(ds):
 
@@ -307,12 +320,14 @@ if __name__ == "__main__":
                 ds = regridder(ds)
 
                 # rename variables
-                ds = ds.rename_vars({
-                    "pressfc": "geopotential",
-                    "tmp": "temperature",
-                    "ugrd10m":"10m_u_component_of_wind",
-                    "vgrd10m":"10m_v_component_of_wind",
-                })
+                ds = ds.rename_vars(
+                    {
+                        "pressfc": "surface_pressure",
+                        "tmp": "temperature",
+                        "ugrd10m": "10m_u_component_of_wind",
+                        "vgrd10m": "10m_v_component_of_wind",
+                    }
+                )
 
                 # fix pressure levels to match obs
                 ds["level"] = np.array(list(gufs.pressure_levels), dtype=np.float32)
@@ -323,12 +338,12 @@ if __name__ == "__main__":
                 ds = ds.drop_vars(["b", "t"])
                 init_times = targets["inittime"].values
                 lead_times = targets["time"].values
-                ds = ds.assign_coords(
-                    {"lead_time": lead_times, "time": init_times}
-                )
-                ds = ds.rename(
-                    {"lat": "latitude", "lon": "longitude"}
-                )
+                ds = ds.assign_coords({"lead_time": lead_times, "time": init_times})
+                ds = ds.rename({"lat": "latitude", "lon": "longitude"})
+
+                # transpose the time dimension
+                ds = ds.transpose("time", ..., "longitude", "latitude")
+
                 return ds
 
             # write chunk by chunk to avoid storing all of it in memory
