@@ -13,6 +13,7 @@ Regarding pytree, see the last few methods and lines of simple_emulatory.py, fol
     https://jax.readthedocs.io/en/latest/faq.html#strategy-3-making-customclass-a-pytree
 """
 
+import os
 from functools import partial
 import numpy as np
 import xarray as xr
@@ -21,6 +22,7 @@ from jax.random import PRNGKey
 import optax
 import haiku as hk
 
+from graphcast import graphcast
 from graphcast.checkpoint import dump
 from graphcast.graphcast import GraphCast
 from graphcast.casting import Bfloat16Cast
