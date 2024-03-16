@@ -141,10 +141,10 @@ def get_chunk_in_parallel(
         for k, v in data_0.items():
             data[k] = v
     # don't prefetch a chunk on the last iteration
-    if it < args.chunks - 1:
+    if it < args.chunks_per_epoch - 1:
         input_thread = threading.Thread(
             target=get_chunk_data,
-            args=(data_0, args.num_batches),
+            args=(data_0, args.batches_per_chunk),
         )
         input_thread.start()
     # for first chunk, wait until input thread finishes
@@ -247,48 +247,11 @@ def parse_args():
     # parse arguments
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument(
-        "--train",
-        dest="train",
+        "--test",
+        dest="test",
         action="store_true",
         required=False,
-        help="Train model",
-    )
-    parser.add_argument(
-        "--test", dest="test", action="store_true", required=False, help="Test model"
-    )
-    parser.add_argument(
-        "--chunks",
-        dest="chunks",
-        required=False,
-        type=int,
-        default=1,
-        help="Number of chunks per epoch.",
-    )
-    parser.add_argument(
-        "--epochs",
-        dest="epochs",
-        required=False,
-        type=int,
-        default=1,
-        help="Number of epochs.",
-    )
-    parser.add_argument(
-        "--batch-size",
-        "-b",
-        dest="batch_size",
-        required=False,
-        type=int,
-        default=32,
-        help="batch size.",
-    )
-    parser.add_argument(
-        "--num-batches",
-        "-n",
-        dest="num_batches",
-        required=False,
-        type=int,
-        default=32,
-        help="Number of batches to read and load into RAM.",
+        help="Test model specified with --id. Otherwise train model.",
     )
     parser.add_argument(
         "--id",
@@ -297,46 +260,39 @@ def parse_args():
         required=False,
         type=int,
         default=0,
-        help="ID of neural networks to load.",
+        help="ID of neural networks to resume training/testing from.",
     )
-    parser.add_argument(
-        "--checkpoint-chunks",
-        "-c",
-        dest="checkpoint_chunks",
-        required=False,
-        type=int,
-        default=1,
-        help="Save weights after this many chunks are processed.",
-    )
-    parser.add_argument(
-        "--checkpoint-dir",
-        dest="checkpoint_dir",
-        required=False,
-        default="nets",
-        help="Path to network files",
-    )
-    parser.add_argument(
-        "--latent-size",
-        dest="latent_size",
-        required=False,
-        default=256,
-        help="The latent space vector width. Set this lower, e.g. 32, for low RAM",
-    )
-    args = parser.parse_args()
-    return args
 
-def override_options(args, emulator):
-    """ Override options in emulator class by those from CLI. """
+    # add options from P0Emulator
+    for k, v in vars(P0Emulator).items():
+        if not k.startswith("__"):
+            name = "--" + k.replace("_", "-")
+            parser.add_argument(
+                name,
+                dest=k,
+                required=False,
+                type=type(v),
+                default=v,
+                help=f"{k}: default {v}",
+            )
+
+    # parse CLI args
+    args = parser.parse_args()
+
+    # override options in emulator class by those from CLI
     for arg in vars(args):
         value = getattr(args, arg)
         if value is not None:
-            arg_name = arg.replace('-', '_')
-            if hasattr(emulator, arg_name):
-                stored = getattr(emulator, arg_name)
+            arg_name = arg.replace("-", "_")
+            if hasattr(P0Emulator, arg_name):
+                stored = getattr(P0Emulator, arg_name)
                 if stored is not None:
-                    attr_type = type(getattr(emulator, arg_name))
+                    attr_type = type(getattr(P0Emulator, arg_name))
                     value = attr_type(value)
-                setattr(emulator, arg_name, value)
+                setattr(P0Emulator, arg_name, value)
+
+    return args
+
 
 if __name__ == "__main__":
 
@@ -346,9 +302,6 @@ if __name__ == "__main__":
     # initialize emulator and open dataset
     walltime = Timer()
     localtime = Timer()
-
-    # override options
-    override_options(args, P0Emulator)
 
     # initialize emulator
     gufs = P0Emulator()
@@ -369,7 +322,7 @@ if __name__ == "__main__":
         params, state = init_model(data_0)
 
     # training
-    if args.train:
+    if not args.test:
         walltime.start("Starting Training")
 
         # create checkpoint directory
@@ -379,11 +332,13 @@ if __name__ == "__main__":
         optimizer = optax.adam(learning_rate=1e-4)
 
         # training loop
-        for e in range(args.epochs):
-            for it in range(args.chunks):
+        for e in range(args.num_epochs):
+            for it in range(args.chunks_per_epoch):
 
                 # get chunk of data in parallel with NN optimization
-                input_thread = get_chunk_in_parallel(data, data_0, input_thread, it, args)
+                input_thread = get_chunk_in_parallel(
+                    data, data_0, input_thread, it, args
+                )
 
                 # optimize
                 localtime.start("Starting Optimization")
@@ -419,7 +374,7 @@ if __name__ == "__main__":
             shutil.rmtree(targets_zarr_name)
 
         stats = {}
-        for it in range(args.chunks):
+        for it in range(args.chunks_per_epoch):
 
             # get chunk of data in parallel with inference
             input_thread = get_chunk_in_parallel(data, data_0, input_thread, it, args)

@@ -57,6 +57,7 @@ class P0Emulator(ReplayEmulator):
 
     # training protocol
     batch_size = 16
+    num_epochs = 1
 
     # model config options
     resolution = 1.0
@@ -71,6 +72,12 @@ class P0Emulator(ReplayEmulator):
     grad_rng_seed = 0
     init_rng_seed = 0
     training_batch_rng_seed = 100
+
+    # data chunking options
+    chunks_per_epoch = 1
+    batches_per_chunk = 32
+    checkpoint_chunks = 1
+    checkpoint_dir = "./nets"
 
 tree_util.register_pytree_node(
     P0Emulator,

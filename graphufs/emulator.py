@@ -45,6 +45,7 @@ class ReplayEmulator:
 
     # training protocol
     batch_size = None           # number of forecasts averaged over in loss per optim_step
+    num_epochs = None           # number of epochs
 
     # model config options
     resolution = None
@@ -59,6 +60,12 @@ class ReplayEmulator:
     grad_rng_seed = None
     init_rng_seed = None
     training_batch_rng_seed = None # used to randomize the training batches
+
+    # data chunking options
+    chunks_per_epoch = None          # number of chunks per epoch
+    batches_per_chunk = None         # number of batches per chunk
+    checkpoint_chunks = None         # save model after this many chunks are processed
+    checkpoint_dir = ""              # directory to store checkpoints
 
     def __init__(self):
 
