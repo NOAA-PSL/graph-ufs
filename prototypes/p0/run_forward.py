@@ -23,13 +23,8 @@ if __name__ == "__main__":
 
     gufs = P0Emulator()
 
-    ds = xr.open_zarr(gufs.data_url, storage_options={"token": "anon"})
     inputs, targets, forcings = gufs.get_training_batches(
-        xds=ds,
         n_optim_steps=2,
-        batch_size=3,
-        delta_t="6h",
-        target_lead_time="12h",
     )
     localtime.stop()
 
