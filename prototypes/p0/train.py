@@ -32,23 +32,17 @@ Example usage:
 """
 
 
-def get_chunk_data(ds: xr.Dataset, data: dict, n_batches: int = 4, batch_size: int = 1):
+def get_chunk_data(data: dict, n_batches: int = 4):
     """Get multiple training batches.
 
     Args:
-        ds (xr.Dataset): xarray dataset
         data (List[3]): A list containing the [inputs, targets, forcings]
         n_batches (int): Number of batches we want to read
-        batch_size (int): batch size
     """
     print("Preparing Batches from Replay on GCS")
 
     inputs, targets, forcings = gufs.get_training_batches(
-        xds=ds,
-        n_batches=n_batches,
-        batch_size=batch_size,
-        delta_t="6h",
-        target_lead_time="18h",
+        n_optim_steps=n_batches,
     )
 
     # load into ram
@@ -129,17 +123,17 @@ def convert_wb2_format(ds, targets) -> xr.Dataset:
 
 
 def get_chunk_in_parallel(
-    ds: xr.Dataset, data: dict, data_0: dict, input_thread, it: int
+    data: dict, data_0: dict, input_thread, it: int, args: dict
 ) -> threading.Thread:
     """Get a chunk of data in parallel with optimization/prediction. This keeps
     two big chunks (data and data_0) in RAM.
 
     Args:
-        ds (xr.Dataset): dataset from which chunks are being extracted
         data (dict): the data being used by optimization/prediction process
         data_0 (dict): the data currently being fetched/processed
         input_thread: the input thread
         it: chunk number, it < 0 indicates first chunk
+        args: CLI arguments
     """
     # make sure input thread finishes before copying data_0 to data
     if it >= 0:
@@ -150,7 +144,7 @@ def get_chunk_in_parallel(
     if it < args.chunks - 1:
         input_thread = threading.Thread(
             target=get_chunk_data,
-            args=(ds, data_0, args.num_batches, args.batch_size),
+            args=(data_0, args.num_batches),
         )
         input_thread.start()
     # for first chunk, wait until input thread finishes
@@ -334,13 +328,16 @@ if __name__ == "__main__":
     walltime = Timer()
     localtime = Timer()
     gufs = P0Emulator()
-    ds = xr.open_zarr(gufs.data_url, storage_options={"token": "anon"})
+
+    # override with options from CLI
+    if args.batch_size:
+        gufs.batch_size = args.batch_size
 
     # get the first chunk of data
     data = {}
     data_0 = {}
     input_thread = None
-    input_thread = get_chunk_in_parallel(ds, data, data_0, input_thread, -1)
+    input_thread = get_chunk_in_parallel(data, data_0, input_thread, -1, args)
 
     # load weights or initialize a random model
     ckpt_id = args.id
@@ -366,12 +363,12 @@ if __name__ == "__main__":
             for it in range(args.chunks):
 
                 # get chunk of data in parallel with NN optimization
-                input_thread = get_chunk_in_parallel(ds, data, data_0, input_thread, it)
+                input_thread = get_chunk_in_parallel(data, data_0, input_thread, it, args)
 
                 # optimize
                 localtime.start("Starting Optimization")
 
-                params, loss, diagnostics, opt_state, grads = optimize(
+                params, loss = optimize(
                     params=params,
                     state=state,
                     optimizer=optimizer,
@@ -405,7 +402,7 @@ if __name__ == "__main__":
         for it in range(args.chunks):
 
             # get chunk of data in parallel with inference
-            input_thread = get_chunk_in_parallel(ds, data, data_0, input_thread, it)
+            input_thread = get_chunk_in_parallel(data, data_0, input_thread, it, args)
 
             # run predictions
             predictions = predict(
