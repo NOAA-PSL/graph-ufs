@@ -13,14 +13,18 @@ Regarding pytree, see the last few methods and lines of simple_emulatory.py, fol
     https://jax.readthedocs.io/en/latest/faq.html#strategy-3-making-customclass-a-pytree
 """
 
+import os
 from functools import partial
 import numpy as np
+import xarray as xr
 from jax import jit, value_and_grad, tree_util
 from jax.random import PRNGKey
 import optax
 import haiku as hk
 import xarray as xr
 
+from graphcast import graphcast
+from graphcast.checkpoint import dump
 from graphcast.graphcast import GraphCast
 from graphcast.casting import Bfloat16Cast
 from graphcast.autoregressive import Predictor
@@ -87,7 +91,24 @@ def grads_fn(params, state, emulator, inputs, targets, forcings):
     return loss, diagnostics, next_state, grads
 
 
-def optimize(params, state, optimizer, emulator, input_batches, target_batches, forcing_batches, verbose=False):
+def optimize(params, state, optimizer, emulator, input_batches, target_batches, forcing_batches, store_results=True, description="", license="", verbose=False):
+    """Optimize the model parameters by running through all optim_steps in data
+
+    Args:
+        params (dict): with the initialized model parameters
+        state (dict): this is empty, but for now has to be here
+        optimizer (Callable, optax.optimizer): see `here <https://optax.readthedocs.io/en/latest/api/optimizers.html>`_
+        emulator (ReplayEmulator): the emulator object
+        input_batches, training_batches, forcing_batches (xarray.Dataset): with data needed for training
+        store_results (bool, optional): if True, store the loss values to netcdf and model checkpoint (optimized weights) using graphcast's storage routines
+        description, license (str, optional): information to store with the model checkpoint when writing out optimized weights, irrelevant if store_results is False
+        verbose (bool, optional): if True, print loss and mean(|gradient|) at each step
+
+    Returns:
+        params (dict): optimized model parameters
+        loss_ds (xarray.Dataset): with the total loss function and loss per variable for each optim_step
+            this doesn't have gradient info, but we could add that
+    """
 
     opt_state = optimizer.init(params)
 
@@ -112,30 +133,75 @@ def optimize(params, state, optimizer, emulator, input_batches, target_batches, 
         params = optax.apply_updates(params, updates)
         return params, loss, diagnostics, opt_state, grads
 
-    def with_params(fn):
-        return partial(fn, params=params, state=state)
+    optim_step_jitted = jit( optim_step )
 
-    optim_step_jitted = with_params( jit(
-        optim_step
-    ) )
+    loss_values = []
+    loss_by_var = {k: list() for k in target_batches.data_vars}
 
-    for i in input_batches["batch"].values:
+    for k in input_batches["optim_step"].values:
 
         params, loss, diagnostics, opt_state, grads = optim_step_jitted(
             opt_state=opt_state,
             emulator=emulator,
-            inputs=input_batches.sel(batch=[i]),
-            targets=target_batches.sel(batch=[i]),
-            forcings=forcing_batches.sel(batch=[i]),
+            inputs=input_batches.sel(optim_step=k),
+            targets=target_batches.sel(optim_step=k),
+            forcings=forcing_batches.sel(optim_step=k),
+            params=params,
+            state=state,
         )
-        mean_grad = np.mean(tree_util.tree_flatten(tree_util.tree_map(lambda x: np.abs(x).mean(), grads))[0])
-        if verbose or i == input_batches["batch"].values[-1]:
-            print(f"Step = {i}, loss = {loss}, mean(|grad|) = {mean_grad}")
+        loss_values.append(loss)
+        for key, val in diagnostics.items():
+            loss_by_var[key].append(val)
+
+        if verbose:
+            mean_grad = np.mean(tree_util.tree_flatten(tree_util.tree_map(lambda x: np.abs(x).mean(), grads))[0])
+            print(f"Step = {k+1}, loss = {loss}, mean(|grad|) = {mean_grad}")
             print("diagnostics: ")
             print(diagnostics)
             print()
 
-    return params, loss, diagnostics, opt_state, grads
+    loss_ds = xr.Dataset()
+    loss_ds["optim_step"] = input_batches["optim_step"]
+    loss_ds.attrs["batch_size"] = len(input_batches["batch"])
+    loss_ds["var_index"] = xr.DataArray(
+        np.arange(len(loss_by_var)),
+        coords={"var_index": np.arange(len(loss_by_var))},
+        dims=("var_index",),
+    )
+    loss_ds["var_names"] = xr.DataArray(
+        list(loss_by_var.keys()),
+        dims=("var_index",),
+    )
+    loss_ds["loss"] = xr.DataArray(
+        loss_values,
+        coords={"optim_step": loss_ds["optim_step"]},
+        dims=("optim_step",),
+        attrs={"long_name": "loss function value"},
+    )
+    loss_ds["loss_by_var"] = xr.DataArray(
+        np.vstack(list(loss_by_var.values())),
+        dims=("var_index", "optim_step"),
+    )
+
+    if store_results:
+        loss_fname = os.path.join(emulator.local_store_path, "loss.nc")
+        print(f"Storing loss function values at: {loss_fname}")
+        loss_ds.to_netcdf(os.path.join(emulator.local_store_path, "loss.nc"))
+
+        # store parameters
+        ckpt = graphcast.CheckPoint(
+            params=params,
+            model_config=emulator.model_config,
+            task_config=emulator.task_config,
+            description=description,
+            license=license,
+        )
+        ckpt_fname = os.path.join(emulator.local_store_path, "graphufs.ckpt")
+        print(f"Storing model checkpoint at: {ckpt_fname}")
+        with open(ckpt_fname, "wb") as f:
+            dump(f, ckpt)
+
+    return params, loss_ds
 
 
 def predict(
