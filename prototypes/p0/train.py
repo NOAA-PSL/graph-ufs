@@ -315,9 +315,28 @@ def parse_args():
         default="nets",
         help="Path to network files",
     )
+    parser.add_argument(
+        "--latent-size",
+        dest="latent_size",
+        required=False,
+        default=256,
+        help="The latent space vector width. Set this lower, e.g. 32, for low RAM",
+    )
     args = parser.parse_args()
     return args
 
+def override_options(args, emulator):
+    """ Override options in emulator class by those from CLI. """
+    for arg in vars(args):
+        value = getattr(args, arg)
+        if value is not None:
+            arg_name = arg.replace('-', '_')
+            if hasattr(emulator, arg_name):
+                stored = getattr(emulator, arg_name)
+                if stored is not None:
+                    attr_type = type(getattr(emulator, arg_name))
+                    value = attr_type(value)
+                setattr(emulator, arg_name, value)
 
 if __name__ == "__main__":
 
@@ -327,11 +346,12 @@ if __name__ == "__main__":
     # initialize emulator and open dataset
     walltime = Timer()
     localtime = Timer()
-    gufs = P0Emulator()
 
-    # override with options from CLI
-    if args.batch_size:
-        gufs.batch_size = args.batch_size
+    # override options
+    override_options(args, P0Emulator)
+
+    # initialize emulator
+    gufs = P0Emulator()
 
     # get the first chunk of data
     data = {}
