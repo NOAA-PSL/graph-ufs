@@ -6,3 +6,13 @@ from .training import (
     optimize,
     predict,
 )
+from .utils import (
+    get_chunk_data,
+    get_chunk_in_parallel,
+    load_checkpoint,
+    save_checkpoint,
+)
+from .evaluation import (
+    convert_wb2_format,
+    compute_rmse_bias,
+)

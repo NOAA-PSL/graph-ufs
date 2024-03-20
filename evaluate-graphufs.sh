@@ -16,7 +16,7 @@ python weatherbench2/scripts/evaluate.py \
   --time_start=1993-12-31 \
   --time_stop=1994-01-05 \
   --variables="surface_pressure,temperature,10m_u_component_of_wind,10m_v_component_of_wind" \
-  --levels=100,500,100
+  --levels=100,500,1000
 
 # We need to match dates before comparing against this obs, currently gives NaNs for metrics
 #   --obs_path=gs://weatherbench2/datasets/era5/1959-2022-6h-64x32_equiangular_conservative.zarr \

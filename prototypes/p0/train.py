@@ -1,15 +1,21 @@
 import argparse
 import os
 import shutil
-import threading
 from functools import partial
 
 import numpy as np
 import optax
-import xarray as xr
-import xesmf as xe
-from graphcast import checkpoint, graphcast
-from graphufs import optimize, predict, run_forward
+from graphufs import (
+    optimize,
+    predict,
+    run_forward,
+    get_chunk_data,
+    get_chunk_in_parallel,
+    load_checkpoint,
+    save_checkpoint,
+    convert_wb2_format,
+    compute_rmse_bias,
+)
 from jax import jit
 from jax.random import PRNGKey
 from ufs2arco.timer import Timer
@@ -30,215 +36,6 @@ Example usage:
 
     python3 run_training.py --chunks 10 --batch-size 1 --num-batches 16 --test --id 8
 """
-
-
-def get_chunk_data(data: dict, n_batches: int = 4):
-    """Get multiple training batches.
-
-    Args:
-        data (List[3]): A list containing the [inputs, targets, forcings]
-        n_batches (int): Number of batches we want to read
-    """
-    print("Preparing Batches from Replay on GCS")
-
-    inputs, targets, forcings = gufs.get_training_batches(
-        n_optim_steps=n_batches,
-    )
-
-    # load into ram
-    inputs.load()
-    targets.load()
-    forcings.load()
-
-    data.update(
-        {
-            "inputs": inputs,
-            "targets": targets,
-            "forcings": forcings,
-        }
-    )
-
-    print("Finished preparing batches")
-
-
-def convert_wb2_format(ds, targets) -> xr.Dataset:
-    """Convert a dataset into weatherbench2 compatible format. Details can be
-    found in: https://weatherbench2.readthedocs.io/en/latest/evaluation.html.
-
-    Args:
-        ds (xr.Dataset): the xarray dadatset
-        targets (xr.Dataset): a dataset that contains "inititime", forecast
-                initialization time
-    """
-
-    # regrid to the obs coordinates
-    ds_obs = xr.open_zarr(
-        gufs.wb2_obs_url,
-        storage_options={"token": "anon"},
-    )
-    ds_out = xr.Dataset(
-        {
-            "lat": (["lat"], ds_obs["latitude"].values),
-            "lon": (["lon"], ds_obs["longitude"].values),
-        }
-    )
-    regridder = xe.Regridder(
-        ds,
-        ds_out,
-        "bilinear",
-        periodic=True,
-        reuse_weights=False,
-        filename="graphufs_regridder",
-    )
-    ds = regridder(ds)
-
-    # rename variables
-    ds = ds.rename_vars(
-        {
-            "pressfc": "surface_pressure",
-            "tmp": "temperature",
-            "ugrd10m": "10m_u_component_of_wind",
-            "vgrd10m": "10m_v_component_of_wind",
-        }
-    )
-
-    # fix pressure levels to match obs
-    ds["level"] = np.array(list(gufs.pressure_levels), dtype=np.float32)
-
-    # remove batch dimension
-    ds = ds.rename({"time": "t", "batch": "b"})
-    ds = ds.stack(time=("b", "t"), create_index=False)
-    ds = ds.drop_vars(["b", "t"])
-    init_times = targets["inittime"].values
-    lead_times = targets["time"].values
-    ds = ds.assign_coords({"lead_time": lead_times, "time": init_times})
-    ds = ds.rename({"lat": "latitude", "lon": "longitude"})
-
-    # transpose the dimensions, and insert lead_time
-    ds = ds.transpose("time", ..., "longitude", "latitude")
-    for var in ds.data_vars:
-        ds[var] = ds[var].expand_dims({"lead_time": ds.lead_time}, axis=1)
-
-    return ds
-
-
-def get_chunk_in_parallel(
-    data: dict, data_0: dict, input_thread, it: int, args: dict
-) -> threading.Thread:
-    """Get a chunk of data in parallel with optimization/prediction. This keeps
-    two big chunks (data and data_0) in RAM.
-
-    Args:
-        data (dict): the data being used by optimization/prediction process
-        data_0 (dict): the data currently being fetched/processed
-        input_thread: the input thread
-        it: chunk number, it < 0 indicates first chunk
-        args: CLI arguments
-    """
-    # make sure input thread finishes before copying data_0 to data
-    if it >= 0:
-        input_thread.join()
-        for k, v in data_0.items():
-            data[k] = v
-    # don't prefetch a chunk on the last iteration
-    if it < args.chunks_per_epoch - 1:
-        input_thread = threading.Thread(
-            target=get_chunk_data,
-            args=(data_0, args.batches_per_chunk),
-        )
-        input_thread.start()
-    # for first chunk, wait until input thread finishes
-    if it < 0:
-        input_thread.join()
-    return input_thread
-
-
-def init_model(data: dict):
-    """Initialize model with random weights.
-
-    Args:
-        data (str): data to be used for initialization?
-    """
-    localtime.start("Initializing Optimizer and Parameters")
-
-    init_jitted = jit(run_forward.init)
-    params, state = init_jitted(
-        rng=PRNGKey(gufs.init_rng_seed),
-        emulator=gufs,
-        inputs=data["inputs"].sel(batch=[0]),
-        targets_template=data["targets"].sel(batch=[0]),
-        forcings=data["forcings"].sel(batch=[0]),
-    )
-
-    localtime.stop()
-    return params, state
-
-
-def load_checkpoint(ckpt_path: str):
-    """Load checkpoint.
-
-    Args:
-        ckpt_path (str): path to model
-    """
-    localtime.start("Loading weights")
-
-    with open(ckpt_path, "rb") as f:
-        ckpt = checkpoint.load(f, graphcast.CheckPoint)
-    params = ckpt.params
-    state = {}
-    model_config = ckpt.model_config
-    task_config = ckpt.task_config
-    print("Model description:\n", ckpt.description, "\n")
-    print("Model license:\n", ckpt.license, "\n")
-
-    localtime.stop()
-    return params, state
-
-
-def save_checkpoint(gufs, params, ckpt_path: str) -> None:
-    """Load checkpoint.
-
-    Args:
-        gufs: emulator class
-        params: the parameters (weights) of the model
-        ckpt_path (str): path to model
-    """
-    with open(ckpt_path, "wb") as f:
-        ckpt = graphcast.CheckPoint(
-            params=params,
-            model_config=gufs.model_config,
-            task_config=gufs.task_config,
-            description="GraphCast model trained on UFS data",
-            license="Public domain",
-        )
-        checkpoint.dump(f, ckpt)
-
-
-def compute_metrics(
-    predictions: xr.Dataset, target: xr.Dataset, stats: dict, it: int
-) -> None:
-    """Compute fast metrics (rmse and bias) between predictions and target.
-
-    Args:
-        predictions (xr.Dataset): the forecast
-        target (xr.Dataset): the ground trutch
-        stats (dict): dictionary containing statistics
-        it (int): current chunk iteration id. This is needed for computing a running average
-    """
-    diff = predictions - targets
-    rmse = np.sqrt((diff ** 2).mean())
-    bias = diff.mean()
-
-    # compute running average of rmse and bias
-    for var_name, _ in rmse.data_vars.items():
-        r = rmse[var_name].values
-        b = bias[var_name].values
-        if var_name in stats.keys():
-            rmse_o = stats[var_name][0]
-            bias_o = stats[var_name][1]
-            r = rmse_o + (r - rmse_o) / (it + 1)
-            b = bias_o + (b - bias_o) / (it + 1)
-        stats[var_name] = [r, b]
 
 
 def parse_args():
@@ -310,16 +107,19 @@ if __name__ == "__main__":
     data = {}
     data_0 = {}
     input_thread = None
-    input_thread = get_chunk_in_parallel(data, data_0, input_thread, -1, args)
+    input_thread = get_chunk_in_parallel(gufs, data, data_0, input_thread, -1, args)
 
     # load weights or initialize a random model
     ckpt_id = args.id
     ckpt_path = f"{args.checkpoint_dir}/model_{ckpt_id}.npz"
 
     if os.path.exists(ckpt_path):
+        localtime.start("Loading weights")
         params, state = load_checkpoint(ckpt_path)
     else:
+        localtime.start("Initializing Optimizer and Parameters")
         params, state = init_model(data_0)
+    localtime.stop()
 
     # training
     if not args.test:
@@ -337,7 +137,7 @@ if __name__ == "__main__":
 
                 # get chunk of data in parallel with NN optimization
                 input_thread = get_chunk_in_parallel(
-                    data, data_0, input_thread, it, args
+                    gufs, data, data_0, input_thread, it, args
                 )
 
                 # optimize
@@ -377,7 +177,7 @@ if __name__ == "__main__":
         for it in range(args.chunks_per_epoch):
 
             # get chunk of data in parallel with inference
-            input_thread = get_chunk_in_parallel(data, data_0, input_thread, it, args)
+            input_thread = get_chunk_in_parallel(gufs, data, data_0, input_thread, it, args)
 
             # run predictions
             predictions = predict(
@@ -391,7 +191,7 @@ if __name__ == "__main__":
 
             # Compute rmse and bias comparing targets and predictions
             targets = data["targets"]
-            compute_metrics(predictions, targets, stats, it)
+            compute_rmse_bias(predictions, targets, stats, it)
 
             # write chunk by chunk to avoid storing all of it in memory
             predictions = convert_wb2_format(predictions, targets)
