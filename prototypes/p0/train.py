@@ -3,7 +3,6 @@ import os
 import shutil
 from functools import partial
 
-import numpy as np
 import optax
 from graphufs import (
     optimize,
@@ -27,14 +26,14 @@ Script to train and test graphufs over multiple chunks and epochs
 
 Example usage:
 
-    python3 run_training.py --chunks 10 --batch-size 1 --num-batches 16 --train
+    python3 train.py --chunks-per-epoch 10 --batches-per-chunk 1 --batch-size 1 --latent-size 32
 
     This will train networks over 10 chunks where each chunk goes through 16 steps
     with a batch size of 1. You should get 10 checkpoints after training completes.
 
     Later, you can evaluate a specific model by specifying model id
 
-    python3 run_training.py --chunks 10 --batch-size 1 --num-batches 16 --test --id 8
+    python3 train.py --chunks-per-epoch 1 --batches-per-chunk 1 --batch-size 1 --latent-size 32 --test --id 1
 """
 
 
@@ -194,11 +193,11 @@ if __name__ == "__main__":
             compute_rmse_bias(predictions, targets, stats, it)
 
             # write chunk by chunk to avoid storing all of it in memory
-            predictions = convert_wb2_format(predictions, targets)
+            predictions = convert_wb2_format(gufs, predictions, targets)
             predictions.to_zarr(predictions_zarr_name, mode="a")
 
             # write also targets to compute metrics against it with wb2
-            targets = convert_wb2_format(targets, targets)
+            targets = convert_wb2_format(gufs, targets, targets)
             targets.to_zarr(targets_zarr_name, mode="a")
 
         print("--------- Statistiscs ---------")

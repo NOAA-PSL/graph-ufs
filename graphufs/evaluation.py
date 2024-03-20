@@ -1,12 +1,14 @@
+import numpy as np
 import xesmf as xe
 import xarray as xr
 
 
-def convert_wb2_format(ds, targets) -> xr.Dataset:
+def convert_wb2_format(gufs, ds, targets) -> xr.Dataset:
     """Convert a dataset into weatherbench2 compatible format. Details can be
     found in: https://weatherbench2.readthedocs.io/en/latest/evaluation.html.
 
     Args:
+        gufs: emulator class
         ds (xr.Dataset): the xarray dadatset
         targets (xr.Dataset): a dataset that contains "inititime", forecast
                 initialization time
@@ -64,13 +66,13 @@ def convert_wb2_format(ds, targets) -> xr.Dataset:
 
 
 def compute_rmse_bias(
-    predictions: xr.Dataset, target: xr.Dataset, stats: dict, it: int
+    predictions: xr.Dataset, targets: xr.Dataset, stats: dict, it: int
 ) -> None:
     """Compute fast metrics (rmse and bias) between predictions and target.
 
     Args:
         predictions (xr.Dataset): the forecast
-        target (xr.Dataset): the ground trutch
+        targets (xr.Dataset): the ground trutch
         stats (dict): dictionary containing statistics
         it (int): current chunk iteration id. This is needed for computing a running average
     """
