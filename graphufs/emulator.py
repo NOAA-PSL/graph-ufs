@@ -291,7 +291,7 @@ class ReplayEmulator:
 
             # fix this later for batch_size != 1
             times = batch.datetime.isel(time=0).values
-            this_target = this_target.assign_coords(inittime=times)
+            this_target = this_target.assign_coords(inittime=[times])
 
             # note that the optim_step dim has to be added after the extract_inputs_targets_forcings call
             inputs.append(this_input.expand_dims({"optim_step": [k]}))
