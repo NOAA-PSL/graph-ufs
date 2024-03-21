@@ -1,5 +1,8 @@
 from graphcast import checkpoint, graphcast
+from jax import jit
+from jax.random import PRNGKey
 import threading
+from graphufs import run_forward
 
 
 def get_chunk_data(gufs, data: dict, n_batches: int = 4):
@@ -12,7 +15,7 @@ def get_chunk_data(gufs, data: dict, n_batches: int = 4):
     """
     print("Preparing Batches from Replay on GCS")
 
-    inputs, targets, forcings = gufs.get_training_batches(
+    inputs, targets, forcings, inittimes = gufs.get_training_batches(
         n_optim_steps=n_batches,
     )
 
@@ -20,12 +23,14 @@ def get_chunk_data(gufs, data: dict, n_batches: int = 4):
     inputs.load()
     targets.load()
     forcings.load()
+    inittimes.load()
 
     data.update(
         {
             "inputs": inputs,
             "targets": targets,
             "forcings": forcings,
+            "inittimes": inittimes,
         }
     )
 

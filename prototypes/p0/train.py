@@ -7,16 +7,14 @@ import optax
 from graphufs import (
     optimize,
     predict,
-    run_forward,
     get_chunk_data,
     get_chunk_in_parallel,
+    init_model,
     load_checkpoint,
     save_checkpoint,
     convert_wb2_format,
     compute_rmse_bias,
 )
-from jax import jit
-from jax.random import PRNGKey
 from ufs2arco.timer import Timer
 
 from simple_emulator import P0Emulator
@@ -117,7 +115,7 @@ if __name__ == "__main__":
         params, state = load_checkpoint(ckpt_path)
     else:
         localtime.start("Initializing Optimizer and Parameters")
-        params, state = init_model(data_0)
+        params, state = init_model(gufs, data_0)
     localtime.stop()
 
     # training
@@ -190,14 +188,15 @@ if __name__ == "__main__":
 
             # Compute rmse and bias comparing targets and predictions
             targets = data["targets"]
+            inittimes = data["inittimes"]
             compute_rmse_bias(predictions, targets, stats, it)
 
             # write chunk by chunk to avoid storing all of it in memory
-            predictions = convert_wb2_format(gufs, predictions, targets)
+            predictions = convert_wb2_format(gufs, predictions, inittimes)
             predictions.to_zarr(predictions_zarr_name, mode="a")
 
             # write also targets to compute metrics against it with wb2
-            targets = convert_wb2_format(gufs, targets, targets)
+            targets = convert_wb2_format(gufs, targets, inittimes)
             targets.to_zarr(targets_zarr_name, mode="a")
 
         print("--------- Statistiscs ---------")

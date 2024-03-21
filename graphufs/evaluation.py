@@ -3,15 +3,15 @@ import xesmf as xe
 import xarray as xr
 
 
-def convert_wb2_format(gufs, ds, targets) -> xr.Dataset:
+def convert_wb2_format(gufs, ds, inittimes) -> xr.Dataset:
     """Convert a dataset into weatherbench2 compatible format. Details can be
     found in: https://weatherbench2.readthedocs.io/en/latest/evaluation.html.
 
     Args:
         gufs: emulator class
         ds (xr.Dataset): the xarray dadatset
-        targets (xr.Dataset): a dataset that contains "inititime", forecast
-                initialization time
+        inittimes (xr.Dataset): a dataset that contains "inititime", forecast
+                initialization time, and lead time coordinate "time".
     """
 
     # regrid to the obs coordinates
@@ -52,15 +52,15 @@ def convert_wb2_format(gufs, ds, targets) -> xr.Dataset:
     ds = ds.rename({"time": "t", "batch": "b"})
     ds = ds.stack(time=("b", "t"), create_index=False)
     ds = ds.drop_vars(["b", "t"])
-    init_times = targets["inittime"].values
-    lead_times = targets["time"].values
+    init_times = inittimes["datetime"].values
+    lead_times = inittimes["time"].values
     ds = ds.assign_coords({"lead_time": lead_times, "time": init_times})
     ds = ds.rename({"lat": "latitude", "lon": "longitude"})
 
     # transpose the dimensions, and insert lead_time
     ds = ds.transpose("time", ..., "longitude", "latitude")
-    for var in ds.data_vars:
-        ds[var] = ds[var].expand_dims({"lead_time": ds.lead_time}, axis=1)
+    #for var in ds.data_vars:
+    #    ds[var] = ds[var].expand_dims({"lead_time": ds.lead_time}, axis=1)
 
     return ds
 

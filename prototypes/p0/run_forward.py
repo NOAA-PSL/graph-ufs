@@ -23,7 +23,7 @@ if __name__ == "__main__":
 
     gufs = P0Emulator()
 
-    inputs, targets, forcings = gufs.get_training_batches(
+    inputs, targets, forcings, inittimes = gufs.get_training_batches(
         n_optim_steps=2,
     )
     localtime.stop()

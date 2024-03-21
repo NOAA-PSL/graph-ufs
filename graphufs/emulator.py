@@ -193,11 +193,13 @@ class ReplayEmulator:
             inputs_path = os.path.join(self.local_store_path, "training-inputs.zarr")
             targets_path = os.path.join(self.local_store_path, "training-targets.zarr")
             forcings_path = os.path.join(self.local_store_path, "training-forcings.zarr")
+            inittimes_path = os.path.join(self.local_store_path, "training-inittimes.zarr")
             if all(os.path.exists(x) for x in [inputs_path, targets_path, forcings_path]):
                 inputs = xr.open_zarr(inputs_path)
                 targets = xr.open_zarr(targets_path)
                 forcings = xr.open_zarr(forcings_path)
-                return inputs, targets, forcings
+                inittimes = xr.open_zarr(inittimes_path)
+                return inputs, targets, forcings, inittimes
 
         # grab the dataset and subsample training portion at desired model time step
         xds = xr.open_zarr(self.data_url, storage_options={"token": "anon"})
@@ -267,6 +269,7 @@ class ReplayEmulator:
         inputs = []
         targets = []
         forcings = []
+        inittimes = []
         timer.start("Extracting inputs, targets, and forcings")
         for i, (k, b) in enumerate(
             itertools.product(range(n_optim_steps), range(self.batch_size))
@@ -290,13 +293,14 @@ class ReplayEmulator:
             )
 
             # fix this later for batch_size != 1
-            times = batch.datetime.isel(time=0).values
-            this_target = this_target.assign_coords(inittime=(times))
+            this_inittimes = batch.datetime.isel(time=0)
+            this_inittimes = this_inittimes.to_dataset(name="inittimes")
 
             # note that the optim_step dim has to be added after the extract_inputs_targets_forcings call
             inputs.append(this_input.expand_dims({"optim_step": [k]}))
             targets.append(this_target.expand_dims({"optim_step": [k]}))
             forcings.append(this_forcing.expand_dims({"optim_step": [k]}))
+            inittimes.append(this_inittimes.expand_dims({"optim_step": [k]}))
             if b == self.batch_size and k // 10 ==  k / 10:
                 print(f" ... done with {k} optim steps")
 
@@ -306,8 +310,9 @@ class ReplayEmulator:
         inputs = self.combine_chunk_store(inputs, "training-inputs.zarr")
         targets = self.combine_chunk_store(targets, "training-targets.zarr")
         forcings = self.combine_chunk_store(forcings, "training-forcings.zarr")
+        inittimes = self.combine_chunk_store(inittimes, "training-inittimes.zarr", True)
         timer.stop()
-        return inputs, targets, forcings
+        return inputs, targets, forcings, inittimes
 
 
     def load_normalization(self, **kwargs):
@@ -377,17 +382,23 @@ class ReplayEmulator:
         return xr.DataArray(pfull, coords={"pfull": pfull}, dims="pfull")
 
 
-    def combine_chunk_store(self, ds_list, zname):
+    def combine_chunk_store(self, ds_list, zname, chunk_special = False):
         """Used by the training batch creation code to combine many datasets for optimization"""
         newds = xr.combine_by_coords(ds_list)
-        chunksize = {
-            "optim_step": 1,
-            "batch": -1,
-            "time": -1,
-            "level": -1,
-            "lat": -1,
-            "lon": -1,
-        }
+        if not chunk_special:
+            chunksize = {
+                "optim_step": 1,
+                "batch": -1,
+                "time": -1,
+                "level": -1,
+                "lat": -1,
+                "lon": -1,
+            }
+        else:
+            chunksize = {
+                "optim_step": 1,
+                "batch": -1,
+            }
         chunksize = {k:v for k,v in chunksize.items() if k in newds}
         newds = newds.chunk(chunksize)
         if self.local_store_path is not None:
