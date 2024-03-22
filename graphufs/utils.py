@@ -5,7 +5,7 @@ import threading
 from graphufs import run_forward
 
 
-def get_chunk_data(gufs, data: dict, n_batches: int = 4):
+def get_chunk_data(gufs, data: dict, n_batches: int = 4, random_sample: bool = True):
     """Get multiple training batches.
 
     Args:
@@ -17,6 +17,7 @@ def get_chunk_data(gufs, data: dict, n_batches: int = 4):
 
     inputs, targets, forcings, inittimes = gufs.get_training_batches(
         n_optim_steps=n_batches,
+        random_sample=random_sample,
     )
 
     # load into ram
@@ -60,7 +61,7 @@ def get_chunk_in_parallel(
     if it < args.chunks_per_epoch - 1:
         input_thread = threading.Thread(
             target=get_chunk_data,
-            args=(gufs, data_0, args.batches_per_chunk),
+            args=(gufs, data_0, args.batches_per_chunk, not args.test),
         )
         input_thread.start()
     # for first chunk, wait until input thread finishes

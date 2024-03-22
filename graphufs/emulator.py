@@ -171,6 +171,7 @@ class ReplayEmulator:
     def get_training_batches(self,
         n_optim_steps=None,
         drop_cftime=True,
+        random_sample=True,
         ):
         """Get a dataset with all the batches of data necessary for training
 
@@ -246,12 +247,15 @@ class ReplayEmulator:
 
         # randomly sample without replacement
         # note that GraphCast samples with replacement
-        rstate = np.random.RandomState(seed=self.training_batch_rng_seed)
-        forecast_initial_times = rstate.choice(
-            all_initial_times,
-            size=(n_forecasts,),
-            replace=False
-        )
+        if random_sample:
+            rstate = np.random.RandomState(seed=self.training_batch_rng_seed)
+            forecast_initial_times = rstate.choice(
+                all_initial_times,
+                size=(n_forecasts,),
+                replace=False
+            )
+        else:
+            forecast_initial_times = all_initial_times[:n_forecasts]
 
         # warnings before we get started
         if pd.Timedelta(self.target_lead_time) > delta_t:
