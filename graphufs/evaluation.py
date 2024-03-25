@@ -28,7 +28,7 @@ def convert_wb2_format(gufs, ds, inittimes) -> xr.Dataset:
     regridder = xe.Regridder(
         ds,
         ds_out,
-        "bilinear",
+        "conservative",
         periodic=True,
         reuse_weights=False,
         filename="graphufs_regridder",
