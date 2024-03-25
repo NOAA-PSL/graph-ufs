@@ -389,21 +389,15 @@ class ReplayEmulator:
     def combine_chunk_store(self, ds_list, zname, chunk_special = False):
         """Used by the training batch creation code to combine many datasets for optimization"""
         newds = xr.combine_by_coords(ds_list)
-        if not chunk_special:
-            chunksize = {
-                "optim_step": 1,
-                "batch": -1,
-                "time": -1,
-                "level": -1,
-                "lat": -1,
-                "lon": -1,
-            }
-        else:
-            chunksize = {
-                "optim_step": 1,
-                "batch": -1,
-            }
-        chunksize = {k:v for k,v in chunksize.items() if k in newds}
+        chunksize = {
+            "optim_step": 1,
+            "batch": -1,
+            "time": -1,
+            "level": -1,
+            "lat": -1,
+            "lon": -1,
+        }
+        chunksize = {k:v for k,v in chunksize.items() if k in newds.dims}
         newds = newds.chunk(chunksize)
         if self.local_store_path is not None:
             newds.to_zarr(os.path.join(self.local_store_path, zname))
