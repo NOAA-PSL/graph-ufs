@@ -33,10 +33,10 @@ def convert_wb2_format(gufs, ds, inittimes) -> xr.Dataset:
         reuse_weights=False,
         filename="graphufs_regridder",
     )
-    ds = regridder(ds)
+    ds_out = regridder(ds)
 
     # rename variables
-    ds = ds.rename_vars(
+    ds_out = ds_out.rename_vars(
         {
             "pressfc": "surface_pressure",
             "tmp": "temperature",
@@ -46,23 +46,23 @@ def convert_wb2_format(gufs, ds, inittimes) -> xr.Dataset:
     )
 
     # fix pressure levels to match obs
-    ds["level"] = np.array(list(gufs.pressure_levels), dtype=np.float32)
+    ds_out["level"] = np.array(list(gufs.pressure_levels), dtype=np.float32)
 
     # remove batch dimension
-    ds = ds.rename({"time": "t", "batch": "b"})
-    ds = ds.stack(time=("b", "t"), create_index=False)
-    ds = ds.drop_vars(["b", "t"])
+    ds_out = ds_out.rename({"time": "t", "batch": "b"})
+    ds_out = ds_out.stack(time=("b", "t"), create_index=False)
+    ds_out = ds_out.drop_vars(["b", "t"])
     init_times = inittimes["datetime"].values
     lead_times = inittimes["time"].values
-    ds = ds.assign_coords({"lead_time": lead_times, "time": init_times})
-    ds = ds.rename({"lat": "latitude", "lon": "longitude"})
+    ds_out = ds_out.assign_coords({"lead_time": lead_times, "time": init_times})
+    ds_out = ds_out.rename({"lat": "latitude", "lon": "longitude"})
 
     # transpose the dimensions, and insert lead_time
-    ds = ds.transpose("time", ..., "longitude", "latitude")
-    #for var in ds.data_vars:
-    #    ds[var] = ds[var].expand_dims({"lead_time": ds.lead_time}, axis=1)
+    ds_out = ds_out.transpose("time", ..., "longitude", "latitude")
+    #for var in ds_out.data_vars:
+    #    ds_out[var] = ds_out[var].expand_dims({"lead_time": ds_out.lead_time}, axis=1)
 
-    return ds
+    return ds_out
 
 
 def compute_rmse_bias(

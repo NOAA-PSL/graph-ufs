@@ -24,14 +24,14 @@ Script to train and test graphufs over multiple chunks and epochs
 
 Example usage:
 
-    python3 train.py --chunks-per-epoch 10 --batches-per-chunk 1 --batch-size 1 --latent-size 32
+    python3 train.py --chunks-per-epoch 2 --batches-per-chunk 1 --latent-size 32
 
-    This will train networks over 10 chunks where each chunk goes through 16 steps
+    This will train networks over 2 chunks where each chunk goes through 16 steps
     with a batch size of 1. You should get 10 checkpoints after training completes.
 
     Later, you can evaluate a specific model by specifying model id
 
-    python3 train.py --chunks-per-epoch 1 --batches-per-chunk 1 --batch-size 1 --latent-size 32 --test --id 1
+    python3 train.py --chunks-per-epoch 1 --batches-per-chunk 1 --latent-size 32 --test --id 1
 """
 
 
@@ -174,7 +174,9 @@ if __name__ == "__main__":
         for it in range(args.chunks_per_epoch):
 
             # get chunk of data in parallel with inference
-            input_thread = get_chunk_in_parallel(gufs, data, data_0, input_thread, it, args)
+            input_thread = get_chunk_in_parallel(
+                gufs, data, data_0, input_thread, it, args
+            )
 
             # run predictions
             predictions = predict(

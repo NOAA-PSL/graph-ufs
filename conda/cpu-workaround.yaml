@@ -413,3 +413,4 @@ dependencies:
       - tree==0.2.4
       - apache-beam==2.54.0
       - xarray-beam==0.6.3
+      - xesmf==0.8.4

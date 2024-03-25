@@ -61,7 +61,7 @@ def get_chunk_in_parallel(
     if it < args.chunks_per_epoch - 1:
         input_thread = threading.Thread(
             target=get_chunk_data,
-            args=(gufs, data_0, args.batches_per_chunk, not args.test),
+            args=(gufs, data_0, args.batches_per_chunk, False) # not args.test), # training needs to be done with unshuffled dataset as well?
         )
         input_thread.start()
     # for first chunk, wait until input thread finishes
