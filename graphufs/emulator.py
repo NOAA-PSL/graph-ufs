@@ -63,7 +63,7 @@ class ReplayEmulator:
 
     # data chunking options
     chunks_per_epoch = None          # number of chunks per epoch
-    batches_per_chunk = None         # number of batches per chunk
+    steps_per_chunk = None           # number of steps to train for for each chunk
     checkpoint_chunks = None         # save model after this many chunks are processed
     checkpoint_dir = ""              # directory to store checkpoints
 
@@ -168,11 +168,13 @@ class ReplayEmulator:
         return bds
 
 
-    def get_training_batches(self,
+    def get_training_batches(
+        self,
         n_optim_steps=None,
         drop_cftime=True,
         random_sample=True,
-        ):
+        download_data=True,
+    ):
         """Get a dataset with all the batches of data necessary for training
 
         Note:
@@ -181,7 +183,8 @@ class ReplayEmulator:
         Args:
             n_optim_steps (int, optional): number of training batches to grab ... number of times we will update the parameters during optimization. If not specified, use as many as are available based on the available training data.
             drop_cftime (bool, optional): may be useful for debugging
-
+            random_sample (bool, optional): sample batches randomly without replacement
+            download_data (bool, optional): download data from GCS
         Returns:
             inputs, targets, forcings (xarray.Dataset): with new dimension "batch"
                 and appropriate fields for each dataset, based on the variables in :attr:`task_config`
@@ -189,21 +192,13 @@ class ReplayEmulator:
 
         timer = Timer()
 
-        # check for local data first
-        if self.local_store_path is not None:
-            inputs_path = os.path.join(self.local_store_path, "training-inputs.zarr")
-            targets_path = os.path.join(self.local_store_path, "training-targets.zarr")
-            forcings_path = os.path.join(self.local_store_path, "training-forcings.zarr")
-            inittimes_path = os.path.join(self.local_store_path, "training-inittimes.zarr")
-            if all(os.path.exists(x) for x in [inputs_path, targets_path, forcings_path]):
-                inputs = xr.open_zarr(inputs_path)
-                targets = xr.open_zarr(targets_path)
-                forcings = xr.open_zarr(forcings_path)
-                inittimes = xr.open_zarr(inittimes_path)
-                return inputs, targets, forcings, inittimes
-
         # grab the dataset and subsample training portion at desired model time step
-        xds = xr.open_zarr(self.data_url, storage_options={"token": "anon"})
+        # second epoch onwards should be able to read data locally
+        local_data_path = os.path.join(self.local_store_path, "data.zarr")
+        if download_data:
+            xds = xr.open_zarr(self.data_url, storage_options={"token": "anon"})
+        else:
+            xds = xr.open_zarr(local_data_path)
 
         # build time vector based on the model, not the data
         delta_t = pd.Timedelta(self.delta_t)
@@ -211,112 +206,136 @@ class ReplayEmulator:
         end   = self.training_dates[-1] if self.training_dates[-1] is not None else xds["time"].values[-1]
         start = pd.Timestamp(start)
         end   = pd.Timestamp(end)
-        new_time = pd.date_range(
+        all_new_time = pd.date_range(
             start=start,
             end=end,
             freq=delta_t,
             inclusive="both",
         )
-
-        # figure out duration of IC(s), forecast, all of training
-        input_duration = pd.Timedelta(self.input_duration)
-        time_per_forecast = self.target_lead_time + input_duration
-        training_duration = end - start
-
-        n_max_forecasts = (training_duration - input_duration) // delta_t
-        n_max_optim_steps = n_max_forecasts // self.batch_size
-        n_optim_steps = n_max_optim_steps if n_optim_steps is None else n_optim_steps
-        n_forecasts = n_optim_steps * self.batch_size
-        print("n_forecasts, n_max_forecasts: ", n_forecasts, n_max_forecasts)
-        print("n_optim_steps, n_max_optim_steps: ", n_optim_steps, n_max_optim_steps)
-
-        # note that this max can be violated if we sample with replacement ...
-        # but I'd rather just work with epochs and use all the data
-        if n_optim_steps > n_max_optim_steps:
-            n_optim_steps = n_max_optim_steps
-            warnings.warn(f"There's less data than the number of batches requested, reducing n_optim_steps to {n_optim_steps}")
-
-        # create a new time vector with desired delta_t
-        # this has to end such that we can pull an entire forecast from the training data
-        all_initial_times = pd.date_range(
-            start=start,
-            end=end - time_per_forecast,
-            freq=delta_t,
-            inclusive="both",
-        )
-
-        # randomly sample without replacement
-        # note that GraphCast samples with replacement
-        if random_sample:
-            rstate = np.random.RandomState(seed=self.training_batch_rng_seed)
-            forecast_initial_times = rstate.choice(
-                all_initial_times,
-                size=(n_forecasts,),
-                replace=False
-            )
-        else:
-            forecast_initial_times = all_initial_times[:n_forecasts]
-
-        # warnings before we get started
-        if pd.Timedelta(self.target_lead_time) > delta_t:
-            warnings.warn("ReplayEmulator.get_training_batches: need to rework this to pull targets for all steps at delta_t intervals between initial conditions and target_lead times, at least in part because we need the forcings at each delta_t time step, and the data extraction code only pulls this at each specified target_lead_time")
-
-        # load the dataset in to avoid lots of calls... need to figure out how to do this best
-
         # subsample in time, grab variables and vertical levels we want
-        xds = self.subsample_dataset(xds, new_time=new_time)
+        timer.start("Subsampling dataset.")
+        all_xds = self.subsample_dataset(xds, new_time=all_new_time)
+        timer.stop()
 
-        timer.start("Loading the dataset at subsampled time, levels, and variables")
-        xds = xds.load();
-        timer.stop("... done")
+        # split dataset into chunks
+        chunk_size = len(all_new_time) // self.chunks_per_epoch
+        all_new_time_chunks = [all_new_time[i:i + chunk_size] for i in range(0, len(all_new_time), chunk_size)]
+        all_new_time_chunks = all_new_time_chunks[:self.chunks_per_epoch]
+        print(f"Chunks total: {len(all_new_time_chunks)}")
+        for chunk_id, new_time in enumerate(all_new_time_chunks):
+            print(f"Chunk {chunk_id}: {new_time[0]} to {new_time[-1]}")
 
-        inputs = []
-        targets = []
-        forcings = []
-        inittimes = []
-        timer.start("Extracting inputs, targets, and forcings")
-        for i, (k, b) in enumerate(
-            itertools.product(range(n_optim_steps), range(self.batch_size))
-        ):
+        # iterate over all chunks
+        for chunk_id, new_time in enumerate(all_new_time_chunks):
 
-            timestamps_in_this_forecast = pd.date_range(
-                start=forecast_initial_times[i],
-                end=forecast_initial_times[i]+time_per_forecast,
+            # chunk start and end times
+            start = new_time[0]
+            end = new_time[-1]
+
+            # figure out duration of IC(s), forecast, all of training
+            input_duration = pd.Timedelta(self.input_duration)
+            time_per_forecast = self.target_lead_time + input_duration
+            training_duration = end - start
+
+            n_max_forecasts = (training_duration - input_duration) // delta_t
+            n_max_optim_steps = n_max_forecasts // self.batch_size
+            n_optim_steps = n_max_optim_steps if n_optim_steps is None else n_optim_steps
+            n_forecasts = n_optim_steps * self.batch_size
+            print(f" ---Processing chunk {chunk_id} ----")
+            print("n_forecasts, n_max_forecasts: ", n_forecasts, n_max_forecasts)
+            print("n_optim_steps, n_max_optim_steps: ", n_optim_steps, n_max_optim_steps)
+
+            # note that this max can be violated if we sample with replacement ...
+            # but I'd rather just work with epochs and use all the data
+            if n_optim_steps > n_max_optim_steps:
+                n_optim_steps = n_max_optim_steps
+                warnings.warn(f"There's less data than the number of batches requested, reducing n_optim_steps to {n_optim_steps}")
+
+            # create a new time vector with desired delta_t
+            # this has to end such that we can pull an entire forecast from the training data
+            all_initial_times = pd.date_range(
+                start=start,
+                end=end - time_per_forecast,
                 freq=delta_t,
                 inclusive="both",
             )
-            batch = self.preprocess(
-                xds.sel(time=timestamps_in_this_forecast),
-                batch_index=b,
-            )
 
-            this_input, this_target, this_forcing = extract_inputs_targets_forcings(
-                batch,
-                target_lead_times=self.target_lead_time,
-                **dataclasses.asdict(self.task_config),
-            )
+            # randomly sample without replacement
+            # note that GraphCast samples with replacement
+            if random_sample:
+                rstate = np.random.RandomState(seed=self.training_batch_rng_seed)
+                forecast_initial_times = rstate.choice(
+                    all_initial_times,
+                    size=(n_forecasts,),
+                    replace=False
+                )
+            else:
+                forecast_initial_times = all_initial_times[:n_forecasts]
 
-            # fix this later for batch_size != 1
-            this_inittimes = batch.datetime.isel(time=0)
-            this_inittimes = this_inittimes.to_dataset(name="inittimes")
+            # warnings before we get started
+            if pd.Timedelta(self.target_lead_time) > delta_t:
+                warnings.warn("ReplayEmulator.get_training_batches: need to rework this to pull targets for all steps at delta_t intervals between initial conditions and target_lead times, at least in part because we need the forcings at each delta_t time step, and the data extraction code only pulls this at each specified target_lead_time")
 
-            # note that the optim_step dim has to be added after the extract_inputs_targets_forcings call
-            inputs.append(this_input.expand_dims({"optim_step": [k]}))
-            targets.append(this_target.expand_dims({"optim_step": [k]}))
-            forcings.append(this_forcing.expand_dims({"optim_step": [k]}))
-            inittimes.append(this_inittimes.expand_dims({"optim_step": [k]}))
-            if b == self.batch_size and k // 10 ==  k / 10:
-                print(f" ... done with {k} optim steps")
+            # load the dataset in to avoid lots of calls... need to figure out how to do this best
 
-        timer.stop()
+            # subsample in time, grab variables and vertical levels we want
+            timer.start("Subsampling dataset and storing to disk.")
+            xds = self.subsample_dataset(all_xds, new_time=new_time)
+            if download_data:
+                xds.to_zarr(local_data_path, mode="a")
+            timer.stop()
 
-        timer.start("Combining and Storing Datasets")
-        inputs = self.combine_chunk_store(inputs, "training-inputs.zarr")
-        targets = self.combine_chunk_store(targets, "training-targets.zarr")
-        forcings = self.combine_chunk_store(forcings, "training-forcings.zarr")
-        inittimes = self.combine_chunk_store(inittimes, "training-inittimes.zarr", True)
-        timer.stop()
-        return inputs, targets, forcings, inittimes
+            timer.start("Loading the dataset at subsampled time, levels, and variables")
+            xds = xds.load();
+            timer.stop()
+
+            inputs = []
+            targets = []
+            forcings = []
+            inittimes = []
+            timer.start("Extracting inputs, targets, and forcings")
+            for i, (k, b) in enumerate(
+                itertools.product(range(n_optim_steps), range(self.batch_size))
+            ):
+
+                timestamps_in_this_forecast = pd.date_range(
+                    start=forecast_initial_times[i],
+                    end=forecast_initial_times[i]+time_per_forecast,
+                    freq=delta_t,
+                    inclusive="both",
+                )
+                batch = self.preprocess(
+                    xds.sel(time=timestamps_in_this_forecast),
+                    batch_index=b,
+                )
+
+                this_input, this_target, this_forcing = extract_inputs_targets_forcings(
+                    batch,
+                    target_lead_times=self.target_lead_time,
+                    **dataclasses.asdict(self.task_config),
+                )
+
+                # fix this later for batch_size != 1
+                this_inittimes = batch.datetime.isel(time=0)
+                this_inittimes = this_inittimes.to_dataset(name="inittimes")
+
+                # note that the optim_step dim has to be added after the extract_inputs_targets_forcings call
+                inputs.append(this_input.expand_dims({"optim_step": [k]}))
+                targets.append(this_target.expand_dims({"optim_step": [k]}))
+                forcings.append(this_forcing.expand_dims({"optim_step": [k]}))
+                inittimes.append(this_inittimes.expand_dims({"optim_step": [k]}))
+                if b == self.batch_size and k // 10 ==  k / 10:
+                    print(f" ... done with {k} optim steps")
+
+            timer.stop()
+
+            timer.start("Combining and Storing Datasets")
+            inputs = self.combine_chunk(inputs)
+            targets = self.combine_chunk(targets)
+            forcings = self.combine_chunk(forcings)
+            inittimes = self.combine_chunk(inittimes)
+            timer.stop()
+            yield inputs, targets, forcings, inittimes
 
 
     def load_normalization(self, **kwargs):
@@ -385,8 +404,7 @@ class ReplayEmulator:
             pfull = yaml.safe_load(f)["pfull"]
         return xr.DataArray(pfull, coords={"pfull": pfull}, dims="pfull")
 
-
-    def combine_chunk_store(self, ds_list, zname, chunk_special = False):
+    def combine_chunk(self, ds_list):
         """Used by the training batch creation code to combine many datasets for optimization"""
         newds = xr.combine_by_coords(ds_list)
         chunksize = {
@@ -399,8 +417,6 @@ class ReplayEmulator:
         }
         chunksize = {k:v for k,v in chunksize.items() if k in newds.dims}
         newds = newds.chunk(chunksize)
-        if self.local_store_path is not None:
-            newds.to_zarr(os.path.join(self.local_store_path, zname))
         return newds
 
 

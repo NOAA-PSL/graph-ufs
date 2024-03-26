@@ -34,7 +34,13 @@ if __name__ == "__main__":
 
     gufs = P0Emulator()
 
-    inputs, targets, forcings = gufs.get_training_batches()
+    # data generator
+    generator = gufs.get_training_batches(
+        random_sample=True,
+        download_data=True,
+    )
+
+    inputs, targets, forcings, _ = next(generator)
     localtime.stop()
 
     localtime.start("Loading Training Batches into Memory")

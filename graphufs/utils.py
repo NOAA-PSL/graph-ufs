@@ -6,23 +6,23 @@ from graphufs import run_forward
 from ufs2arco.timer import Timer
 
 
-def get_chunk_data(gufs, data: dict, n_batches: int = 4, random_sample: bool = True):
+def get_chunk_data(generator, data: dict):
     """Get multiple training batches.
 
     Args:
-        gufs: emulator class
+        generator: chunk generator object
         data (List[3]): A list containing the [inputs, targets, forcings]
-        n_batches (int): Number of batches we want to read
     """
     localtime = Timer()
 
     # get batches from replay on GCS
     localtime.start("Preparing Batches from Replay on GCS")
 
-    inputs, targets, forcings, inittimes = gufs.get_training_batches(
-        n_optim_steps=n_batches,
-        random_sample=random_sample,
-    )
+    try:
+        inputs, targets, forcings, inittimes = next(generator)
+    except StopIteration:
+        return
+        
 
     localtime.stop()
 
@@ -48,33 +48,31 @@ def get_chunk_data(gufs, data: dict, n_batches: int = 4, random_sample: bool = T
 
 
 def get_chunk_in_parallel(
-    gufs, data: dict, data_0: dict, input_thread, it: int, args: dict
+    generator, data: dict, data_0: dict, input_thread, chunk_id: int
 ) -> threading.Thread:
     """Get a chunk of data in parallel with optimization/prediction. This keeps
     two big chunks (data and data_0) in RAM.
 
     Args:
-        gufs: emulator class
+        generator: chunk generator object
         data (dict): the data being used by optimization/prediction process
         data_0 (dict): the data currently being fetched/processed
         input_thread: the input thread
-        it: chunk number, it < 0 indicates first chunk
-        args: CLI arguments
+        chunk_id: chunk number, chunk_id < 0 indicates first chunk
     """
     # make sure input thread finishes before copying data_0 to data
-    if it >= 0:
+    if chunk_id >= 0:
         input_thread.join()
         for k, v in data_0.items():
             data[k] = v
-    # don't prefetch a chunk on the last iteration
-    if it < args.chunks_per_epoch - 1:
-        input_thread = threading.Thread(
-            target=get_chunk_data,
-            args=(gufs, data_0, args.batches_per_chunk, False) # not args.test), # training needs to be done with unshuffled dataset as well?
-        )
-        input_thread.start()
+    # get data
+    input_thread = threading.Thread(
+        target=get_chunk_data,
+        args=(generator, data_0),
+    )
+    input_thread.start()
     # for first chunk, wait until input thread finishes
-    if it < 0:
+    if chunk_id < 0:
         input_thread.join()
     return input_thread
 

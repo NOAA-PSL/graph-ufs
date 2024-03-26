@@ -75,7 +75,7 @@ class P0Emulator(ReplayEmulator):
 
     # data chunking options
     chunks_per_epoch = 1
-    batches_per_chunk = 1
+    steps_per_chunk = 1
     checkpoint_chunks = 1
     checkpoint_dir = "./nets"
 

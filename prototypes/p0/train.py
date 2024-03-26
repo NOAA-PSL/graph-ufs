@@ -100,11 +100,18 @@ if __name__ == "__main__":
     # initialize emulator
     gufs = P0Emulator()
 
+    # data generator
+    generator = gufs.get_training_batches(
+        n_optim_steps=args.steps_per_chunk,
+        random_sample=(not args.test),
+        download_data=True,
+    )
+
     # get the first chunk of data
     data = {}
     data_0 = {}
     input_thread = None
-    input_thread = get_chunk_in_parallel(gufs, data, data_0, input_thread, -1, args)
+    input_thread = get_chunk_in_parallel(generator, data, data_0, input_thread, -1)
 
     # load weights or initialize a random model
     ckpt_id = args.id
@@ -130,11 +137,11 @@ if __name__ == "__main__":
 
         # training loop
         for e in range(args.num_epochs):
-            for it in range(args.chunks_per_epoch):
+            for c in range(args.chunks_per_epoch):
 
                 # get chunk of data in parallel with NN optimization
                 input_thread = get_chunk_in_parallel(
-                    gufs, data, data_0, input_thread, it, args
+                    generator, data, data_0, input_thread, c
                 )
 
                 # optimize
@@ -153,10 +160,16 @@ if __name__ == "__main__":
                 localtime.stop()
 
                 # save weights
-                if it % args.checkpoint_chunks == 0:
-                    ckpt_id = it // args.checkpoint_chunks
+                if c % args.checkpoint_chunks == 0:
+                    ckpt_id = c // args.checkpoint_chunks
                     ckpt_path = f"{args.checkpoint_dir}/model_{ckpt_id}.npz"
                     save_checkpoint(gufs, params, ckpt_path)
+            # reset generator at the end of an epoch
+            generator = gufs.get_training_batches(
+                n_optim_steps=args.steps_per_chunk,
+                random_sample=True,
+                download_data=False,
+            )
 
     # testing
     else:
@@ -171,11 +184,11 @@ if __name__ == "__main__":
             shutil.rmtree(targets_zarr_name)
 
         stats = {}
-        for it in range(args.chunks_per_epoch):
+        for c in range(args.chunks_per_epoch):
 
             # get chunk of data in parallel with inference
             input_thread = get_chunk_in_parallel(
-                gufs, data, data_0, input_thread, it, args
+                generator, data, data_0, input_thread, c
             )
 
             # run predictions
@@ -191,7 +204,7 @@ if __name__ == "__main__":
             # Compute rmse and bias comparing targets and predictions
             targets = data["targets"]
             inittimes = data["inittimes"]
-            compute_rmse_bias(predictions, targets, stats, it)
+            compute_rmse_bias(predictions, targets, stats, c)
 
             # write chunk by chunk to avoid storing all of it in memory
             predictions = convert_wb2_format(gufs, predictions, inittimes)
