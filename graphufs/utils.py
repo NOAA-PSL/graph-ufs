@@ -3,6 +3,7 @@ from jax import jit
 from jax.random import PRNGKey
 import threading
 from graphufs import run_forward
+from ufs2arco.timer import Timer
 
 
 def get_chunk_data(gufs, data: dict, n_batches: int = 4, random_sample: bool = True):
@@ -13,19 +14,29 @@ def get_chunk_data(gufs, data: dict, n_batches: int = 4, random_sample: bool = T
         data (List[3]): A list containing the [inputs, targets, forcings]
         n_batches (int): Number of batches we want to read
     """
-    print("Preparing Batches from Replay on GCS")
+    localtime = Timer()
+
+    # get batches from replay on GCS
+    localtime.start("Preparing Batches from Replay on GCS")
 
     inputs, targets, forcings, inittimes = gufs.get_training_batches(
         n_optim_steps=n_batches,
         random_sample=random_sample,
     )
 
+    localtime.stop()
+
     # load into ram
+    localtime.start("Loading batches into RAM")
+
     inputs.load()
     targets.load()
     forcings.load()
     inittimes.load()
 
+    localtime.stop()
+
+    # update dictionary
     data.update(
         {
             "inputs": inputs,
@@ -34,8 +45,6 @@ def get_chunk_data(gufs, data: dict, n_batches: int = 4, random_sample: bool = T
             "inittimes": inittimes,
         }
     )
-
-    print("Finished preparing batches")
 
 
 def get_chunk_in_parallel(
