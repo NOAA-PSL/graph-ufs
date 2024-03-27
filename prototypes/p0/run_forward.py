@@ -9,7 +9,7 @@ import optax
 from ufs2arco.timer import Timer
 
 from simple_emulator import P0Emulator
-from graphufs import run_forward
+from graphufs import run_forward, DataGenerator
 
 
 if __name__ == "__main__":
@@ -24,13 +24,18 @@ if __name__ == "__main__":
     gufs = P0Emulator()
 
     # data generator
-    generator = gufs.get_batches(
+    generator = DataGenerator(
+        gufs = gufs,
+        download_data=True,
         n_optim_steps=2,
         mode="testing",
-        download_data=True,
     )
 
-    inputs, targets, forcings, _ = next(generator)
+    generator.generate()
+    inputs = generator.data["inputs"]
+    targets = generator.data["targets"]
+    forcings = generator.data["forcings"]
+
     localtime.stop()
 
     localtime.start("Loading Training Batches into Memory")

@@ -67,6 +67,28 @@ def get_chunk_in_parallel(
     return input_thread
 
 
+class DataGenerator:
+    """Data generator class"""
+
+    def __init__(self, gufs, mode: str, download_data: bool, n_optim_steps: int = None):
+        self.data = {}
+        self.data_0 = {}
+        self.input_thread = None
+
+        self.gen = gufs.get_batches(
+            n_optim_steps=n_optim_steps,
+            mode=mode,
+            download_data=download_data,
+        )
+        self.first = True
+
+    def generate(self):
+        self.input_thread = get_chunk_in_parallel(
+            self.gen, self.data, self.data_0, self.input_thread, -1 if self.first else 0
+        )
+        self.first = False
+
+
 def init_model(gufs, data: dict):
     """Initialize model with random weights.
 

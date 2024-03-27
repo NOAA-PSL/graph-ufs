@@ -7,8 +7,7 @@ import optax
 from graphufs import (
     optimize,
     predict,
-    get_chunk_data,
-    get_chunk_in_parallel,
+    DataGenerator,
     init_model,
     load_checkpoint,
     save_checkpoint,
@@ -110,20 +109,18 @@ if __name__ == "__main__":
     gufs = P0Emulator()
 
     # data generators
-    generator = gufs.get_batches(
+    generator = DataGenerator(
+        gufs=gufs,
+        download_data=True,
         n_optim_steps=args.steps_per_chunk,
         mode="testing" if args.test else "training",
-        download_data=True,
     )
 
     # get the first chunk of data
-    data = {}
-    data_0 = {}
-    input_thread = None
-    input_thread = get_chunk_in_parallel(generator, data, data_0, input_thread, -1)
+    generator.generate()
 
     # load weights or initialize a random model
-    checkpoint_dir=f"{gufs.local_store_path}/models"
+    checkpoint_dir = f"{gufs.local_store_path}/models"
     ckpt_id = args.id
     ckpt_path = f"{checkpoint_dir}/model_{ckpt_id}.npz"
 
@@ -151,9 +148,7 @@ if __name__ == "__main__":
                 print(f"Training on epoch {e} and chunk {c}")
 
                 # get chunk of data in parallel with NN optimization
-                input_thread = get_chunk_in_parallel(
-                    generator, data, data_0, input_thread, c
-                )
+                generator.generate()
 
                 # optimize
                 params, loss = optimize(
@@ -161,9 +156,9 @@ if __name__ == "__main__":
                     state=state,
                     optimizer=optimizer,
                     emulator=gufs,
-                    input_batches=data["inputs"],
-                    target_batches=data["targets"],
-                    forcing_batches=data["forcings"],
+                    input_batches=generator.data["inputs"],
+                    target_batches=generator.data["targets"],
+                    forcing_batches=generator.data["forcings"],
                 )
 
                 # save weights
@@ -171,11 +166,13 @@ if __name__ == "__main__":
                     ckpt_id = (e * args.chunks_per_epoch + c) // args.checkpoint_chunks
                     ckpt_path = f"{checkpoint_dir}/model_{ckpt_id}.npz"
                     save_checkpoint(gufs, params, ckpt_path)
+
             # reset generator at the end of an epoch
-            generator = gufs.get_batches(
-                n_optim_steps=args.steps_per_chunk,
-                mode="training",
+            generator = DataGenerator(
+                gufs=gufs,
                 download_data=False,
+                n_optim_steps=args.steps_per_chunk,
+                mode="testing",
             )
 
     # testing
@@ -195,18 +192,16 @@ if __name__ == "__main__":
             print(f"Testing on chunk {c}")
 
             # get chunk of data in parallel with inference
-            input_thread = get_chunk_in_parallel(
-                generator, data, data_0, input_thread, c
-            )
+            generator.generate()
 
             # run predictions
             predictions = predict(
                 params=params,
                 state=state,
                 emulator=gufs,
-                input_batches=data["inputs"],
-                target_batches=data["targets"],
-                forcing_batches=data["forcings"],
+                input_batches=generator.data["inputs"],
+                target_batches=generator.data["targets"],
+                forcing_batches=generator.data["forcings"],
             )
 
             # Compute rmse and bias comparing targets and predictions

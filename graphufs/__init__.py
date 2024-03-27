@@ -7,8 +7,7 @@ from .training import (
     predict,
 )
 from .utils import (
-    get_chunk_data,
-    get_chunk_in_parallel,
+    DataGenerator,
     init_model,
     load_checkpoint,
     save_checkpoint,

@@ -11,7 +11,7 @@ from ufs2arco.timer import Timer
 
 from graphcast import graphcast
 from simple_emulator import P0Emulator
-from graphufs import optimize, run_forward, loss_fn
+from graphufs import optimize, run_forward, loss_fn, DataGenerator
 
 # Note that adding these slows things down on PSL GPU
 #os.environ['XLA_FLAGS'] = (
@@ -35,12 +35,17 @@ if __name__ == "__main__":
     gufs = P0Emulator()
 
     # data generator
-    generator = gufs.get_batches(
-        mode="training",
+    generator = DataGenerator(
+        gufs = gufs,
         download_data=True,
+        mode="training",
     )
 
-    inputs, targets, forcings, _ = next(generator)
+    generator.generate()
+    inputs = generator.data["inputs"]
+    targets = generator.data["targets"]
+    forcings = generator.data["forcings"]
+
     localtime.stop()
 
     localtime.start("Loading Training Batches into Memory")
