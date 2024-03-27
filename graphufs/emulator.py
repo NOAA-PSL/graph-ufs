@@ -328,7 +328,7 @@ class ReplayEmulator:
                 targets.append(this_target.expand_dims({"optim_step": [k]}))
                 forcings.append(this_forcing.expand_dims({"optim_step": [k]}))
                 inittimes.append(this_inittimes.expand_dims({"optim_step": [k]}))
-                if b == self.batch_size and k // 10 ==  k / 10:
+                if b == self.batch_size or k // 10 ==  k / 10:
                     print(f" ... done with {k} optim steps")
 
             inputs = self.combine_chunk(inputs)
