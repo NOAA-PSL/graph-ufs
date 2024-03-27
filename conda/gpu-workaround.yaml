@@ -420,3 +420,4 @@ dependencies:
       - apache-beam==2.54.0
       - xarray-beam==0.6.3
       - xesmf==0.8.4
+      - tqdm==4.66.2

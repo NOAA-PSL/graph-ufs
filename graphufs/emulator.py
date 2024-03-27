@@ -10,7 +10,6 @@ from jax import tree_util
 
 from graphcast.graphcast import ModelConfig, TaskConfig
 from graphcast.data_utils import extract_inputs_targets_forcings
-from ufs2arco import Timer
 
 class ReplayEmulator:
     """An emulator based on UFS Replay data. This manages all model configuration settings and normalization fields. Currently it is designed to be inherited for a specific use-case, and this could easily be generalized to read in settings via a configuration file (yaml, json, etc). Be sure to register any inherited class as a pytree for it to work with JAX.
@@ -188,9 +187,6 @@ class ReplayEmulator:
             inputs, targets, forcings (xarray.Dataset): with new dimension "batch"
                 and appropriate fields for each dataset, based on the variables in :attr:`task_config`
         """
-
-        timer = Timer()
-
         # grab the dataset and subsample training portion at desired model time step
         # second epoch onwards should be able to read data locally
         local_data_path = os.path.join(self.local_store_path, "data.zarr")
@@ -212,9 +208,7 @@ class ReplayEmulator:
             inclusive="both",
         )
         # subsample in time, grab variables and vertical levels we want
-        timer.start("Subsampling dataset.")
         all_xds = self.subsample_dataset(xds, new_time=all_new_time)
-        timer.stop()
 
         # split dataset into chunks
         chunk_size = len(all_new_time) // self.chunks_per_epoch
@@ -280,19 +274,14 @@ class ReplayEmulator:
             # subsample in time, grab variables and vertical levels we want
             xds = self.subsample_dataset(all_xds, new_time=new_time)
             if download_data:
-                timer.start("Storing chunk to disk.")
-                xds.to_zarr(local_data_path, mode="a")
-                timer.stop()
+                xds.to_zarr(local_data_path, append_dim="time" if chunk_id else None)
 
-            timer.start("Loading the dataset at subsampled time, levels, and variables")
             xds = xds.load();
-            timer.stop()
 
             inputs = []
             targets = []
             forcings = []
             inittimes = []
-            timer.start("Extracting inputs, targets, and forcings")
             for i, (k, b) in enumerate(
                 itertools.product(range(n_optim_steps), range(self.batch_size))
             ):
@@ -326,14 +315,10 @@ class ReplayEmulator:
                 if b == self.batch_size and k // 10 ==  k / 10:
                     print(f" ... done with {k} optim steps")
 
-            timer.stop()
-
-            timer.start("Combining and Storing Datasets")
             inputs = self.combine_chunk(inputs)
             targets = self.combine_chunk(targets)
             forcings = self.combine_chunk(forcings)
             inittimes = self.combine_chunk(inittimes)
-            timer.stop()
             yield inputs, targets, forcings, inittimes
 
 

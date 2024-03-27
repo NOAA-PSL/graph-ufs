@@ -33,6 +33,7 @@ from graphcast.normalization import InputsAndResiduals
 from graphcast.xarray_jax import unwrap_data
 from graphcast import rollout
 
+from tqdm import tqdm
 
 def construct_wrapped_graphcast(emulator):
     """Constructs and wraps the GraphCast Predictor object"""
@@ -91,7 +92,7 @@ def grads_fn(params, state, emulator, inputs, targets, forcings):
     return loss, diagnostics, next_state, grads
 
 
-def optimize(params, state, optimizer, emulator, input_batches, target_batches, forcing_batches, verbose=False):
+def optimize(params, state, optimizer, emulator, input_batches, target_batches, forcing_batches):
     """Optimize the model parameters by running through all optim_steps in data
 
     Args:
@@ -100,7 +101,6 @@ def optimize(params, state, optimizer, emulator, input_batches, target_batches, 
         optimizer (Callable, optax.optimizer): see `here <https://optax.readthedocs.io/en/latest/api/optimizers.html>`_
         emulator (ReplayEmulator): the emulator object
         input_batches, training_batches, forcing_batches (xarray.Dataset): with data needed for training
-        verbose (bool, optional): if True, print loss and mean(|gradient|) at each step
 
     Returns:
         params (dict): optimized model parameters
@@ -136,6 +136,9 @@ def optimize(params, state, optimizer, emulator, input_batches, target_batches, 
     loss_values = []
     loss_by_var = {k: list() for k in target_batches.data_vars}
 
+    iterations = input_batches["optim_step"].size
+    progress_bar = tqdm(total=iterations, desc="Processing")
+
     for k in input_batches["optim_step"].values:
 
         params, loss, diagnostics, opt_state, grads = optim_step_jitted(
@@ -151,12 +154,11 @@ def optimize(params, state, optimizer, emulator, input_batches, target_batches, 
         for key, val in diagnostics.items():
             loss_by_var[key].append(val)
 
-        if verbose:
-            mean_grad = np.mean(tree_util.tree_flatten(tree_util.tree_map(lambda x: np.abs(x).mean(), grads))[0])
-            print(f"Step = {k+1}, loss = {loss}, mean(|grad|) = {mean_grad}")
-            print("diagnostics: ")
-            print(diagnostics)
-            print()
+        mean_grad = np.mean(tree_util.tree_flatten(tree_util.tree_map(lambda x: np.abs(x).mean(), grads))[0])
+        progress_bar.set_description(f"loss = {loss}, mean(|grad|) = {mean_grad}")
+        progress_bar.update(1)
+
+    progress_bar.close()
 
     # save losses for each batch
     loss_ds = xr.Dataset()

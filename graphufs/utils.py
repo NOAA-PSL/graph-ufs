@@ -13,28 +13,18 @@ def get_chunk_data(generator, data: dict):
         generator: chunk generator object
         data (List[3]): A list containing the [inputs, targets, forcings]
     """
-    localtime = Timer()
 
     # get batches from replay on GCS
-    localtime.start("Preparing Batches from Replay on GCS")
-
     try:
         inputs, targets, forcings, inittimes = next(generator)
     except StopIteration:
         return
-        
-
-    localtime.stop()
 
     # load into ram
-    localtime.start("Loading batches into RAM")
-
     inputs.load()
     targets.load()
     forcings.load()
     inittimes.load()
-
-    localtime.stop()
 
     # update dictionary
     data.update(
