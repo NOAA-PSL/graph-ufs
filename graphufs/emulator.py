@@ -192,13 +192,15 @@ class ReplayEmulator:
         local_data_path = os.path.join(self.local_store_path, "data.zarr")
         if download_data:
             xds = xr.open_zarr(self.data_url, storage_options={"token": "anon"})
+            start = self.training_dates[ 0] if self.training_dates[ 0] is not None else xds["time"].values[ 0]
+            end   = self.training_dates[-1] if self.training_dates[-1] is not None else xds["time"].values[-1]
         else:
             xds = xr.open_zarr(local_data_path)
+            start = xds["time"].values[ 0]
+            end   = xds["time"].values[-1]
 
         # build time vector based on the model, not the data
         delta_t = pd.Timedelta(self.delta_t)
-        start = self.training_dates[ 0] if self.training_dates[ 0] is not None else xds["time"].values[ 0]
-        end   = self.training_dates[-1] if self.training_dates[-1] is not None else xds["time"].values[-1]
         start = pd.Timestamp(start)
         end   = pd.Timestamp(end)
         all_new_time = pd.date_range(
