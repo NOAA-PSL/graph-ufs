@@ -63,7 +63,7 @@ class ReplayEmulator:
 
     # data chunking options
     chunks_per_epoch = None          # number of chunks per epoch
-    steps_per_chunk = None           # number of steps to train for for each chunk
+    steps_per_chunk = None           # number of steps to train for in each chunk
     checkpoint_chunks = None         # save model after this many chunks are processed
     checkpoint_dir = ""              # directory to store checkpoints
 
@@ -279,11 +279,11 @@ class ReplayEmulator:
             # load the dataset in to avoid lots of calls... need to figure out how to do this best
 
             # subsample in time, grab variables and vertical levels we want
-            timer.start("Subsampling dataset and storing to disk.")
             xds = self.subsample_dataset(all_xds, new_time=new_time)
             if download_data:
+                timer.start("Storing chunk to disk.")
                 xds.to_zarr(local_data_path, mode="a")
-            timer.stop()
+                timer.stop()
 
             timer.start("Loading the dataset at subsampled time, levels, and variables")
             xds = xds.load();
