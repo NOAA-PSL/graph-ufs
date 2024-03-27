@@ -17,8 +17,11 @@ Compared to GraphCast, this has:
 - Evaluate on and with WeatherBench2
 - Simple data normalization just to get moving: data normalized based on avg/std taken over 1994-1997
 
-The configuration is defined in [simple_emulator.py](simple_emulator.py), and the training can be
-run with the script [run_training.py](run_training.py) as
+The configuration is defined in [simple_emulator.py](simple_emulator.py).
+
+## Training
+
+Run with the script [run_training.py](run_training.py) as
 
 ```bash
 python run_training.py
@@ -38,6 +41,18 @@ as specified in [train.py](train.py) (see file header for help with runtime
 options).
 
 The two training scripts will be merged in the future.
+
+## Evaluation
+
+To evaluate with some of our own basic metrics, and then with WeatherBench2
+
+```bash
+python train.py
+python train.py --test
+cd ../..
+. ./evaluate-graphufs.sh
+```
+
 
 ## Notes
 
