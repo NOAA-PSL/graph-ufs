@@ -1,32 +1,50 @@
 # Prototype 0
 
-Train a GraphCast-like emulator on Replay data with the following
-specifications:
+The purpose of this prototype is to establish a very simple weather emulator
+pipeline that we can further refine and scale up.
+Compared to GraphCast, this has:
 - Reduced variable set
-- 3 vertical levels
-- 6 hour time step
+    * Inputs: surface pressure, 10m zonal/meridional winds, 3D temperature,
+      year/day progress
+    * Targets: surface pressure, 10m zonal/meridional winds, 3D temperature,
+    * Forcings: land, year/day progress
+- 3 vertical levels: approximately 1000 hPa, 500 hPa, 100 hPa, but on the native
+  FV3 vertical grid
+- 6 hour time step and make 1 step ahead predictions
+- 1 degree horizontal resolution (C384)
 - 1 year of training data
 - 1 year of evaluation data
 - Evaluate on and with WeatherBench2
-- 10 day forecasts
-- data normalized based on avg/std taken over 1994-1997
+- Simple data normalization just to get moving: data normalized based on avg/std taken over 1994-1997
 
-The configuration is defined in `simple_emulator.py`, and the training can be
-run with the script `run_training.py` as
+The configuration is defined in [simple_emulator.py](simple_emulator.py), and the training can be
+run with the script [run_training.py](run_training.py as
 
 ```bash
 python run_training.py
 ```
 
-This code requires [this fork and branch](https://github.com/NOAA-PSL/graphcast/tree/feature/replay-integration)
-of GraphCast, and uses the environment file at
-[../../conda/gpu-workaround.yaml](../../conda/gpu-workaround.yaml).
+This will produce the following loss curve, indicating things are going in the
+right direction.
+
+<img src="loss.png" width=500>
+
+Alternatively, training can be executed with [train.py](train.py) as
+
+```bash
+python train.py --chunks-per-epoch 1 --batches-per-chunk 1 --latent-size 32
+```
+as specified in [train.py](train.py) (see file header for help with runtime
+options).
+
+The two training scripts will be merged in the future.
 
 ## Notes
 
 ### Normalization
 
-The normalization fields were computed using `calc_normalization.py`, and there
+The normalization fields were computed using
+[calc_normalization.py](calc_normalization.py), and there
 are many unnecessary hard coded values.
 This code should be generalized in the future, and could probably be more
 efficient, e.g. with a dask cluster rather than brute force slurm job
@@ -41,33 +59,3 @@ Some points of generalization include:
   these calculations should go here so that the correct normalization can be
   computed. Right now those normalization values are hard coded into
   `graphufs.ReplayEmulator.load_normalization`
-
-### Emulator class
-
-This holds all of the configuration details, loads the normalization data, and preprocesses the data for training. See the generic class definition `graphufs.ReplayEmulator` and this specific setup in `simple_emulator.py`. This configuration could be rewritten to read a yaml file rather than to specify everything via class inheritance.
-
-### Training
-
-The main training algorithm is launched from `run_training.py` which calls the
-generic routines from the module `graphufs.train`.
-Those routines are modified from the graphcast demo to work with the
-`ReplayEmulator` class and to work with the optax adam optimizer.
-
-This is just at the point of compiling and running, not at the point of actually
-successfully training (converging).
-The main issue that needs to be addressed is how to handle mini-batches in the
-training.
-Currently, the `ReplayEmulator.get_training_batches` uses routines from the
-graphcast code to get the samples prepared to make predictions with GraphCast,
-but it is unclear how to set up batches with more than one forecast sample
-dataset (i.e., initial conditions and target predictions for that forecast) per
-batch.
-It is then unclear how this is handled with optax, although it could be that
-optax can do this more automatically given a bunch of samples of data.
-
-Once this is figured out, it is a matter of hyperparameter tuning and making the
-code more efficient (e.g., the zarr2zarr transfer happens inside the graphcast
-code, and we should just have this dataset ready).
-
-
-
