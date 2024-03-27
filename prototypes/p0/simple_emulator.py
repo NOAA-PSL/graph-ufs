@@ -77,7 +77,6 @@ class P0Emulator(ReplayEmulator):
     chunks_per_epoch = 1
     steps_per_chunk = None
     checkpoint_chunks = 1
-    checkpoint_dir = "./nets"
 
 tree_util.register_pytree_node(
     P0Emulator,

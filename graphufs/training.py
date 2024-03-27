@@ -91,7 +91,7 @@ def grads_fn(params, state, emulator, inputs, targets, forcings):
     return loss, diagnostics, next_state, grads
 
 
-def optimize(params, state, optimizer, emulator, input_batches, target_batches, forcing_batches, store_results=True, description="", license="", verbose=False):
+def optimize(params, state, optimizer, emulator, input_batches, target_batches, forcing_batches, verbose=False):
     """Optimize the model parameters by running through all optim_steps in data
 
     Args:
@@ -100,8 +100,6 @@ def optimize(params, state, optimizer, emulator, input_batches, target_batches, 
         optimizer (Callable, optax.optimizer): see `here <https://optax.readthedocs.io/en/latest/api/optimizers.html>`_
         emulator (ReplayEmulator): the emulator object
         input_batches, training_batches, forcing_batches (xarray.Dataset): with data needed for training
-        store_results (bool, optional): if True, store the loss values to netcdf and model checkpoint (optimized weights) using graphcast's storage routines
-        description, license (str, optional): information to store with the model checkpoint when writing out optimized weights, irrelevant if store_results is False
         verbose (bool, optional): if True, print loss and mean(|gradient|) at each step
 
     Returns:
@@ -160,6 +158,7 @@ def optimize(params, state, optimizer, emulator, input_batches, target_batches, 
             print(diagnostics)
             print()
 
+    # save losses for each batch
     loss_ds = xr.Dataset()
     loss_ds["optim_step"] = input_batches["optim_step"]
     loss_ds.attrs["batch_size"] = len(input_batches["batch"])
@@ -168,10 +167,7 @@ def optimize(params, state, optimizer, emulator, input_batches, target_batches, 
         coords={"var_index": np.arange(len(loss_by_var))},
         dims=("var_index",),
     )
-    loss_ds["var_names"] = xr.DataArray(
-        list(loss_by_var.keys()),
-        dims=("var_index",),
-    )
+    loss_ds["var_names"] = list(loss_by_var.keys())
     loss_ds["loss"] = xr.DataArray(
         loss_values,
         coords={"optim_step": loss_ds["optim_step"]},
@@ -183,23 +179,14 @@ def optimize(params, state, optimizer, emulator, input_batches, target_batches, 
         dims=("var_index", "optim_step"),
     )
 
-    if store_results:
-        loss_fname = os.path.join(emulator.local_store_path, "loss.nc")
-        print(f"Storing loss function values at: {loss_fname}")
-        loss_ds.to_netcdf(os.path.join(emulator.local_store_path, "loss.nc"))
-
-        # store parameters
-        ckpt = graphcast.CheckPoint(
-            params=params,
-            model_config=emulator.model_config,
-            task_config=emulator.task_config,
-            description=description,
-            license=license,
-        )
-        ckpt_fname = os.path.join(emulator.local_store_path, "graphufs.ckpt")
-        print(f"Storing model checkpoint at: {ckpt_fname}")
-        with open(ckpt_fname, "wb") as f:
-            dump(f, ckpt)
+    # concatenate losses and store
+    loss_fname = os.path.join(emulator.local_store_path, "loss.nc")
+    if os.path.exists(loss_fname):
+        stored_loss_ds = xr.open_dataset(loss_fname)
+        stored_loss_ds = xr.concat([stored_loss_ds, loss_ds], dim='optim_step')
+    else:
+        stored_loss_ds = loss_ds
+    stored_loss_ds.to_netcdf(loss_fname)
 
     return params, loss_ds
 

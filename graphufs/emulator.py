@@ -65,7 +65,6 @@ class ReplayEmulator:
     chunks_per_epoch = None          # number of chunks per epoch
     steps_per_chunk = None           # number of steps to train for in each chunk
     checkpoint_chunks = None         # save model after this many chunks are processed
-    checkpoint_dir = ""              # directory to store checkpoints
 
     def __init__(self):
 

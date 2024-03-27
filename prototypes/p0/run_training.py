@@ -92,8 +92,6 @@ if __name__ == "__main__":
         input_batches=inputs,
         target_batches=targets,
         forcing_batches=forcings,
-        store_results=True,
-        description="P0 Optimized Parameters",
     )
 
     localtime.stop()

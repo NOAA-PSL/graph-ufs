@@ -88,9 +88,9 @@ def init_model(gufs, data: dict):
     params, state = init_jitted(
         rng=PRNGKey(gufs.init_rng_seed),
         emulator=gufs,
-        inputs=data["inputs"].sel(batch=[0]),
-        targets_template=data["targets"].sel(batch=[0]),
-        forcings=data["forcings"].sel(batch=[0]),
+        inputs=data["inputs"].sel(optim_step=0),
+        targets_template=data["targets"].sel(optim_step=0),
+        forcings=data["forcings"].sel(optim_step=0),
     )
     return params, state
 

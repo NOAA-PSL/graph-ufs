@@ -114,8 +114,9 @@ if __name__ == "__main__":
     input_thread = get_chunk_in_parallel(generator, data, data_0, input_thread, -1)
 
     # load weights or initialize a random model
+    checkpoint_dir=f"{gufs.local_store_path}/models"
     ckpt_id = args.id
-    ckpt_path = f"{args.checkpoint_dir}/model_{ckpt_id}.npz"
+    ckpt_path = f"{checkpoint_dir}/model_{ckpt_id}.npz"
 
     if os.path.exists(ckpt_path):
         localtime.start("Loading weights")
@@ -130,8 +131,8 @@ if __name__ == "__main__":
         walltime.start("Starting Training")
 
         # create checkpoint directory
-        if not os.path.exists(args.checkpoint_dir):
-            os.mkdir(args.checkpoint_dir)
+        if not os.path.exists(checkpoint_dir):
+            os.mkdir(checkpoint_dir)
 
         optimizer = optax.adam(learning_rate=1e-4)
 
@@ -162,7 +163,7 @@ if __name__ == "__main__":
                 # save weights
                 if c % args.checkpoint_chunks == 0:
                     ckpt_id = c // args.checkpoint_chunks
-                    ckpt_path = f"{args.checkpoint_dir}/model_{ckpt_id}.npz"
+                    ckpt_path = f"{checkpoint_dir}/model_{ckpt_id}.npz"
                     save_checkpoint(gufs, params, ckpt_path)
             # reset generator at the end of an epoch
             generator = gufs.get_training_batches(
