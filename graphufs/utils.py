@@ -81,6 +81,7 @@ class DataGenerator:
             download_data=download_data,
         )
         self.first_chunk = True
+        self.generate()
 
     def generate(self):
         self.input_thread = get_chunk_in_parallel(

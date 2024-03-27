@@ -116,9 +116,6 @@ if __name__ == "__main__":
         mode="testing" if args.test else "training",
     )
 
-    # get the first chunk of data
-    generator.generate()
-
     # load weights or initialize a random model
     checkpoint_dir = f"{gufs.local_store_path}/models"
     ckpt_id = args.id
@@ -174,7 +171,6 @@ if __name__ == "__main__":
                 n_optim_steps=args.steps_per_chunk,
                 mode="training",
             )
-            generator.generate()
 
     # testing
     else:
@@ -206,8 +202,8 @@ if __name__ == "__main__":
             )
 
             # Compute rmse and bias comparing targets and predictions
-            targets = data["targets"]
-            inittimes = data["inittimes"]
+            targets = generator.data["targets"]
+            inittimes = generator.data["inittimes"]
             compute_rmse_bias(predictions, targets, stats, c)
 
             # write chunk by chunk to avoid storing all of it in memory

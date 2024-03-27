@@ -31,7 +31,6 @@ if __name__ == "__main__":
         mode="testing",
     )
 
-    generator.generate()
     inputs = generator.data["inputs"]
     targets = generator.data["targets"]
     forcings = generator.data["forcings"]
