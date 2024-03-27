@@ -85,11 +85,12 @@ def init_model(gufs, data: dict):
     return params, state
 
 
-def load_checkpoint(ckpt_path: str):
+def load_checkpoint(ckpt_path: str, verbose: bool = False):
     """Load checkpoint.
 
     Args:
         ckpt_path (str): path to model
+        verbose (bool, optional): print metadata about the model
     """
     with open(ckpt_path, "rb") as f:
         ckpt = checkpoint.load(f, graphcast.CheckPoint)
@@ -97,8 +98,9 @@ def load_checkpoint(ckpt_path: str):
     state = {}
     model_config = ckpt.model_config
     task_config = ckpt.task_config
-    print("Model description:\n", ckpt.description, "\n")
-    print("Model license:\n", ckpt.license, "\n")
+    if verbose:
+        print("Model description:\n", ckpt.description, "\n")
+        print("Model license:\n", ckpt.license, "\n")
     return params, state
 
 

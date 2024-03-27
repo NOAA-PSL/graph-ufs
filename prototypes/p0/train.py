@@ -148,6 +148,7 @@ if __name__ == "__main__":
         # training loop
         for e in range(args.num_epochs):
             for c in range(args.chunks_per_epoch):
+                print(f"Training on epoch {e} and chunk {c}")
 
                 # get chunk of data in parallel with NN optimization
                 input_thread = get_chunk_in_parallel(
@@ -155,8 +156,6 @@ if __name__ == "__main__":
                 )
 
                 # optimize
-                localtime.start("Starting Optimization")
-
                 params, loss = optimize(
                     params=params,
                     state=state,
@@ -166,8 +165,6 @@ if __name__ == "__main__":
                     target_batches=data["targets"],
                     forcing_batches=data["forcings"],
                 )
-
-                localtime.stop()
 
                 # save weights
                 if c % args.checkpoint_chunks == 0:
@@ -195,6 +192,7 @@ if __name__ == "__main__":
 
         stats = {}
         for c in range(args.chunks_per_epoch):
+            print(f"Testing on chunk {c}")
 
             # get chunk of data in parallel with inference
             input_thread = get_chunk_in_parallel(
@@ -218,11 +216,11 @@ if __name__ == "__main__":
 
             # write chunk by chunk to avoid storing all of it in memory
             predictions = convert_wb2_format(gufs, predictions, inittimes)
-            predictions.to_zarr(predictions_zarr_name, append_dim="time")
+            predictions.to_zarr(predictions_zarr_name, append_dim="time" if c else None)
 
             # write also targets to compute metrics against it with wb2
             targets = convert_wb2_format(gufs, targets, inittimes)
-            targets.to_zarr(targets_zarr_name, append_dim="time")
+            targets.to_zarr(targets_zarr_name, append_dim="time" if c else None)
 
         print("--------- Statistiscs ---------")
         for k, v in stats.items():

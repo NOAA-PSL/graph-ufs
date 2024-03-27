@@ -250,9 +250,6 @@ class ReplayEmulator:
             n_max_optim_steps = n_max_forecasts // self.batch_size
             n_optim_steps = n_max_optim_steps if n_optim_steps is None else n_optim_steps
             n_forecasts = n_optim_steps * self.batch_size
-            print(f" --- Processing chunk {chunk_id} ---")
-            print("n_forecasts, n_max_forecasts: ", n_forecasts, n_max_forecasts)
-            print("n_optim_steps, n_max_optim_steps: ", n_optim_steps, n_max_optim_steps)
 
             # note that this max can be violated if we sample with replacement ...
             # but I'd rather just work with epochs and use all the data
@@ -328,8 +325,6 @@ class ReplayEmulator:
                 targets.append(this_target.expand_dims({"optim_step": [k]}))
                 forcings.append(this_forcing.expand_dims({"optim_step": [k]}))
                 inittimes.append(this_inittimes.expand_dims({"optim_step": [k]}))
-                if b == self.batch_size or k // 10 ==  k / 10:
-                    print(f" ... done with {k} optim steps")
 
             inputs = self.combine_chunk(inputs)
             targets = self.combine_chunk(targets)
