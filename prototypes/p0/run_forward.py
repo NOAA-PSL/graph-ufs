@@ -26,7 +26,7 @@ if __name__ == "__main__":
     # data generator
     generator = gufs.get_training_batches(
         n_optim_steps=2,
-        random_sample=False,
+        mode="testing",
         download_data=True,
     )
 

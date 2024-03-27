@@ -155,7 +155,7 @@ def optimize(params, state, optimizer, emulator, input_batches, target_batches, 
             loss_by_var[key].append(val)
 
         mean_grad = np.mean(tree_util.tree_flatten(tree_util.tree_map(lambda x: np.abs(x).mean(), grads))[0])
-        progress_bar.set_description(f"loss = {loss}, mean(|grad|) = {mean_grad}")
+        progress_bar.set_description(f"loss = {loss:.9f}, mean(|grad|) = {mean_grad:.12f}")
         progress_bar.update(1)
 
     progress_bar.close()

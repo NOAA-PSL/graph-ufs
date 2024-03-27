@@ -100,10 +100,10 @@ if __name__ == "__main__":
     # initialize emulator
     gufs = P0Emulator()
 
-    # data generator
-    generator = gufs.get_training_batches(
+    # data generators
+    generator = gufs.get_batches(
         n_optim_steps=args.steps_per_chunk,
-        random_sample=(not args.test),
+        mode="testing" if args.test else "training",
         download_data=True,
     )
 
@@ -119,7 +119,7 @@ if __name__ == "__main__":
     ckpt_path = f"{checkpoint_dir}/model_{ckpt_id}.npz"
 
     if os.path.exists(ckpt_path):
-        localtime.start("Loading weights")
+        localtime.start(f"Loading weights: {ckpt_path}")
         params, state = load_checkpoint(ckpt_path)
     else:
         localtime.start("Initializing Optimizer and Parameters")
@@ -162,13 +162,13 @@ if __name__ == "__main__":
 
                 # save weights
                 if c % args.checkpoint_chunks == 0:
-                    ckpt_id = c // args.checkpoint_chunks
+                    ckpt_id = (e * args.chunks_per_epoch + c) // args.checkpoint_chunks
                     ckpt_path = f"{checkpoint_dir}/model_{ckpt_id}.npz"
                     save_checkpoint(gufs, params, ckpt_path)
             # reset generator at the end of an epoch
-            generator = gufs.get_training_batches(
+            generator = gufs.get_batches(
                 n_optim_steps=args.steps_per_chunk,
-                random_sample=True,
+                mode="training",
                 download_data=False,
             )
 
@@ -209,11 +209,11 @@ if __name__ == "__main__":
 
             # write chunk by chunk to avoid storing all of it in memory
             predictions = convert_wb2_format(gufs, predictions, inittimes)
-            predictions.to_zarr(predictions_zarr_name, mode="a")
+            predictions.to_zarr(predictions_zarr_name, append_dim="time")
 
             # write also targets to compute metrics against it with wb2
             targets = convert_wb2_format(gufs, targets, inittimes)
-            targets.to_zarr(targets_zarr_name, mode="a")
+            targets.to_zarr(targets_zarr_name, append_dim="time")
 
         print("--------- Statistiscs ---------")
         for k, v in stats.items():

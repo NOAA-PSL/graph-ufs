@@ -36,7 +36,7 @@ if __name__ == "__main__":
 
     # data generator
     generator = gufs.get_training_batches(
-        random_sample=True,
+        mode="training",
         download_data=True,
     )
 

@@ -41,6 +41,8 @@ class ReplayEmulator:
     input_duration = None       # time covered by initial condition(s)
     target_lead_time = None     # how long the forecast is, i.e., when we compare to data
     training_dates = tuple()    # bounds of training data (inclusive)
+    testing_dates = tuple()     # bounds of testing data (inclusive)
+    validation_dates = tuple()  # bounds of validation data (inclusive)
 
     # training protocol
     batch_size = None           # number of forecasts averaged over in loss per optim_step
@@ -166,11 +168,11 @@ class ReplayEmulator:
         return bds
 
 
-    def get_training_batches(
+    def get_batches(
         self,
         n_optim_steps=None,
         drop_cftime=True,
-        random_sample=True,
+        mode="training",
         download_data=True,
     ):
         """Get a dataset with all the batches of data necessary for training
@@ -181,7 +183,7 @@ class ReplayEmulator:
         Args:
             n_optim_steps (int, optional): number of training batches to grab ... number of times we will update the parameters during optimization. If not specified, use as many as are available based on the available training data.
             drop_cftime (bool, optional): may be useful for debugging
-            random_sample (bool, optional): sample batches randomly without replacement
+            mode (str, optional): can be either "training", "validation" or "testing"
             download_data (bool, optional): download data from GCS
         Returns:
             inputs, targets, forcings (xarray.Dataset): with new dimension "batch"
@@ -192,12 +194,20 @@ class ReplayEmulator:
         local_data_path = os.path.join(self.local_store_path, "data.zarr")
         if download_data:
             xds = xr.open_zarr(self.data_url, storage_options={"token": "anon"})
-            start = self.training_dates[ 0] if self.training_dates[ 0] is not None else xds["time"].values[ 0]
-            end   = self.training_dates[-1] if self.training_dates[-1] is not None else xds["time"].values[-1]
         else:
             xds = xr.open_zarr(local_data_path)
-            start = xds["time"].values[ 0]
-            end   = xds["time"].values[-1]
+        # choose dates based on mode
+        if mode == "training":
+            start = self.training_dates[ 0]
+            end   = self.training_dates[-1]
+        elif mode == "testing":
+            start = self.testing_dates[ 0]
+            end   = self.testing_dates[-1]
+        elif mode == "validation":
+            start = self.validation_dates[ 0]
+            end   = self.validation_dates[-1]
+        else:
+            raise ValueError("Unknown mode: make sure it is either training/testing/validation")
 
         # build time vector based on the model, not the data
         delta_t = pd.Timedelta(self.delta_t)
@@ -214,8 +224,12 @@ class ReplayEmulator:
 
         # split dataset into chunks
         chunk_size = len(all_new_time) // self.chunks_per_epoch
-        all_new_time_chunks = [all_new_time[i:i + chunk_size] for i in range(0, len(all_new_time), chunk_size)]
-        all_new_time_chunks = all_new_time_chunks[:self.chunks_per_epoch]
+        all_new_time_chunks = []
+        for i in range(self.chunks_per_epoch):
+            if i == self.chunks_per_epoch - 1:
+                all_new_time_chunks.append(all_new_time[i * chunk_size:len(all_new_time)])
+            else:
+                all_new_time_chunks.append(all_new_time[i * chunk_size:(i + 1) * chunk_size])
         print(f"Chunks total: {len(all_new_time_chunks)}")
         for chunk_id, new_time in enumerate(all_new_time_chunks):
             print(f"Chunk {chunk_id}: {new_time[0]} to {new_time[-1]}")
@@ -236,7 +250,7 @@ class ReplayEmulator:
             n_max_optim_steps = n_max_forecasts // self.batch_size
             n_optim_steps = n_max_optim_steps if n_optim_steps is None else n_optim_steps
             n_forecasts = n_optim_steps * self.batch_size
-            print(f" ---Processing chunk {chunk_id} ----")
+            print(f" --- Processing chunk {chunk_id} ---")
             print("n_forecasts, n_max_forecasts: ", n_forecasts, n_max_forecasts)
             print("n_optim_steps, n_max_optim_steps: ", n_optim_steps, n_max_optim_steps)
 
@@ -257,7 +271,8 @@ class ReplayEmulator:
 
             # randomly sample without replacement
             # note that GraphCast samples with replacement
-            if random_sample:
+            is_testing = (mode == "testing")
+            if not is_testing:
                 rstate = np.random.RandomState(seed=self.training_batch_rng_seed)
                 forecast_initial_times = rstate.choice(
                     all_initial_times,
@@ -276,7 +291,7 @@ class ReplayEmulator:
             # subsample in time, grab variables and vertical levels we want
             xds = self.subsample_dataset(all_xds, new_time=new_time)
             if download_data:
-                xds.to_zarr(local_data_path, append_dim="time" if chunk_id else None)
+                xds.to_zarr(local_data_path, append_dim="time" if is_testing or chunk_id else None)
 
             xds = xds.load();
 

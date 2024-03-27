@@ -52,7 +52,15 @@ class P0Emulator(ReplayEmulator):
     target_lead_time = "6h"     # how long is the forecast ... at what point do we compare model to targets
     training_dates = (          # bounds of training data (inclusive)
         "1993-12-31T18",        # start
-        "1994-12-31T18"         # stop, includes all of 1994
+        "1994-01-31T18"         # stop
+    )
+    testing_dates = (           # bounds of testing data (inclusive)
+        "1994-12-31T18",        # start
+        "1995-01-31T18"         # stop
+    )
+    validation_dates = (        # bounds of validation data (inclusive)
+        "1995-12-31T18",        # start
+        "1996-01-31T18"         # stop
     )
 
     # training protocol
