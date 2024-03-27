@@ -92,7 +92,7 @@ def grads_fn(params, state, emulator, inputs, targets, forcings):
     return loss, diagnostics, next_state, grads
 
 
-def optimize(params, state, optimizer, emulator, input_batches, target_batches, forcing_batches):
+def optimize(params, state, optimizer, emulator, input_batches, target_batches, forcing_batches, verbose=False):
     """Optimize the model parameters by running through all optim_steps in data
 
     Args:
@@ -101,6 +101,7 @@ def optimize(params, state, optimizer, emulator, input_batches, target_batches, 
         optimizer (Callable, optax.optimizer): see `here <https://optax.readthedocs.io/en/latest/api/optimizers.html>`_
         emulator (ReplayEmulator): the emulator object
         input_batches, training_batches, forcing_batches (xarray.Dataset): with data needed for training
+        verbose (bool, optional): compute and display mean gradient of loss
 
     Returns:
         params (dict): optimized model parameters
@@ -154,8 +155,11 @@ def optimize(params, state, optimizer, emulator, input_batches, target_batches, 
         for key, val in diagnostics.items():
             loss_by_var[key].append(val)
 
-        mean_grad = np.mean(tree_util.tree_flatten(tree_util.tree_map(lambda x: np.abs(x).mean(), grads))[0])
-        progress_bar.set_description(f"loss = {loss:.9f}, mean(|grad|) = {mean_grad:.12f}")
+        if verbose:
+            mean_grad = np.mean(tree_util.tree_flatten(tree_util.tree_map(lambda x: np.abs(x).mean(), grads))[0])
+            progress_bar.set_description(f"loss = {loss:.9f}, mean(|grad|) = {mean_grad:.12f}")
+        else:
+            progress_bar.set_description(f"loss = {loss:.9f}")
         progress_bar.update(1)
 
     progress_bar.close()
