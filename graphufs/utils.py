@@ -38,7 +38,7 @@ def get_chunk_data(generator, data: dict):
 
 
 def get_chunk_in_parallel(
-    generator, data: dict, data_0: dict, input_thread, chunk_id: int
+    generator, data: dict, data_0: dict, input_thread, first_chunk: bool
 ) -> threading.Thread:
     """Get a chunk of data in parallel with optimization/prediction. This keeps
     two big chunks (data and data_0) in RAM.
@@ -48,10 +48,10 @@ def get_chunk_in_parallel(
         data (dict): the data being used by optimization/prediction process
         data_0 (dict): the data currently being fetched/processed
         input_thread: the input thread
-        chunk_id: chunk number, chunk_id < 0 indicates first chunk
+        first_chunk: is this the first chunk?
     """
     # make sure input thread finishes before copying data_0 to data
-    if chunk_id >= 0:
+    if not first_chunk:
         input_thread.join()
         for k, v in data_0.items():
             data[k] = v
@@ -62,7 +62,7 @@ def get_chunk_in_parallel(
     )
     input_thread.start()
     # for first chunk, wait until input thread finishes
-    if chunk_id < 0:
+    if first_chunk:
         input_thread.join()
     return input_thread
 
@@ -80,13 +80,13 @@ class DataGenerator:
             mode=mode,
             download_data=download_data,
         )
-        self.first = True
+        self.first_chunk = True
 
     def generate(self):
         self.input_thread = get_chunk_in_parallel(
-            self.gen, self.data, self.data_0, self.input_thread, -1 if self.first else 0
+            self.gen, self.data, self.data_0, self.input_thread, self.first_chunk
         )
-        self.first = False
+        self.first_chunk = False
 
 
 def init_model(gufs, data: dict):

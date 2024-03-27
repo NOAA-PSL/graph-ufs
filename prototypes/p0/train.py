@@ -172,8 +172,9 @@ if __name__ == "__main__":
                 gufs=gufs,
                 download_data=False,
                 n_optim_steps=args.steps_per_chunk,
-                mode="testing",
+                mode="training",
             )
+            generator.generate()
 
     # testing
     else:
