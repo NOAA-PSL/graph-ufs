@@ -35,7 +35,7 @@ if __name__ == "__main__":
     gufs = P0Emulator()
 
     # data generator
-    generator = gufs.get_training_batches(
+    generator = gufs.get_batches(
         mode="training",
         download_data=True,
     )

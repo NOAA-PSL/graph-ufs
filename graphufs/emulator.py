@@ -271,8 +271,7 @@ class ReplayEmulator:
 
             # randomly sample without replacement
             # note that GraphCast samples with replacement
-            is_testing = (mode == "testing")
-            if not is_testing:
+            if mode == "testing":
                 rstate = np.random.RandomState(seed=self.training_batch_rng_seed)
                 forecast_initial_times = rstate.choice(
                     all_initial_times,
@@ -291,7 +290,7 @@ class ReplayEmulator:
             # subsample in time, grab variables and vertical levels we want
             xds = self.subsample_dataset(all_xds, new_time=new_time)
             if download_data:
-                xds.to_zarr(local_data_path, append_dim="time" if is_testing or chunk_id else None)
+                xds.to_zarr(local_data_path, append_dim="time" if os.path.exists(local_data_path) else None)
 
             xds = xds.load();
 

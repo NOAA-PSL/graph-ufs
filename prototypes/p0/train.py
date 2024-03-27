@@ -61,14 +61,23 @@ def parse_args():
     for k, v in vars(P0Emulator).items():
         if not k.startswith("__"):
             name = "--" + k.replace("_", "-")
-            parser.add_argument(
-                name,
-                dest=k,
-                required=False,
-                type=type(v),
-                default=v,
-                help=f"{k}: default {v}",
-            )
+            if v is not None:
+                parser.add_argument(
+                    name,
+                    dest=k,
+                    required=False,
+                    type=type(v),
+                    default=v,
+                    help=f"{k}: default {v}",
+                )
+            else:
+                parser.add_argument(
+                    name,
+                    dest=k,
+                    required=False,
+                    type=int,
+                    help=f"{k}: default {v}",
+                )
 
     # parse CLI args
     args = parser.parse_args()
@@ -81,7 +90,7 @@ def parse_args():
             if hasattr(P0Emulator, arg_name):
                 stored = getattr(P0Emulator, arg_name)
                 if stored is not None:
-                    attr_type = type(getattr(P0Emulator, arg_name))
+                    attr_type = type(stored)
                     value = attr_type(value)
                 setattr(P0Emulator, arg_name, value)
 
