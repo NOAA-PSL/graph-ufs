@@ -38,8 +38,9 @@ dependencies:
     - trimesh
     - typing_extensions
     - google-api-python-client
-    - pip
-# Don't pull graphcast since we fork it and develop it
-#    - pip
-#    - pip:
-#        - https://github.com/deepmind/graphcast/archive/master.zip
+# WeatherBench2
+    - apache-beam
+    - xarray-beam
+    - xesmf
+# legit progress bar
+    - tqdm
