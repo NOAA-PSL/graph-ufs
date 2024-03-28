@@ -126,7 +126,7 @@ if __name__ == "__main__":
         params, state = load_checkpoint(ckpt_path)
     else:
         localtime.start("Initializing Optimizer and Parameters")
-        params, state = init_model(gufs, data_0)
+        params, state = init_model(gufs, generator.data_0)
     localtime.stop()
 
     # training
