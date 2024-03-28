@@ -180,7 +180,7 @@ if __name__ == "__main__":
             # reset generator at the end of an epoch
             if e != gufs.num_epochs - 1:
                 generator = DataGenerator(
-                    gufs=gufs,
+                    emulator=gufs,
                     download_data=False,
                     n_optim_steps=gufs.steps_per_chunk,
                     mode="training",
