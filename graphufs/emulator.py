@@ -268,7 +268,7 @@ class ReplayEmulator:
 
             # randomly sample without replacement
             # note that GraphCast samples with replacement
-            if mode == "testing":
+            if mode != "testing":
                 rstate = np.random.RandomState(seed=self.training_batch_rng_seed)
                 forecast_initial_times = rstate.choice(
                     all_initial_times,

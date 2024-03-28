@@ -229,5 +229,6 @@ def predict(
         inputs=input_batches,
         targets_template=target_batches,
         forcings=forcing_batches,
+        verbose=True,
     )
     return predictions

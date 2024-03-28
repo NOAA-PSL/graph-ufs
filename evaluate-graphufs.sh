@@ -13,8 +13,8 @@ python weatherbench2/scripts/evaluate.py \
   --output_file_prefix=graphufs_ \
   --input_chunks=init_time=1 \
   --eval_configs=deterministic \
-  --time_start=1993-12-31 \
-  --time_stop=1994-01-05 \
+  --time_start=1995-01-01 \
+  --time_stop=1995-12-31 \
   --variables="surface_pressure,temperature,10m_u_component_of_wind,10m_v_component_of_wind" \
   --levels=100,500,1000
 
