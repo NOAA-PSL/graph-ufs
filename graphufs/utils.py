@@ -70,12 +70,12 @@ def get_chunk_in_parallel(
 class DataGenerator:
     """Data generator class"""
 
-    def __init__(self, gufs, mode: str, download_data: bool, n_optim_steps: int = None):
+    def __init__(self, emulator, mode: str, download_data: bool, n_optim_steps: int = None):
         self.data = {}
         self.data_0 = {}
         self.input_thread = None
 
-        self.gen = gufs.get_batches(
+        self.gen = emulator.get_batches(
             n_optim_steps=n_optim_steps,
             mode=mode,
             download_data=download_data,

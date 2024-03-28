@@ -121,7 +121,7 @@ if __name__ == "__main__":
 
     # data generators
     generator = DataGenerator(
-        gufs=gufs,
+        emulator=gufs,
         download_data=True,
         n_optim_steps=gufs.steps_per_chunk,
         mode="testing" if args.test else "training",
