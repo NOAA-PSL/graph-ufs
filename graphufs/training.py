@@ -166,7 +166,13 @@ def optimize(params, state, optimizer, emulator, input_batches, target_batches, 
 
     # save losses for each batch
     loss_ds = xr.Dataset()
-    loss_ds["optim_step"] = input_batches["optim_step"]
+    loss_fname = os.path.join(emulator.local_store_path, "loss.nc")
+    previous_optim_steps = 0
+    if os.path.exists(loss_fname):
+        stored_loss_ds = xr.open_dataset(loss_fname)
+        previous_optim_steps = len(stored_loss_ds.optim_step)
+
+    loss_ds["optim_step"] = input_batches["optim_step"] + previous_optim_steps
     loss_ds.attrs["batch_size"] = len(input_batches["batch"])
     loss_ds["var_index"] = xr.DataArray(
         np.arange(len(loss_by_var)),
@@ -186,9 +192,7 @@ def optimize(params, state, optimizer, emulator, input_batches, target_batches, 
     )
 
     # concatenate losses and store
-    loss_fname = os.path.join(emulator.local_store_path, "loss.nc")
     if os.path.exists(loss_fname):
-        stored_loss_ds = xr.open_dataset(loss_fname)
         stored_loss_ds = xr.concat([stored_loss_ds, loss_ds], dim='optim_step')
     else:
         stored_loss_ds = loss_ds
