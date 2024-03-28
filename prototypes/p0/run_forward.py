@@ -31,9 +31,10 @@ if __name__ == "__main__":
         mode="testing",
     )
 
-    inputs = generator.data["inputs"]
-    targets = generator.data["targets"]
-    forcings = generator.data["forcings"]
+    data = generator.get_data()
+    inputs = data["inputs"]
+    targets = data["targets"]
+    forcings = data["forcings"]
 
     localtime.stop()
 

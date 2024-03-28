@@ -57,16 +57,26 @@ def parse_args():
     )
 
     # add options from P0Emulator
+    # Todo: Handle dictionaries
     for k, v in vars(P0Emulator).items():
         if not k.startswith("__"):
             name = "--" + k.replace("_", "-")
-            if v is not None:
+            if v is None:
                 parser.add_argument(
                     name,
                     dest=k,
                     required=False,
-                    type=type(v),
-                    default=v,
+                    type=int,
+                    help=f"{k}: default {v}",
+                )
+            elif isinstance(v, (tuple,list)) and len(v):
+                tp = type(v[0])
+                parser.add_argument(
+                    name,
+                    dest=k,
+                    required=False,
+                    nargs="+",
+                    type=tp,
                     help=f"{k}: default {v}",
                 )
             else:
@@ -74,7 +84,8 @@ def parse_args():
                     name,
                     dest=k,
                     required=False,
-                    type=int,
+                    type=type(v),
+                    default=v,
                     help=f"{k}: default {v}",
                 )
 
@@ -112,7 +123,7 @@ if __name__ == "__main__":
     generator = DataGenerator(
         gufs=gufs,
         download_data=True,
-        n_optim_steps=args.steps_per_chunk,
+        n_optim_steps=gufs.steps_per_chunk,
         mode="testing" if args.test else "training",
     )
 
@@ -126,7 +137,8 @@ if __name__ == "__main__":
         params, state = load_checkpoint(ckpt_path)
     else:
         localtime.start("Initializing Optimizer and Parameters")
-        params, state = init_model(gufs, generator.data_0)
+        data = generator.get_data() # just to figure out shapes
+        params, state = init_model(gufs, data)
     localtime.stop()
 
     # training
@@ -140,12 +152,13 @@ if __name__ == "__main__":
         optimizer = optax.adam(learning_rate=1e-4)
 
         # training loop
-        for e in range(args.num_epochs):
-            for c in range(args.chunks_per_epoch):
+        for e in range(gufs.num_epochs):
+            for c in range(gufs.chunks_per_epoch):
                 print(f"Training on epoch {e} and chunk {c}")
 
                 # get chunk of data in parallel with NN optimization
                 generator.generate()
+                data = generator.get_data()
 
                 # optimize
                 params, loss = optimize(
@@ -153,24 +166,25 @@ if __name__ == "__main__":
                     state=state,
                     optimizer=optimizer,
                     emulator=gufs,
-                    input_batches=generator.data["inputs"],
-                    target_batches=generator.data["targets"],
-                    forcing_batches=generator.data["forcings"],
+                    input_batches=data["inputs"],
+                    target_batches=data["targets"],
+                    forcing_batches=data["forcings"],
                 )
 
                 # save weights
-                if c % args.checkpoint_chunks == 0:
-                    ckpt_id = (e * args.chunks_per_epoch + c) // args.checkpoint_chunks
+                if c % gufs.checkpoint_chunks == 0:
+                    ckpt_id = (e * gufs.chunks_per_epoch + c) // gufs.checkpoint_chunks
                     ckpt_path = f"{checkpoint_dir}/model_{ckpt_id}.npz"
                     save_checkpoint(gufs, params, ckpt_path)
 
             # reset generator at the end of an epoch
-            generator = DataGenerator(
-                gufs=gufs,
-                download_data=False,
-                n_optim_steps=args.steps_per_chunk,
-                mode="training",
-            )
+            if e != gufs.num_epochs - 1:
+                generator = DataGenerator(
+                    gufs=gufs,
+                    download_data=False,
+                    n_optim_steps=gufs.steps_per_chunk,
+                    mode="training",
+                )
 
     # testing
     else:
@@ -185,25 +199,26 @@ if __name__ == "__main__":
             shutil.rmtree(targets_zarr_name)
 
         stats = {}
-        for c in range(args.chunks_per_epoch):
+        for c in range(gufs.chunks_per_epoch):
             print(f"Testing on chunk {c}")
 
             # get chunk of data in parallel with inference
             generator.generate()
+            data = generator.get_data()
 
             # run predictions
             predictions = predict(
                 params=params,
                 state=state,
                 emulator=gufs,
-                input_batches=generator.data["inputs"],
-                target_batches=generator.data["targets"],
-                forcing_batches=generator.data["forcings"],
+                input_batches=data["inputs"],
+                target_batches=data["targets"],
+                forcing_batches=data["forcings"],
             )
 
             # Compute rmse and bias comparing targets and predictions
-            targets = generator.data["targets"]
-            inittimes = generator.data["inittimes"]
+            targets = data["targets"]
+            inittimes = data["inittimes"]
             compute_rmse_bias(predictions, targets, stats, c)
 
             # write chunk by chunk to avoid storing all of it in memory

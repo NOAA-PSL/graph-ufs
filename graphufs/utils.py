@@ -89,6 +89,12 @@ class DataGenerator:
         )
         self.first_chunk = False
 
+    def get_data(self):
+        if self.data:
+            return self.data;
+        else:
+            return self.data_0;
+
 
 def init_model(gufs, data: dict):
     """Initialize model with random weights.
