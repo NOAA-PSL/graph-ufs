@@ -184,8 +184,7 @@ definition as follows
 
 ```python
 # linearly increase learning rate
-n_linear = gufs.num_epochs * gufs.chunks_per_epoch *
-len(data["inputs"]["optim_step"])
+n_linear = gufs.num_epochs * gufs.chunks_per_epoch * len(data["inputs"]["optim_step"])
 schedule_1 = optax.linear_schedule(
     init_value=0.0,
     end_value=1e-3,
