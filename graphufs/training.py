@@ -223,12 +223,28 @@ def predict(
 
     apply_jitted = drop_state(with_params(jit(run_forward_loc.apply)))
 
-    predictions = rollout.chunked_prediction(
-        apply_jitted,
-        rng=PRNGKey(0),
-        inputs=input_batches,
-        targets_template=target_batches,
-        forcings=forcing_batches,
-        verbose=True,
-    )
+    # process steps one by one
+    all_predictions = []
+
+    iterations = input_batches["optim_step"].size
+    progress_bar = tqdm(total=iterations, desc="Processing")
+
+    for k in input_batches["optim_step"].values:
+        predictions = rollout.chunked_prediction(
+            apply_jitted,
+            rng=PRNGKey(0),
+            inputs=input_batches.sel(optim_step=k),
+            targets_template=target_batches.sel(optim_step=k),
+            forcings=forcing_batches.sel(optim_step=k),
+        )
+
+        all_predictions.append(predictions)
+
+        progress_bar.update(1)
+
+    progress_bar.close()
+
+    # combine along "optim_step" dimension
+    predictions = xr.concat(all_predictions, dim="optim_step")
+
     return predictions

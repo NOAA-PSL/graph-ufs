@@ -30,8 +30,7 @@ Usage:
 
     Later, you can evaluate a specific model by specifying model id, and testing dataset range i.e. first month of 1995
 
-    python3 -W ignore train.py --steps-per-chunk 1 --chunks-per-epoch 1 --latent-size 32 --test --id 3 --testing-dates "1995-01-01T00" "1995-01-31T18"
-
+    python3 -W ignore train.py --chunks-per-epoch 2 --latent-size 32 --test --id 3 --testing-dates  "1995-01-01T00"  "1995-01-31T18"
 """
 
 

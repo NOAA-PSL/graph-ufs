@@ -49,11 +49,11 @@ def convert_wb2_format(gufs, ds, inittimes) -> xr.Dataset:
     ds_out["level"] = np.array(list(gufs.pressure_levels), dtype=np.float32)
 
     # remove batch dimension
-    ds_out = ds_out.rename({"time": "t", "batch": "b"})
-    ds_out = ds_out.stack(time=("b", "t"), create_index=False)
-    ds_out = ds_out.drop_vars(["b", "t"])
-    init_times = inittimes["datetime"].values
-    lead_times = inittimes["time"].values
+    ds_out = ds_out.rename({"optim_step": "o", "time": "t", "batch": "b"})
+    ds_out = ds_out.stack(time=("o", "b", "t"), create_index=False)
+    ds_out = ds_out.drop_vars(["o", "b", "t"])
+    init_times = inittimes["datetime"].values.flatten()
+    lead_times = inittimes["time"].values.flatten()
     ds_out = ds_out.assign_coords({"lead_time": lead_times, "time": init_times})
     ds_out = ds_out.rename({"lat": "latitude", "lon": "longitude"})
 
