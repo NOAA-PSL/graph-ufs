@@ -1,4 +1,5 @@
 import argparse
+import logging
 import os
 import shutil
 from functools import partial
@@ -111,6 +112,9 @@ if __name__ == "__main__":
 
     # parse arguments
     args = parse_args()
+
+    # turn off absl warnings
+    logging.getLogger("absl").setLevel(logging.CRITICAL)
 
     # initialize emulator and open dataset
     walltime = Timer()
