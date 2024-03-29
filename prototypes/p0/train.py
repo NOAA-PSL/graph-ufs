@@ -21,16 +21,17 @@ from simple_emulator import P0Emulator
 """
 Script to train and test graphufs over multiple chunks and epochs
 
-Example usage:
+Usage:
 
-    python3 train.py --chunks-per-epoch 2 --batches-per-chunk 1 --latent-size 32
+    python3 -W ignore train.py --num-epochs 2 --chunks-per-epoch 2 --latent-size 32 --training-dates "1994-01-01T00" "1994-01-31T18"
 
-    This will train networks over 2 chunks where each chunk goes through 16 steps
-    with a batch size of 1. You should get 10 checkpoints after training completes.
+    This will train networks for 2 epochs with 2 chunks per epoch with training dataset of first month of 1994.
+    You should get 4 models (checkpoints) after training completes.
 
-    Later, you can evaluate a specific model by specifying model id
+    Later, you can evaluate a specific model by specifying model id, and testing dataset range i.e. first month of 1995
 
-    python3 train.py --chunks-per-epoch 1 --batches-per-chunk 1 --latent-size 32 --test --id 1
+    python3 -W ignore train.py --steps-per-chunk 1 --chunks-per-epoch 1 --latent-size 32 --test --id 3 --testing-dates "1995-01-01T00" "1995-01-31T18"
+
 """
 
 
@@ -69,7 +70,7 @@ def parse_args():
                     type=int,
                     help=f"{k}: default {v}",
                 )
-            elif isinstance(v, (tuple,list)) and len(v):
+            elif isinstance(v, (tuple, list)) and len(v):
                 tp = type(v[0])
                 parser.add_argument(
                     name,
@@ -137,7 +138,7 @@ if __name__ == "__main__":
         params, state = load_checkpoint(ckpt_path)
     else:
         localtime.start("Initializing Optimizer and Parameters")
-        data = generator.get_data() # just to figure out shapes
+        data = generator.get_data()  # just to figure out shapes
         params, state = init_model(gufs, data)
     localtime.stop()
 
