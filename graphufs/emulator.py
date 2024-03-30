@@ -225,14 +225,17 @@ class ReplayEmulator:
         # split dataset into chunks
         chunk_size = len(all_new_time) // self.chunks_per_epoch
         all_new_time_chunks = []
+        # overlap chunks by lead time + input duration
+        overlap_step = (self.target_lead_time + self.input_duration) // delta_t
         for i in range(self.chunks_per_epoch):
             if i == self.chunks_per_epoch - 1:
                 all_new_time_chunks.append(all_new_time[i * chunk_size:len(all_new_time)])
             else:
-                all_new_time_chunks.append(all_new_time[i * chunk_size:(i + 1) * chunk_size])
+                all_new_time_chunks.append(all_new_time[i * chunk_size:(i + 1) * chunk_size + overlap_step])
+        # print chunk boundaries
         print(f"Chunks total: {len(all_new_time_chunks)}")
         for chunk_id, new_time in enumerate(all_new_time_chunks):
-            print(f"Chunk {chunk_id}: {new_time[0]} to {new_time[-1]}")
+            print(f"Chunk {chunk_id}: {new_time[0]} to {new_time[-1]} : {len(new_time)} time slices")
 
         # iterate over all chunks
         for chunk_id, new_time in enumerate(all_new_time_chunks):
@@ -287,7 +290,12 @@ class ReplayEmulator:
             # subsample in time, grab variables and vertical levels we want
             xds = self.subsample_dataset(all_xds, new_time=new_time)
             if download_data:
-                xds.to_zarr(local_data_path, append_dim="time" if os.path.exists(local_data_path) else None)
+                # don't write overlapped dates twice
+                if chunk_id < self.chunks_per_epoch - 1:
+                    wxds = self.subsample_dataset(xds, new_time=new_time[:-overlap_step])
+                else:
+                    wxds = xds
+                wxds.to_zarr(local_data_path, append_dim="time" if os.path.exists(local_data_path) else None)
 
             xds = xds.load();
 

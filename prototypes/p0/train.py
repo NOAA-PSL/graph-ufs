@@ -56,6 +56,13 @@ def parse_args():
         default=0,
         help="ID of neural networks to resume training/testing from.",
     )
+    parser.add_argument(
+        "--reuse-data",
+        dest="reuse_data",
+        action="store_true",
+        required=False,
+        help="Reuse data stored locally on disk.",
+    )
 
     # add options from P0Emulator
     # Todo: Handle dictionaries
@@ -126,7 +133,7 @@ if __name__ == "__main__":
     # data generators
     generator = DataGenerator(
         emulator=gufs,
-        download_data=True,
+        download_data=not args.reuse_data,
         n_optim_steps=gufs.steps_per_chunk,
         mode="testing" if args.test else "training",
     )
@@ -220,17 +227,20 @@ if __name__ == "__main__":
                 forcing_batches=data["forcings"],
             )
 
-            # Compute rmse and bias comparing targets and predictions
             targets = data["targets"]
             inittimes = data["inittimes"]
+
+            # Compute rmse and bias comparing targets and predictions
             compute_rmse_bias(predictions, targets, stats, c)
 
             # write chunk by chunk to avoid storing all of it in memory
             predictions = convert_wb2_format(gufs, predictions, inittimes)
+            predictions = predictions.dropna("time")
             predictions.to_zarr(predictions_zarr_name, append_dim="time" if c else None)
 
             # write also targets to compute metrics against it with wb2
             targets = convert_wb2_format(gufs, targets, inittimes)
+            targets = targets.dropna("time")
             targets.to_zarr(targets_zarr_name, append_dim="time" if c else None)
 
         print("--------- Statistiscs ---------")

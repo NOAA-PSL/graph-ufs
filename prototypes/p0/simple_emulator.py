@@ -48,7 +48,7 @@ class P0Emulator(ReplayEmulator):
 
     # time related
     delta_t = "6h"              # the model time step
-    input_duration = "6h 1s"    # time covered by initial condition(s), note the 1s is necessary for GraphCast code
+    input_duration = "12h"      # time covered by initial condition(s) + 6h (necessary for GraphCast code)
     target_lead_time = "6h"     # how long is the forecast ... at what point do we compare model to targets
     training_dates = (          # bounds of training data (inclusive)
         "1994-01-01T00",        # start
