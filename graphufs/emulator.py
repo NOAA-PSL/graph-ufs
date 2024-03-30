@@ -1,4 +1,5 @@
 import os
+import math
 import yaml
 import warnings
 import itertools
@@ -250,9 +251,10 @@ class ReplayEmulator:
             training_duration = end - start
 
             n_max_forecasts = (training_duration - input_duration) // delta_t
-            n_max_optim_steps = n_max_forecasts // self.batch_size
+            n_max_optim_steps = math.ceil(n_max_forecasts / self.batch_size)
             n_optim_steps = n_max_optim_steps if n_optim_steps is None else n_optim_steps
             n_forecasts = n_optim_steps * self.batch_size
+            n_forecasts = min(n_forecasts, n_max_forecasts)
 
             # note that this max can be violated if we sample with replacement ...
             # but I'd rather just work with epochs and use all the data
@@ -306,6 +308,21 @@ class ReplayEmulator:
             for i, (k, b) in enumerate(
                 itertools.product(range(n_optim_steps), range(self.batch_size))
             ):
+
+                if i >= n_max_forecasts:
+                    # If the last batch won't be full, take values from the previous batch and complete it.
+                    # Do this only for training, because in testing mode this process will mess up the output.
+                    # For testing, we will cleanup after prediction using dropna()
+                    def copy_values(ds):
+                        mds = ds[-self.batch_size].copy()
+                        mds["optim_step"] = [k]
+                        ds.append(mds)
+                    if mode != "testing":
+                        copy_values(inputs)
+                        copy_values(targets)
+                        copy_values(forcings)
+                        copy_values(inittimes)
+                    continue
 
                 timestamps_in_this_forecast = pd.date_range(
                     start=forecast_initial_times[i],
