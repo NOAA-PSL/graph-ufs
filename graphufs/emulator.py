@@ -2,6 +2,7 @@ import os
 import math
 import yaml
 import warnings
+import random
 import itertools
 import dataclasses
 import numpy as np
@@ -233,6 +234,11 @@ class ReplayEmulator:
                 all_new_time_chunks.append(all_new_time[i * chunk_size:len(all_new_time)])
             else:
                 all_new_time_chunks.append(all_new_time[i * chunk_size:(i + 1) * chunk_size + overlap_step])
+
+        # shuffle chunks
+        if mode != "testing":
+            random.shuffle(all_new_time_chunks)
+
         # print chunk boundaries
         print(f"Chunks total: {len(all_new_time_chunks)}")
         for chunk_id, new_time in enumerate(all_new_time_chunks):
