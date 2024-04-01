@@ -14,6 +14,8 @@ from graphufs import (
     save_checkpoint,
     convert_wb2_format,
     compute_rmse_bias,
+    add_emulator_arguments,
+    set_emulator_options,
 )
 from ufs2arco.timer import Timer
 
@@ -64,53 +66,14 @@ def parse_args():
         help="Reuse data stored locally on disk.",
     )
 
-    # add options from P0Emulator
-    # Todo: Handle dictionaries
-    for k, v in vars(P0Emulator).items():
-        if not k.startswith("__"):
-            name = "--" + k.replace("_", "-")
-            if v is None:
-                parser.add_argument(
-                    name,
-                    dest=k,
-                    required=False,
-                    type=int,
-                    help=f"{k}: default {v}",
-                )
-            elif isinstance(v, (tuple, list)) and len(v):
-                tp = type(v[0])
-                parser.add_argument(
-                    name,
-                    dest=k,
-                    required=False,
-                    nargs="+",
-                    type=tp,
-                    help=f"{k}: default {v}",
-                )
-            else:
-                parser.add_argument(
-                    name,
-                    dest=k,
-                    required=False,
-                    type=type(v),
-                    default=v,
-                    help=f"{k}: default {v}",
-                )
+    # add arguments from emulator
+    add_emulator_arguments(P0Emulator, parser)
 
     # parse CLI args
     args = parser.parse_args()
 
     # override options in emulator class by those from CLI
-    for arg in vars(args):
-        value = getattr(args, arg)
-        if value is not None:
-            arg_name = arg.replace("-", "_")
-            if hasattr(P0Emulator, arg_name):
-                stored = getattr(P0Emulator, arg_name)
-                if stored is not None:
-                    attr_type = type(stored)
-                    value = attr_type(value)
-                setattr(P0Emulator, arg_name, value)
+    set_emulator_options(P0Emulator, args)
 
     return args
 
