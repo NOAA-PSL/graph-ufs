@@ -1,6 +1,7 @@
 import numpy as np
 import xesmf as xe
 import xarray as xr
+import pandas as pd
 
 
 def convert_wb2_format(gufs, ds, inittimes) -> xr.Dataset:
@@ -53,14 +54,14 @@ def convert_wb2_format(gufs, ds, inittimes) -> xr.Dataset:
     ds_out = ds_out.stack(time=("o", "b", "t"), create_index=False)
     ds_out = ds_out.drop_vars(["o", "b", "t"])
     init_times = inittimes["datetime"].values.flatten()
-    lead_times = inittimes["time"].values.flatten()
-    ds_out = ds_out.assign_coords({"lead_time": lead_times, "time": init_times})
+    lead_time = pd.Timedelta(gufs.target_lead_time)
+    ds_out = ds_out.assign_coords({"lead_time": [lead_time], "time": init_times})
     ds_out = ds_out.rename({"lat": "latitude", "lon": "longitude"})
 
     # transpose the dimensions, and insert lead_time
     ds_out = ds_out.transpose("time", ..., "longitude", "latitude")
-    #for var in ds_out.data_vars:
-    #    ds_out[var] = ds_out[var].expand_dims({"lead_time": ds_out.lead_time}, axis=1)
+    for var in ds_out.data_vars:
+        ds_out[var] = ds_out[var].expand_dims({"lead_time": ds_out.lead_time}, axis=1)
 
     return ds_out
 
