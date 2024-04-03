@@ -4,8 +4,6 @@ export PYTHONPATH=$PYTHONPATH:$PWD/weatherbench2:$PWD/weatherbench2/weatherbench
 
 GRAPHUFS_ZARR_DIR="$PWD/prototypes/p0/zarr-stores"
 
-#OBS_PATH="$GRAPHUFS_ZARR_DIR/graphufs_targets.zarr"
-
 OBS_PATH="gs://weatherbench2/datasets/era5/1959-2022-6h-64x32_equiangular_conservative.zarr"
 
 python weatherbench2/scripts/evaluate.py \

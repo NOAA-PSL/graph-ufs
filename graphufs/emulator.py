@@ -242,7 +242,7 @@ class ReplayEmulator:
         # print chunk boundaries
         print(f"Chunks total: {len(all_new_time_chunks)}")
         for chunk_id, new_time in enumerate(all_new_time_chunks):
-            print(f"Chunk {chunk_id}: {new_time[0]} to {new_time[-1]} : {len(new_time)} time slices")
+            print(f"Chunk {chunk_id}: {new_time[0]} to {new_time[-1]} : {len(new_time)} time stamps")
 
         # iterate over all chunks
         for chunk_id, new_time in enumerate(all_new_time_chunks):
@@ -319,10 +319,10 @@ class ReplayEmulator:
                     # If the last batch won't be full, take values from the previous batch and complete it.
                     # Do this only for training, because in testing mode this process will mess up the output.
                     # For testing, we will cleanup after prediction using dropna()
-                    def copy_values(ds):
-                        mds = ds[-self.batch_size].copy()
+                    def copy_values(ds_list):
+                        mds = ds_list[-self.batch_size].copy()
                         mds["optim_step"] = [k]
-                        ds.append(mds)
+                        ds_list.append(mds)
                     if mode != "testing":
                         copy_values(inputs)
                         copy_values(targets)
