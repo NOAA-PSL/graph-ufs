@@ -176,6 +176,7 @@ class ReplayEmulator:
         drop_cftime=True,
         mode="training",
         download_data=True,
+        allow_overlapped_chunks=None,
     ):
         """Get a dataset with all the batches of data necessary for training
 
@@ -187,6 +188,7 @@ class ReplayEmulator:
             drop_cftime (bool, optional): may be useful for debugging
             mode (str, optional): can be either "training", "validation" or "testing"
             download_data (bool, optional): download data from GCS
+            allow_overlapped_chunks (bool, optional): overlapp chunks
         Returns:
             inputs, targets, forcings (xarray.Dataset): with new dimension "batch"
                 and appropriate fields for each dataset, based on the variables in :attr:`task_config`
@@ -202,12 +204,15 @@ class ReplayEmulator:
         if mode == "training":
             start = self.training_dates[ 0]
             end   = self.training_dates[-1]
+            if allow_overlapped_chunks is None: allow_overlapped_chunks = False
         elif mode == "testing":
             start = self.testing_dates[ 0]
             end   = self.testing_dates[-1]
+            allow_overlapped_chunks = True
         elif mode == "validation":
             start = self.validation_dates[ 0]
             end   = self.validation_dates[-1]
+            if allow_overlapped_chunks is None: allow_overlapped_chunks = False
         else:
             raise ValueError("Unknown mode: make sure it is either training/testing/validation")
 
@@ -228,7 +233,7 @@ class ReplayEmulator:
         chunk_size = len(all_new_time) // self.chunks_per_epoch
         all_new_time_chunks = []
         # overlap chunks by lead time + input duration
-        overlap_step = (self.target_lead_time + self.input_duration) // delta_t
+        overlap_step = (self.target_lead_time + self.input_duration) // delta_t if allow_overlapped_chunks else 0
         for i in range(self.chunks_per_epoch):
             if i == self.chunks_per_epoch - 1:
                 all_new_time_chunks.append(all_new_time[i * chunk_size:len(all_new_time)])
@@ -299,7 +304,7 @@ class ReplayEmulator:
             xds = self.subsample_dataset(all_xds, new_time=new_time)
             if download_data:
                 # don't write overlapped dates twice
-                if chunk_id < self.chunks_per_epoch - 1:
+                if allow_overlapped_chunks and chunk_id < self.chunks_per_epoch - 1:
                     wxds = self.subsample_dataset(xds, new_time=new_time[:-overlap_step])
                 else:
                     wxds = xds
