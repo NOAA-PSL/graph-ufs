@@ -175,7 +175,6 @@ class ReplayEmulator:
         n_optim_steps=None,
         drop_cftime=True,
         mode="training",
-        download_data=True,
         allow_overlapped_chunks=None,
     ):
         """Get a dataset with all the batches of data necessary for training
@@ -187,7 +186,6 @@ class ReplayEmulator:
             n_optim_steps (int, optional): number of training batches to grab ... number of times we will update the parameters during optimization. If not specified, use as many as are available based on the available training data.
             drop_cftime (bool, optional): may be useful for debugging
             mode (str, optional): can be either "training", "validation" or "testing"
-            download_data (bool, optional): download data from GCS
             allow_overlapped_chunks (bool, optional): overlapp chunks
         Returns:
             inputs, targets, forcings (xarray.Dataset): with new dimension "batch"
@@ -196,10 +194,8 @@ class ReplayEmulator:
         # grab the dataset and subsample training portion at desired model time step
         # second epoch onwards should be able to read data locally
         local_data_path = os.path.join(self.local_store_path, "data.zarr")
-        if download_data:
-            xds = xr.open_zarr(self.data_url, storage_options={"token": "anon"})
-        else:
-            xds = xr.open_zarr(local_data_path)
+        xds = xr.open_zarr(self.data_url, storage_options={"token": "anon"})
+
         # choose dates based on mode
         if mode == "training":
             start = self.training_dates[ 0]
@@ -226,12 +222,31 @@ class ReplayEmulator:
             freq=delta_t,
             inclusive="both",
         )
+
         # subsample in time, grab variables and vertical levels we want
         all_xds = self.subsample_dataset(xds, new_time=all_new_time)
+
+        # download only missing dates and write them to disk
+        if os.path.exists(local_data_path):
+            # figure out missing dates
+            xds_on_disk = xr.open_zarr(local_data_path)
+            missing_dates = set(all_xds.time.values) - set(xds_on_disk.time.values)
+            xds_on_disk.close()
+            print(f"Downloading missing data for {len(missing_dates)} time stamps.")
+            # download and write missing dates to disk
+            missing_xds = all_xds.sel(time=list(missing_dates))
+            missing_xds.to_zarr(local_data_path, append_dim="time")
+            # now that the data on disk is complete, reopen the dataset from disk
+            all_xds.close()
+            all_xds = xr.open_zarr(local_data_path)
+        else:
+            print(f"Downloading missing data for {len(all_xds.time.values)} time stamps.")
+            all_xds.to_zarr(local_data_path)
 
         # split dataset into chunks
         chunk_size = len(all_new_time) // self.chunks_per_epoch
         all_new_time_chunks = []
+
         # overlap chunks by lead time + input duration
         overlap_step = (self.target_lead_time + self.input_duration) // delta_t if allow_overlapped_chunks else 0
         for i in range(self.chunks_per_epoch):
@@ -302,14 +317,8 @@ class ReplayEmulator:
 
             # subsample in time, grab variables and vertical levels we want
             xds = self.subsample_dataset(all_xds, new_time=new_time)
-            if download_data:
-                # don't write overlapped dates twice
-                if allow_overlapped_chunks and chunk_id < self.chunks_per_epoch - 1:
-                    wxds = self.subsample_dataset(xds, new_time=new_time[:-overlap_step])
-                else:
-                    wxds = xds
-                wxds.to_zarr(local_data_path, append_dim="time" if os.path.exists(local_data_path) else None)
 
+            # load into RAM
             xds = xds.load();
 
             inputs = []

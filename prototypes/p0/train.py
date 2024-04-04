@@ -58,13 +58,6 @@ def parse_args():
         default=0,
         help="ID of neural networks to resume training/testing from.",
     )
-    parser.add_argument(
-        "--reuse-data",
-        dest="reuse_data",
-        action="store_true",
-        required=False,
-        help="Reuse data stored locally on disk.",
-    )
 
     # add arguments from emulator
     add_emulator_arguments(P0Emulator, parser)
@@ -96,7 +89,6 @@ if __name__ == "__main__":
     # data generators
     generator = DataGenerator(
         emulator=gufs,
-        download_data=not args.reuse_data,
         n_optim_steps=gufs.steps_per_chunk,
         mode="testing" if args.test else "training",
     )
@@ -155,7 +147,6 @@ if __name__ == "__main__":
             if e != gufs.num_epochs - 1:
                 generator = DataGenerator(
                     emulator=gufs,
-                    download_data=False,
                     n_optim_steps=gufs.steps_per_chunk,
                     mode="training",
                 )

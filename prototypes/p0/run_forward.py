@@ -26,7 +26,6 @@ if __name__ == "__main__":
     # data generator
     generator = DataGenerator(
         emulator = gufs,
-        download_data=True,
         n_optim_steps=2,
         mode="testing",
     )
