@@ -160,6 +160,22 @@ def optimize(
             process_batch, dim="optim_step"
         )(input_batches, target_batches, forcing_batches)
 
+        # Remove the first dimension, which is added due to pmap, from loss/grads
+        # For grads, which is a dict of dicts, "layer_name" & "weights/bias" being the two keys
+        # we use a helper function. I suspect there must be a better way.
+        def remove_first_dim(d):
+            if isinstance(d, dict):
+                return {k: remove_first_dim(v) for k, v in d.items()}
+            elif isinstance(d, jnp.ndarray):
+                return jnp.squeeze(d, axis=0)
+            else:
+                return d
+
+        loss = jnp.squeeze(loss, axis=0)
+        grads = remove_first_dim(grads)
+        diagnostics = remove_first_dim(diagnostics)
+        next_state = remove_first_dim(next_state)
+
         # update parameters
         updates, opt_state = optimizer.update(grads, opt_state, params)
         params = optax.apply_updates(params, updates)
@@ -177,7 +193,8 @@ def optimize(
         # When the number of batches is not evenly divisible by num_gpus
         # the last set of batches may not be enough for all gpus. We skip
         # training because aggregation can corrupt final result. Passing
-        # a shorter list of devices may solve it, but jitted functions don't like tha
+        # a shorter list of devices may solve it, but the jitted optim 
+        # function don't like that.
         if k + emulator.num_gpus > n_steps:
             continue
 
@@ -193,8 +210,6 @@ def optimize(
             params=params,
             state=state,
         )
-
-        loss = loss[0]
 
         loss_values.append(loss)
         for key, val in diagnostics.items():
