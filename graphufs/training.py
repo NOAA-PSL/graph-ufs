@@ -196,7 +196,12 @@ def optimize(
         # a shorter list of devices may solve it, but the jitted optim 
         # function don't like that.
         if k + emulator.num_gpus > n_steps:
-            continue
+            # repeat losses, see below for why?
+            n_repeat = n_steps - k
+            loss_values = loss_values + [loss_values[-1]] * n_repeat
+            for k,v in loss_by_var.items():
+                loss_by_var[k] = v + [v[-1]] * n_repeat
+            break
 
         # the slice should provide for all gpus
         sl = slice(k, k + emulator.num_gpus)
@@ -211,9 +216,14 @@ def optimize(
             state=state,
         )
 
-        loss_values.append(loss)
+        # Since we are doing num_gpus steps per iteration, repeat the losses.
+        # Note that pmean() has averaged the losses from different gpus.
+        # This is necessary to obtain loss datasets of n_steps size.
+        for i in range(emulator.num_gpus):
+            loss_values.append(loss)
         for key, val in diagnostics.items():
-            loss_by_var[key].append(val)
+            for i in range(emulator.num_gpus):
+                loss_by_var[key].append(val)
 
         mean_grad = np.mean(tree_util.tree_flatten(tree_util.tree_map(lambda x: np.abs(x).mean(), grads))[0])
         progress_bar.set_description(f"loss = {loss:.9f}, mean(|grad|) = {mean_grad:.12f}")
