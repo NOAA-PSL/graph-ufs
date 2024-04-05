@@ -25,6 +25,7 @@ import jax.numpy as jnp
 import optax
 import haiku as hk
 import xarray as xr
+from math import ceil
 
 from graphcast import graphcast
 from graphcast.checkpoint import dump
@@ -169,11 +170,18 @@ def optimize(
     loss_values = []
     loss_by_var = {k: list() for k in target_batches.data_vars}
 
-    iterations = input_batches["optim_step"].size
-    progress_bar = tqdm(total=iterations, desc="Processing")
+    n_steps = input_batches["optim_step"].size
+    progress_bar = tqdm(total=n_steps, desc="Processing")
 
-    for k in range(0, len(input_batches["optim_step"].values), emulator.num_gpus):
+    for k in range(0, n_steps, emulator.num_gpus):
+        # When the number of batches is not evenly divisible by num_gpus
+        # the last set of batches may not be enough for all gpus. We skip
+        # training because aggregation can corrupt final result. Passing
+        # a shorter list of devices may solve it, but jitted functions don't like tha
+        if k + emulator.num_gpus > n_steps:
+            continue
 
+        # the slice should provide for all gpus
         sl = slice(k, k + emulator.num_gpus)
 
         params, loss, diagnostics, opt_state, grads = optim_step_jitted(
@@ -194,7 +202,7 @@ def optimize(
 
         mean_grad = np.mean(tree_util.tree_flatten(tree_util.tree_map(lambda x: np.abs(x).mean(), grads))[0])
         progress_bar.set_description(f"loss = {loss:.9f}, mean(|grad|) = {mean_grad:.12f}")
-        progress_bar.update(1)
+        progress_bar.update(emulator.num_gpus)
 
     progress_bar.close()
 
