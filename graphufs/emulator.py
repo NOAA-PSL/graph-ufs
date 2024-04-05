@@ -69,6 +69,9 @@ class ReplayEmulator:
     steps_per_chunk = None           # number of steps to train for in each chunk
     checkpoint_chunks = None         # save model after this many chunks are processed
 
+    # others
+    num_gpus = None                  # number of GPUs to use for training
+
     def __init__(self):
 
         if self.local_store_path is None:

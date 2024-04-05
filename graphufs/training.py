@@ -18,7 +18,10 @@ from functools import partial
 import numpy as np
 import xarray as xr
 from jax import jit, value_and_grad, tree_util
+from graphcast.xarray_jax import pmap
+from jax.lax import pmean
 from jax.random import PRNGKey
+import jax.numpy as jnp
 import optax
 import haiku as hk
 import xarray as xr
@@ -34,6 +37,7 @@ from graphcast.xarray_jax import unwrap_data
 from graphcast import rollout
 
 from tqdm import tqdm
+
 
 def construct_wrapped_graphcast(emulator):
     """Constructs and wraps the GraphCast Predictor object"""
@@ -92,7 +96,9 @@ def grads_fn(params, state, emulator, inputs, targets, forcings):
     return loss, diagnostics, next_state, grads
 
 
-def optimize(params, state, optimizer, emulator, input_batches, target_batches, forcing_batches):
+def optimize(
+    params, state, optimizer, emulator, input_batches, target_batches, forcing_batches
+):
     """Optimize the model parameters by running through all optim_steps in data
 
     Args:
@@ -110,7 +116,15 @@ def optimize(params, state, optimizer, emulator, input_batches, target_batches, 
 
     opt_state = optimizer.init(params)
 
-    def optim_step(params, state, opt_state, emulator, inputs, targets, forcings):
+    def optim_step(
+        params,
+        state,
+        opt_state,
+        emulator,
+        input_batches,
+        target_batches,
+        forcing_batches,
+    ):
         """Note that this function has to be definied within optimize so that we do not
         pass optimizer as an argument. Otherwise we get some craazy jax errors"""
 
@@ -120,13 +134,32 @@ def optimize(params, state, optimizer, emulator, input_batches, target_batches, 
             )
             return loss, (diagnostics, next_state)
 
-        (loss, (diagnostics, next_state)), grads = value_and_grad(_aux, has_aux=True)(
-            params,
-            state,
-            inputs,
-            targets,
-            forcings,
-        )
+        # process one batch per GPU
+        def process_batch(inputs, targets, forcings):
+            (loss, (diagnostics, next_state)), grads = value_and_grad(
+                _aux, has_aux=True
+            )(
+                params,
+                state,
+                inputs,
+                targets,
+                forcings,
+            )
+
+            # aggregate gradients across all devices
+            grads = pmean(grads, axis_name="optim_step")
+            loss = pmean(loss, axis_name="optim_step")
+            diagnostics = pmean(diagnostics, axis_name="optim_step")
+            next_state = pmean(next_state, axis_name="optim_step")
+
+            return (loss, (diagnostics, next_state)), grads
+
+        # pmap batch processing into multiple GPUs
+        (loss, (diagnostics, next_state)), grads = pmap(
+            process_batch, dim="optim_step"
+        )(input_batches, target_batches, forcing_batches)
+
+        # update parameters
         updates, opt_state = optimizer.update(grads, opt_state, params)
         params = optax.apply_updates(params, updates)
         return params, loss, diagnostics, opt_state, grads
@@ -139,17 +172,22 @@ def optimize(params, state, optimizer, emulator, input_batches, target_batches, 
     iterations = input_batches["optim_step"].size
     progress_bar = tqdm(total=iterations, desc="Processing")
 
-    for k in input_batches["optim_step"].values:
+    for k in range(0, len(input_batches["optim_step"].values), emulator.num_gpus):
+
+        sl = slice(k, k + emulator.num_gpus)
 
         params, loss, diagnostics, opt_state, grads = optim_step_jitted(
             opt_state=opt_state,
             emulator=emulator,
-            inputs=input_batches.sel(optim_step=k),
-            targets=target_batches.sel(optim_step=k),
-            forcings=forcing_batches.sel(optim_step=k),
+            input_batches=input_batches.isel(optim_step=sl),
+            target_batches=target_batches.isel(optim_step=sl),
+            forcing_batches=forcing_batches.isel(optim_step=sl),
             params=params,
             state=state,
         )
+
+        loss = loss[0]
+
         loss_values.append(loss)
         for key, val in diagnostics.items():
             loss_by_var[key].append(val)

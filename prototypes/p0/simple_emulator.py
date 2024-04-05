@@ -86,6 +86,9 @@ class P0Emulator(ReplayEmulator):
     steps_per_chunk = None
     checkpoint_chunks = 1
 
+    # others
+    num_gpus = 1
+
 tree_util.register_pytree_node(
     P0Emulator,
     P0Emulator._tree_flatten,
