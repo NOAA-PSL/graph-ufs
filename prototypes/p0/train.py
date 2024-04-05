@@ -88,7 +88,7 @@ if __name__ == "__main__":
     gufs = P0Emulator()
 
     # for testing multi-gpu on single cpu/gpu machine
-    init_logical_devices(gufs.num_gpus)
+    init_logical_devices(gufs)
 
     # data generators
     generator = DataGenerator(

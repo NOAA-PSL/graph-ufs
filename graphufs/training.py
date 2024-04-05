@@ -17,7 +17,7 @@ import os
 from functools import partial
 import numpy as np
 import xarray as xr
-from jax import jit, value_and_grad, tree_util, devices
+from jax import jit, value_and_grad, tree_util, devices, device_count
 from graphcast.xarray_jax import pmap
 from jax.lax import pmean
 from jax.random import PRNGKey
@@ -320,7 +320,24 @@ def predict(
 
     return predictions
 
-def init_logical_devices(num_gpus):
-    os.environ['XLA_FLAGS'] = f"--xla_force_host_platform_device_count={num_gpus}"
+
+def init_logical_devices(emulator):
+    try:
+        N = device_count(backend='gpu')
+    except:
+        N = 0
+    if N > 0:
+        if N > emulator.num_gpus:
+            print(f"Using fewer gpus than available: {emulator.num_gpus} out of {N}.")
+            gpu_devices_str = ','.join(str(i) for i in range(emulator.num_gpus))
+            os.environ['XLA_FLAGS'] = f"--xla_gpu_devices={gpu_devices_str}"
+        else:
+            emulator.num_gpus = N
+            print(f"Using {N} GPUs.")
+    else:
+        if emulator.num_gpus > 1:
+            os.environ['XLA_FLAGS'] = f"--xla_force_host_platform_device_count={emulator.num_gpus}"
+        print(f"Using {emulator.num_gpus} logical CPUs. You may want to set OMP_NUM_THREADS to an appropriate value.")
+
     print(f"Local devices: {devices()}")
     
