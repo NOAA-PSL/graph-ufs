@@ -17,7 +17,7 @@ import os
 from functools import partial
 import numpy as np
 import xarray as xr
-from jax import jit, value_and_grad, tree_util
+from jax import jit, value_and_grad, tree_util, devices
 from graphcast.xarray_jax import pmap
 from jax.lax import pmean
 from jax.random import PRNGKey
@@ -167,11 +167,11 @@ def optimize(
             if isinstance(d, dict):
                 return {k: remove_first_dim(v) for k, v in d.items()}
             elif isinstance(d, jnp.ndarray):
-                return jnp.squeeze(d, axis=0)
+                return jnp.squeeze(d[:1], axis=0)
             else:
                 return d
 
-        loss = jnp.squeeze(loss, axis=0)
+        loss = jnp.squeeze(loss[:1], axis=0)
         grads = remove_first_dim(grads)
         diagnostics = remove_first_dim(diagnostics)
         next_state = remove_first_dim(next_state)
@@ -309,3 +309,8 @@ def predict(
     predictions = xr.concat(all_predictions, dim="optim_step")
 
     return predictions
+
+def init_logical_devices(num_gpus):
+    os.environ['XLA_FLAGS'] = f"--xla_force_host_platform_device_count={num_gpus}"
+    print(f"Local devices: {devices()}")
+    

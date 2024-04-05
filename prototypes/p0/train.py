@@ -16,6 +16,7 @@ from graphufs import (
     compute_rmse_bias,
     add_emulator_arguments,
     set_emulator_options,
+    init_logical_devices,
 )
 from ufs2arco.timer import Timer
 
@@ -85,6 +86,9 @@ if __name__ == "__main__":
 
     # initialize emulator
     gufs = P0Emulator()
+
+    # for testing multi-gpu on single cpu/gpu machine
+    #init_logical_devices(gufs.num_gpus)
 
     # data generators
     generator = DataGenerator(
