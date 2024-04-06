@@ -1,4 +1,5 @@
 import os
+import logging
 import math
 import yaml
 import warnings
@@ -235,7 +236,7 @@ class ReplayEmulator:
             xds_on_disk = xr.open_zarr(local_data_path)
             missing_dates = set(all_xds.time.values) - set(xds_on_disk.time.values)
             xds_on_disk.close()
-            print(f"Downloading missing data for {len(missing_dates)} time stamps.")
+            logging.info(f"Downloading missing data for {len(missing_dates)} time stamps.")
             # download and write missing dates to disk
             missing_xds = all_xds.sel(time=list(missing_dates))
             missing_xds.to_zarr(local_data_path, append_dim="time")
@@ -243,7 +244,7 @@ class ReplayEmulator:
             all_xds.close()
             all_xds = xr.open_zarr(local_data_path)
         else:
-            print(f"Downloading missing data for {len(all_xds.time.values)} time stamps.")
+            logging.info(f"Downloading missing data for {len(all_xds.time.values)} time stamps.")
             all_xds.to_zarr(local_data_path)
 
         # split dataset into chunks
@@ -263,9 +264,9 @@ class ReplayEmulator:
             random.shuffle(all_new_time_chunks)
 
         # print chunk boundaries
-        print(f"Chunks total: {len(all_new_time_chunks)}")
+        logging.info(f"Chunks total: {len(all_new_time_chunks)}")
         for chunk_id, new_time in enumerate(all_new_time_chunks):
-            print(f"Chunk {chunk_id}: {new_time[0]} to {new_time[-1]} : {len(new_time)} time stamps")
+            logging.info(f"Chunk {chunk_id}: {new_time[0]} to {new_time[-1]} : {len(new_time)} time stamps")
 
         # iterate over all chunks
         for chunk_id, new_time in enumerate(all_new_time_chunks):

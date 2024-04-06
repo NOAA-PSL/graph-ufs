@@ -18,7 +18,6 @@ from graphufs import (
     set_emulator_options,
     init_logical_devices,
 )
-from ufs2arco.timer import Timer
 
 from simple_emulator import P0Emulator
 
@@ -77,17 +76,10 @@ if __name__ == "__main__":
     # parse arguments
     args = parse_args()
 
-    # turn off absl warnings
-    logging.getLogger("absl").setLevel(logging.CRITICAL)
-
-    # initialize emulator and open dataset
-    walltime = Timer()
-    localtime = Timer()
-
     # initialize emulator
     gufs = P0Emulator()
 
-    # for testing multi-gpu on single cpu/gpu machine
+    # for multi-gpu training
     init_logical_devices(gufs)
 
     # data generators
@@ -103,17 +95,16 @@ if __name__ == "__main__":
     ckpt_path = f"{checkpoint_dir}/model_{ckpt_id}.npz"
 
     if os.path.exists(ckpt_path):
-        localtime.start(f"Loading weights: {ckpt_path}")
+        logging.info(f"Loading weights: {ckpt_path}")
         params, state = load_checkpoint(ckpt_path)
     else:
-        localtime.start("Initializing Optimizer and Parameters")
+        logging.info("Initializing Optimizer and Parameters")
         data = generator.get_data()  # just to figure out shapes
         params, state = init_model(gufs, data)
-    localtime.stop()
 
     # training
     if not args.test:
-        walltime.start("Starting Training")
+        logging.info("Starting Training")
 
         # create checkpoint directory
         if not os.path.exists(checkpoint_dir):
@@ -124,7 +115,7 @@ if __name__ == "__main__":
         # training loop
         for e in range(gufs.num_epochs):
             for c in range(gufs.chunks_per_epoch):
-                print(f"Training on epoch {e} and chunk {c}")
+                logging.info(f"Training on epoch {e} and chunk {c}")
 
                 # get chunk of data in parallel with NN optimization
                 generator.generate()
@@ -157,7 +148,7 @@ if __name__ == "__main__":
 
     # testing
     else:
-        walltime.start("Starting Testing")
+        logging.info("Starting Testing")
 
         # create predictions and targets zarr file for WB2
         predictions_zarr_name = f"{gufs.local_store_path}/graphufs_predictions.zarr"
@@ -169,7 +160,7 @@ if __name__ == "__main__":
 
         stats = {}
         for c in range(gufs.chunks_per_epoch):
-            print(f"Testing on chunk {c}")
+            logging.info(f"Testing on chunk {c}")
 
             # get chunk of data in parallel with inference
             generator.generate()
@@ -201,9 +192,6 @@ if __name__ == "__main__":
             targets = targets.dropna("time")
             targets.to_zarr(targets_zarr_name, append_dim="time" if c else None)
 
-        print("--------- Statistiscs ---------")
+        logging.info("--------- Statistiscs ---------")
         for k, v in stats.items():
-            print(f"{k:32s}: RMSE: {v[0]} BIAS: {v[1]}")
-
-    # total walltime
-    walltime.stop("Total Walltime")
+            logging.info(f"{k:32s}: RMSE: {v[0]} BIAS: {v[1]}")

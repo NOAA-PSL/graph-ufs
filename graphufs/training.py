@@ -14,6 +14,7 @@ Regarding pytree, see the last few methods and lines of simple_emulatory.py, fol
 """
 
 import os
+import logging
 from functools import partial
 import numpy as np
 import xarray as xr
@@ -167,11 +168,11 @@ def optimize(
             if isinstance(d, dict):
                 return {k: remove_first_dim(v) for k, v in d.items()}
             elif isinstance(d, jnp.ndarray):
-                return jnp.squeeze(d[:1], axis=0)
+                return d[0]
             else:
                 return d
 
-        loss = jnp.squeeze(loss[:1], axis=0)
+        loss = remove_first_dim(loss)
         grads = remove_first_dim(grads)
         diagnostics = remove_first_dim(diagnostics)
         next_state = remove_first_dim(next_state)
@@ -322,22 +323,27 @@ def predict(
 
 
 def init_logical_devices(emulator):
+    # logging
+    logging.basicConfig(level=logging.INFO, format="[%(relativeCreated)d ms] [%(levelname)s] %(message)s")
+    logging.getLogger("absl").setLevel(logging.CRITICAL)
+
+    # devices
     try:
         N = device_count(backend='gpu')
     except:
         N = 0
     if N > 0:
         if N > emulator.num_gpus:
-            print(f"Using fewer gpus than available: {emulator.num_gpus} out of {N}.")
+            logging.info(f"Using fewer gpus than available: {emulator.num_gpus} out of {N}.")
             gpu_devices_str = ','.join(str(i) for i in range(emulator.num_gpus))
             os.environ['XLA_FLAGS'] = f"--xla_gpu_devices={gpu_devices_str}"
         else:
             emulator.num_gpus = N
-            print(f"Using {N} GPUs.")
+            logging.info(f"Using {N} GPUs.")
     else:
         if emulator.num_gpus > 1:
             os.environ['XLA_FLAGS'] = f"--xla_force_host_platform_device_count={emulator.num_gpus}"
-        print(f"Using {emulator.num_gpus} logical CPUs. You may want to set OMP_NUM_THREADS to an appropriate value.")
+        logging.info(f"Using {emulator.num_gpus} logical CPUs. You may want to set OMP_NUM_THREADS to an appropriate value.")
 
-    print(f"Local devices: {devices()}")
+    logging.info(f"Local devices: {devices()}")
     

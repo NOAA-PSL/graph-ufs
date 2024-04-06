@@ -2,6 +2,7 @@ from graphcast import checkpoint, graphcast
 from jax import jit
 from jax.random import PRNGKey
 import threading
+import logging
 from graphufs import run_forward
 from ufs2arco.timer import Timer
 
@@ -127,8 +128,8 @@ def load_checkpoint(ckpt_path: str, verbose: bool = False):
     model_config = ckpt.model_config
     task_config = ckpt.task_config
     if verbose:
-        print("Model description:\n", ckpt.description, "\n")
-        print("Model license:\n", ckpt.license, "\n")
+        logging.info("Model description:\n", ckpt.description, "\n")
+        logging.info("Model license:\n", ckpt.license, "\n")
     return params, state
 
 
