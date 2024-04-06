@@ -16,7 +16,7 @@ from graphufs import (
     compute_rmse_bias,
     add_emulator_arguments,
     set_emulator_options,
-    init_logical_devices,
+    init_devices,
 )
 
 from simple_emulator import P0Emulator
@@ -56,7 +56,7 @@ def parse_args():
         dest="id",
         required=False,
         type=int,
-        default=0,
+        default=-1,
         help="ID of neural networks to resume training/testing from.",
     )
 
@@ -81,7 +81,7 @@ if __name__ == "__main__":
     gufs = P0Emulator()
 
     # for multi-gpu training
-    init_logical_devices(gufs)
+    init_devices(gufs)
 
     # data generators
     generator = DataGenerator(
@@ -95,13 +95,16 @@ if __name__ == "__main__":
     ckpt_id = args.id
     ckpt_path = f"{checkpoint_dir}/model_{ckpt_id}.npz"
 
-    if os.path.exists(ckpt_path):
+    if os.path.exists(ckpt_path) and args.id >= 0:
         logging.info(f"Loading weights: {ckpt_path}")
         params, state = load_checkpoint(ckpt_path)
     else:
         logging.info("Initializing Optimizer and Parameters")
         data = generator.get_data()  # just to figure out shapes
         params, state = init_model(gufs, data)
+        loss_name = f"{gufs.local_store_path}/loss.nc"
+        if os.path.exists(loss_name):
+            os.remove(loss_name)
 
     # training
     if not args.test:
@@ -153,11 +156,8 @@ if __name__ == "__main__":
 
         # create predictions and targets zarr file for WB2
         predictions_zarr_name = f"{gufs.local_store_path}/graphufs_predictions.zarr"
-        targets_zarr_name = f"{gufs.local_store_path}/graphufs_targets.zarr"
         if os.path.exists(predictions_zarr_name):
             shutil.rmtree(predictions_zarr_name)
-        if os.path.exists(targets_zarr_name):
-            shutil.rmtree(targets_zarr_name)
 
         stats = {}
         for c in range(gufs.chunks_per_epoch):

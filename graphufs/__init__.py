@@ -5,7 +5,7 @@ from .training import (
     grads_fn,
     optimize,
     predict,
-    init_logical_devices,
+    init_devices,
 )
 from .utils import (
     DataGenerator,

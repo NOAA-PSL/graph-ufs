@@ -358,7 +358,7 @@ def predict(
     return predictions
 
 
-def init_logical_devices(emulator):
+def init_devices(emulator):
 
     # initialize distributed training
     try:
