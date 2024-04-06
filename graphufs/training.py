@@ -18,7 +18,16 @@ import logging
 from functools import partial
 import numpy as np
 import xarray as xr
-from jax import jit, value_and_grad, tree_util, devices, device_count
+from jax import (
+    jit,
+    value_and_grad,
+    tree_util,
+    local_devices,
+    devices,
+    local_device_count,
+    device_count,
+    distributed,
+)
 from graphcast.xarray_jax import pmap
 from jax.lax import pmean
 from jax.random import PRNGKey
@@ -39,6 +48,12 @@ from graphcast.xarray_jax import unwrap_data
 from graphcast import rollout
 
 from tqdm import tqdm
+
+try:
+    from mpi4py import MPI
+    import mpi4jax
+except:
+    pass
 
 
 def construct_wrapped_graphcast(emulator):
@@ -65,11 +80,7 @@ def construct_wrapped_graphcast(emulator):
 @hk.transform_with_state
 def run_forward(emulator, inputs, targets_template, forcings):
     predictor = construct_wrapped_graphcast(emulator)
-    return predictor(
-        inputs,
-        targets_template=targets_template,
-        forcings=forcings
-    )
+    return predictor(inputs, targets_template=targets_template, forcings=forcings)
 
 
 @hk.transform_with_state
@@ -77,8 +88,8 @@ def loss_fn(emulator, inputs, targets, forcings):
     predictor = construct_wrapped_graphcast(emulator)
     loss, diagnostics = predictor.loss(inputs, targets, forcings)
     return map_structure(
-        lambda x: unwrap_data(x.mean(), require_jax=True),
-        (loss, diagnostics))
+        lambda x: unwrap_data(x.mean(), require_jax=True), (loss, diagnostics)
+    )
 
 
 def grads_fn(params, state, emulator, inputs, targets, forcings):
@@ -117,6 +128,8 @@ def optimize(
     """
 
     opt_state = optimizer.init(params)
+    num_gpus = emulator.num_gpus
+    mpi_size = emulator.mpi_size
 
     def optim_step(
         params,
@@ -127,6 +140,7 @@ def optimize(
         target_batches,
         forcing_batches,
     ):
+
         """Note that this function has to be definied within optimize so that we do not
         pass optimizer as an argument. Otherwise we get some craazy jax errors"""
 
@@ -148,11 +162,29 @@ def optimize(
                 forcings,
             )
 
-            # aggregate gradients across all devices
+            # aggregate across local devices
             grads = pmean(grads, axis_name="optim_step")
             loss = pmean(loss, axis_name="optim_step")
             diagnostics = pmean(diagnostics, axis_name="optim_step")
             next_state = pmean(next_state, axis_name="optim_step")
+
+            # aggregate accross nodes
+            # use a helpfer function for grads, which is a dict of dicts,
+            # "layer_name" & "weights/bias" being the two keys
+            def aggregate_across_nodes(d):
+                if isinstance(d, dict):
+                    return {k: aggregate_across_nodes(v) for k, v in d.items()}
+                elif isinstance(d, jnp.ndarray):
+                    d, _ = mpi4jax.allreduce(d, op=MPI.SUM, comm=MPI.COMM_WORLD)
+                    d = d / mpi_size
+                    return d
+                else:
+                    return d
+
+            loss = aggregate_across_nodes(loss)
+            grads = aggregate_across_nodes(grads)
+            diagnostics = aggregate_across_nodes(diagnostics)
+            next_state = aggregate_across_nodes(next_state)
 
             return (loss, (diagnostics, next_state)), grads
 
@@ -161,9 +193,7 @@ def optimize(
             process_batch, dim="optim_step"
         )(input_batches, target_batches, forcing_batches)
 
-        # Remove the first dimension, which is added due to pmap, from loss/grads
-        # For grads, which is a dict of dicts, "layer_name" & "weights/bias" being the two keys
-        # we use a helper function. I suspect there must be a better way.
+        # Remove the first dimension (device dimension), which is added due to pmap
         def remove_first_dim(d):
             if isinstance(d, dict):
                 return {k: remove_first_dim(v) for k, v in d.items()}
@@ -182,30 +212,32 @@ def optimize(
         params = optax.apply_updates(params, updates)
         return params, loss, diagnostics, opt_state, grads
 
-    optim_step_jitted = jit( optim_step )
+    optim_step_jitted = jit(optim_step)
 
     loss_values = []
     loss_by_var = {k: list() for k in target_batches.data_vars}
 
     n_steps = input_batches["optim_step"].size
-    progress_bar = tqdm(total=n_steps, desc="Processing")
 
-    for k in range(0, n_steps, emulator.num_gpus):
+    if emulator.mpi_rank == 0:
+        progress_bar = tqdm(total=n_steps, desc="Processing")
+
+    for k in range(0, n_steps, num_gpus):
         # When the number of batches is not evenly divisible by num_gpus
         # the last set of batches may not be enough for all gpus. We skip
         # training because aggregation can corrupt final result. Passing
-        # a shorter list of devices may solve it, but the jitted optim 
+        # a shorter list of devices may solve it, but the jitted optim
         # function don't like that.
-        if k + emulator.num_gpus > n_steps:
+        if k + num_gpus > n_steps:
             # repeat losses, see below for why?
             n_repeat = n_steps - k
             loss_values = loss_values + [loss_values[-1]] * n_repeat
-            for k,v in loss_by_var.items():
+            for k, v in loss_by_var.items():
                 loss_by_var[k] = v + [v[-1]] * n_repeat
             break
 
         # the slice should provide for all gpus
-        sl = slice(k, k + emulator.num_gpus)
+        sl = slice(k, k + num_gpus)
 
         params, loss, diagnostics, opt_state, grads = optim_step_jitted(
             opt_state=opt_state,
@@ -220,51 +252,60 @@ def optimize(
         # Since we are doing num_gpus steps per iteration, repeat the losses.
         # Note that pmean() has averaged the losses from different gpus.
         # This is necessary to obtain loss datasets of n_steps size.
-        for i in range(emulator.num_gpus):
+        for i in range(num_gpus):
             loss_values.append(loss)
         for key, val in diagnostics.items():
-            for i in range(emulator.num_gpus):
+            for i in range(num_gpus):
                 loss_by_var[key].append(val)
 
-        mean_grad = np.mean(tree_util.tree_flatten(tree_util.tree_map(lambda x: np.abs(x).mean(), grads))[0])
-        progress_bar.set_description(f"loss = {loss:.9f}, mean(|grad|) = {mean_grad:.12f}")
-        progress_bar.update(emulator.num_gpus)
+        if emulator.mpi_rank == 0:
+            mean_grad = np.mean(
+                tree_util.tree_flatten(
+                    tree_util.tree_map(lambda x: np.abs(x).mean(), grads)
+                )[0]
+            )
+            progress_bar.set_description(
+                f"[{emulator.mpi_rank}] loss = {loss:.9f}, mean(|grad|) = {mean_grad:.12f}"
+            )
+            progress_bar.update(num_gpus)
 
-    progress_bar.close()
+    if emulator.mpi_rank == 0:
+        progress_bar.close()
 
     # save losses for each batch
     loss_ds = xr.Dataset()
-    loss_fname = os.path.join(emulator.local_store_path, "loss.nc")
-    previous_optim_steps = 0
-    if os.path.exists(loss_fname):
-        stored_loss_ds = xr.open_dataset(loss_fname)
-        previous_optim_steps = len(stored_loss_ds.optim_step)
+    if emulator.mpi_rank == 0:
+        loss_fname = os.path.join(emulator.local_store_path, "loss.nc")
+        previous_optim_steps = 0
+        if os.path.exists(loss_fname):
+            stored_loss_ds = xr.open_dataset(loss_fname)
+            previous_optim_steps = len(stored_loss_ds.optim_step)
 
-    loss_ds["optim_step"] = input_batches["optim_step"] + previous_optim_steps
-    loss_ds.attrs["batch_size"] = len(input_batches["batch"])
-    loss_ds["var_index"] = xr.DataArray(
-        np.arange(len(loss_by_var)),
-        coords={"var_index": np.arange(len(loss_by_var))},
-        dims=("var_index",),
-    )
-    loss_ds["var_names"] = list(loss_by_var.keys())
-    loss_ds["loss"] = xr.DataArray(
-        loss_values,
-        coords={"optim_step": loss_ds["optim_step"]},
-        dims=("optim_step",),
-        attrs={"long_name": "loss function value"},
-    )
-    loss_ds["loss_by_var"] = xr.DataArray(
-        np.vstack(list(loss_by_var.values())),
-        dims=("var_index", "optim_step"),
-    )
+        loss_ds["optim_step"] = input_batches["optim_step"] + previous_optim_steps
+        loss_ds.attrs["batch_size"] = len(input_batches["batch"])
+        loss_ds["var_index"] = xr.DataArray(
+            np.arange(len(loss_by_var)),
+            coords={"var_index": np.arange(len(loss_by_var))},
+            dims=("var_index",),
+        )
+        loss_ds["var_names"] = list(loss_by_var.keys())
+        loss_ds["loss"] = xr.DataArray(
+            loss_values,
+            coords={"optim_step": loss_ds["optim_step"]},
+            dims=("optim_step",),
+            attrs={"long_name": "loss function value"},
+        )
+        loss_ds["loss_by_var"] = xr.DataArray(
+            np.vstack(list(loss_by_var.values())),
+            dims=("var_index", "optim_step"),
+        )
 
-    # concatenate losses and store
-    if os.path.exists(loss_fname):
-        stored_loss_ds = xr.concat([stored_loss_ds, loss_ds], dim='optim_step')
-    else:
-        stored_loss_ds = loss_ds
-    stored_loss_ds.to_netcdf(loss_fname)
+        # concatenate losses and store
+        if os.path.exists(loss_fname):
+            stored_loss_ds = xr.concat([stored_loss_ds, loss_ds], dim="optim_step")
+        else:
+            stored_loss_ds = loss_ds
+        stored_loss_ds.to_netcdf(loss_fname)
 
     return params, loss_ds
 
@@ -277,15 +318,10 @@ def predict(
     target_batches,
     forcing_batches,
 ) -> xr.Dataset:
-
     @hk.transform_with_state
     def run_forward_loc(inputs, targets_template, forcings):
         predictor = construct_wrapped_graphcast(emulator)
-        return predictor(
-            inputs,
-            targets_template=targets_template,
-            forcings=forcings
-        )
+        return predictor(inputs, targets_template=targets_template, forcings=forcings)
 
     def with_params(fn):
         return partial(fn, params=params, state=state)
@@ -323,27 +359,73 @@ def predict(
 
 
 def init_logical_devices(emulator):
-    # logging
-    logging.basicConfig(level=logging.INFO, format="[%(relativeCreated)d ms] [%(levelname)s] %(message)s")
+
+    # initialize distributed training
+    try:
+        comm = MPI.COMM_WORLD
+        emulator.mpi_rank = comm.Get_rank()
+        emulator.mpi_size = comm.Get_size()
+    except:
+        emulator.mpi_rank = 0
+        emulator.mpi_size = 1
+
+    # custom logging handler that filters messages based on mpi rank
+    class RankFilter(logging.Filter):
+        def __init__(self, rank):
+            super().__init__()
+            self.rank = rank
+
+        def filter(self, record):
+            return self.rank == 0 or not emulator.log_only_rank0
+
+    # Custom formatter to include MPI rank in log messages
+    class RankFormatter(logging.Formatter):
+        def __init__(self, rank, fmt):
+            super().__init__(fmt)
+            self.rank = rank
+
+        def format(self, record):
+            record.rank = self.rank
+            return super().format(record)
+
+    # create logger
+    rank = emulator.mpi_rank
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger()
+    logger.addFilter(RankFilter(rank))
+
+    formatter = RankFormatter(
+        rank, fmt="[%(relativeCreated)d ms] [Rank %(rank)d] [%(levelname)s] %(message)s"
+    )
+    for handler in logger.handlers:
+        handler.setFormatter(formatter)
+
+    # turn off absl warnings
     logging.getLogger("absl").setLevel(logging.CRITICAL)
 
     # devices
     try:
-        N = device_count(backend='gpu')
+        N = local_device_count(backend="gpu")
     except:
         N = 0
     if N > 0:
         if N > emulator.num_gpus:
-            logging.info(f"Using fewer gpus than available: {emulator.num_gpus} out of {N}.")
-            gpu_devices_str = ','.join(str(i) for i in range(emulator.num_gpus))
-            os.environ['XLA_FLAGS'] = f"--xla_gpu_devices={gpu_devices_str}"
+            logging.info(
+                f"Using fewer gpus than available: {emulator.num_gpus} out of {N}."
+            )
+            gpu_devices_str = ",".join(str(i) for i in range(emulator.num_gpus))
+            os.environ["XLA_FLAGS"] = f"--xla_gpu_devices={gpu_devices_str}"
         else:
             emulator.num_gpus = N
             logging.info(f"Using {N} GPUs.")
     else:
         if emulator.num_gpus > 1:
-            os.environ['XLA_FLAGS'] = f"--xla_force_host_platform_device_count={emulator.num_gpus}"
-        logging.info(f"Using {emulator.num_gpus} logical CPUs. You may want to set OMP_NUM_THREADS to an appropriate value.")
+            os.environ[
+                "XLA_FLAGS"
+            ] = f"--xla_force_host_platform_device_count={emulator.num_gpus}"
+        logging.info(
+            f"Using {emulator.num_gpus} logical CPUs. You may want to set OMP_NUM_THREADS to an appropriate value."
+        )
 
-    logging.info(f"Local devices: {devices()}")
-    
+    logging.info(f"Local devices: {local_device_count()} {local_devices()}")
+    logging.info(f"Global devices: {device_count()} {devices()}")

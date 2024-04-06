@@ -72,11 +72,15 @@ class ReplayEmulator:
 
     # others
     num_gpus = None                  # number of GPUs to use for training
+    log_only_rank0 = None            # log only messages from rank 0
 
     def __init__(self):
 
         if self.local_store_path is None:
             warnings.warng("ReplayEmulator.__init__: no local_store_path set, data will always be accessed remotely. Proceed with patience.")
+
+        self.mpi_rank = None
+        self.mpi_size = None
 
         pfull = self._get_replay_vertical_levels()
         levels = pfull.sel(
@@ -226,6 +230,14 @@ class ReplayEmulator:
             freq=delta_t,
             inclusive="both",
         )
+
+        # split the dataset across nodes
+        if self.mpi_size > 1:
+            mpi_chunk_size = len(all_new_time) // self.mpi_size
+            start = self.mpi_rank * mpi_chunk_size
+            end = (self.mpi_rank + 1) * mpi_chunk_size if self.mpi_rank < self.mpi_size - 1 else None
+            all_new_time = all_new_time[start:end]
+            logging.info(f"MPI rank {self.mpi_rank}: {all_new_time[0]} to {all_new_time[-1]} : {len(all_new_time)} time stamps.")
 
         # subsample in time, grab variables and vertical levels we want
         all_xds = self.subsample_dataset(xds, new_time=all_new_time)

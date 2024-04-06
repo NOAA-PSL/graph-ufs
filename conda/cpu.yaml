@@ -27,6 +27,7 @@ dependencies:
     - google-colab
     - dm-haiku
     - jax
+    - mpi4jax
     - jraph
     - pandas
     - rtree

@@ -88,6 +88,7 @@ class P0Emulator(ReplayEmulator):
 
     # others
     num_gpus = 1
+    log_only_rank0 = False
 
 tree_util.register_pytree_node(
     P0Emulator,

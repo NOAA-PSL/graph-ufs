@@ -29,6 +29,7 @@ dependencies:
     - dm-haiku
     - jax
     - jaxlib=*=*cuda*
+    - mpi4jax
     - cuda-nvcc
     - optax
     - jraph
