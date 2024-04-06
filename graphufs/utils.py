@@ -1,10 +1,6 @@
-from graphcast import checkpoint, graphcast
-from jax import jit
-from jax.random import PRNGKey
-import threading
 import logging
-from graphufs import run_forward
-from ufs2arco.timer import Timer
+import threading
+from graphcast import checkpoint, graphcast
 
 
 def get_chunk_data(generator, data: dict):
@@ -94,24 +90,6 @@ class DataGenerator:
             return self.data;
         else:
             return self.data_0;
-
-
-def init_model(gufs, data: dict):
-    """Initialize model with random weights.
-
-    Args:
-        gufs: emulator class
-        data (str): data to be used for initialization?
-    """
-    init_jitted = jit(run_forward.init)
-    params, state = init_jitted(
-        rng=PRNGKey(gufs.init_rng_seed),
-        emulator=gufs,
-        inputs=data["inputs"].sel(optim_step=0),
-        targets_template=data["targets"].sel(optim_step=0),
-        forcings=data["forcings"].sel(optim_step=0),
-    )
-    return params, state
 
 
 def load_checkpoint(ckpt_path: str, verbose: bool = False):

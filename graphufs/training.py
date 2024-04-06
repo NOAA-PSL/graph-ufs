@@ -77,36 +77,28 @@ def construct_wrapped_graphcast(emulator):
     return predictor
 
 
-@hk.transform_with_state
-def run_forward(emulator, inputs, targets_template, forcings):
-    predictor = construct_wrapped_graphcast(emulator)
-    return predictor(inputs, targets_template=targets_template, forcings=forcings)
+def init_model(emulator, data: dict):
+    """Initialize model with random weights.
 
+    Args:
+        gufs: emulator class
+        data (str): data to be used for initialization?
+    """
 
-@hk.transform_with_state
-def loss_fn(emulator, inputs, targets, forcings):
-    predictor = construct_wrapped_graphcast(emulator)
-    loss, diagnostics = predictor.loss(inputs, targets, forcings)
-    return map_structure(
-        lambda x: unwrap_data(x.mean(), require_jax=True), (loss, diagnostics)
+    @hk.transform_with_state
+    def run_forward(emulator, inputs, targets_template, forcings):
+        predictor = construct_wrapped_graphcast(emulator)
+        return predictor(inputs, targets_template=targets_template, forcings=forcings)
+
+    init_jitted = jit(run_forward.init)
+    params, state = init_jitted(
+        rng=PRNGKey(emulator.init_rng_seed),
+        emulator=emulator,
+        inputs=data["inputs"].sel(optim_step=0),
+        targets_template=data["targets"].sel(optim_step=0),
+        forcings=data["forcings"].sel(optim_step=0),
     )
-
-
-def grads_fn(params, state, emulator, inputs, targets, forcings):
-    def _aux(params, state, i, t, f):
-        (loss, diagnostics), next_state = loss_fn.apply(
-            params, state, PRNGKey(0), emulator, i, t, f
-        )
-        return loss, (diagnostics, next_state)
-
-    (loss, (diagnostics, next_state)), grads = value_and_grad(_aux, has_aux=True)(
-        params,
-        state,
-        inputs,
-        targets,
-        forcings,
-    )
-    return loss, diagnostics, next_state, grads
+    return params, state
 
 
 def optimize(
@@ -130,6 +122,14 @@ def optimize(
     opt_state = optimizer.init(params)
     num_gpus = emulator.num_gpus
     mpi_size = emulator.mpi_size
+
+    @hk.transform_with_state
+    def loss_fn(emulator, inputs, targets, forcings):
+        predictor = construct_wrapped_graphcast(emulator)
+        loss, diagnostics = predictor.loss(inputs, targets, forcings)
+        return map_structure(
+            lambda x: unwrap_data(x.mean(), require_jax=True), (loss, diagnostics)
+        )
 
     def optim_step(
         params,
@@ -319,7 +319,7 @@ def predict(
     forcing_batches,
 ) -> xr.Dataset:
     @hk.transform_with_state
-    def run_forward_loc(inputs, targets_template, forcings):
+    def run_forward(inputs, targets_template, forcings):
         predictor = construct_wrapped_graphcast(emulator)
         return predictor(inputs, targets_template=targets_template, forcings=forcings)
 
@@ -329,21 +329,22 @@ def predict(
     def drop_state(fn):
         return lambda **kw: fn(**kw)[0]
 
-    apply_jitted = drop_state(with_params(jit(run_forward_loc.apply)))
+    apply_jitted = drop_state(with_params(jit(run_forward.apply)))
 
     # process steps one by one
     all_predictions = []
 
-    iterations = input_batches["optim_step"].size
-    progress_bar = tqdm(total=iterations, desc="Processing")
+    n_steps = input_batches["optim_step"].size
+    progress_bar = tqdm(total=n_steps, desc="Processing")
 
-    for k in input_batches["optim_step"].values:
+    for k in range(0, n_steps):
+
         predictions = rollout.chunked_prediction(
             apply_jitted,
             rng=PRNGKey(0),
-            inputs=input_batches.sel(optim_step=k),
-            targets_template=target_batches.sel(optim_step=k),
-            forcings=forcing_batches.sel(optim_step=k),
+            inputs=input_batches.isel(optim_step=k),
+            targets_template=target_batches.isel(optim_step=k),
+            forcings=forcing_batches.isel(optim_step=k),
         )
 
         all_predictions.append(predictions)
