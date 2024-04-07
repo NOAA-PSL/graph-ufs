@@ -26,7 +26,7 @@ from jax import (
     devices,
     local_device_count,
     device_count,
-    distributed,
+    print_environment_info,
 )
 from graphcast.xarray_jax import pmap
 from jax.lax import pmean
@@ -404,11 +404,35 @@ def init_devices(emulator):
     # turn off absl warnings
     logging.getLogger("absl").setLevel(logging.CRITICAL)
 
-    # devices
+    # Set XLA flags before any JAX library calls for them
+    # to take effect.
+
+    # recommened optimization flags
+    os.environ["XLA_FLAGS"] = (
+        "--xla_gpu_enable_triton_softmax_fusion=true "
+        "--xla_gpu_triton_gemm_any=True "
+        "--xla_gpu_enable_async_collectives=true "
+        "--xla_gpu_enable_latency_hiding_scheduler=true "
+        "--xla_gpu_enable_highest_priority_async_stream=true "
+        f"--xla_force_host_platform_device_count={emulator.num_gpus}"
+    )
+
+    # nccl flags
+    os.environ.update(
+        {
+            "NCCL_LL128_BUFFSIZE": "-2",
+            "NCCL_LL_BUFFSIZE": "-2",
+            "NCCL_PROTO": "SIMPLE,LL,LL128",
+        }
+    )
+
+    # are there gpus?
     try:
         N = local_device_count(backend="gpu")
     except:
         N = 0
+
+    # set environment flags
     if N > 0:
         if N > emulator.num_gpus:
             logging.info(
@@ -420,13 +444,12 @@ def init_devices(emulator):
             emulator.num_gpus = N
             logging.info(f"Using {N} GPUs.")
     else:
-        if emulator.num_gpus > 1:
-            os.environ[
-                "XLA_FLAGS"
-            ] = f"--xla_force_host_platform_device_count={emulator.num_gpus}"
         logging.info(
             f"Using {emulator.num_gpus} logical CPUs. You may want to set OMP_NUM_THREADS to an appropriate value."
         )
+
+    if emulator.mpi_rank == 0:
+        logging.info("\n" + print_environment_info(return_string=True))
 
     logging.info(f"Local devices: {local_device_count()} {local_devices()}")
     logging.info(f"Global devices: {device_count()} {devices()}")
