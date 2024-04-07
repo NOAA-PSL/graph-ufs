@@ -220,7 +220,7 @@ def optimize(
     n_steps = input_batches["optim_step"].size
 
     if emulator.mpi_rank == 0:
-        progress_bar = tqdm(total=n_steps, desc="Processing")
+        progress_bar = tqdm(total=n_steps, ncols=140, desc="Processing")
 
     for k in range(0, n_steps, num_gpus):
         # When the number of batches is not evenly divisible by num_gpus
@@ -265,7 +265,7 @@ def optimize(
                 )[0]
             )
             progress_bar.set_description(
-                f"[{emulator.mpi_rank}] loss = {loss:.9f}, mean(|grad|) = {mean_grad:.12f}"
+                f"[{emulator.mpi_rank}] loss = {loss:.5f}, mean(|grad|) = {mean_grad:.8f}"
             )
             progress_bar.update(num_gpus)
 
@@ -335,7 +335,7 @@ def predict(
     all_predictions = []
 
     n_steps = input_batches["optim_step"].size
-    progress_bar = tqdm(total=n_steps, desc="Processing")
+    progress_bar = tqdm(total=n_steps, ncols=140, desc="Processing")
 
     for k in range(0, n_steps):
 
