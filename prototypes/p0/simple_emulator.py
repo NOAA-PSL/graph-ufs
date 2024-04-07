@@ -13,6 +13,7 @@ class P0Emulator(ReplayEmulator):
     wb2_obs_url = "gs://weatherbench2/datasets/era5/1959-2022-6h-64x32_equiangular_conservative.zarr"
 
     local_store_path = "./zarr-stores"
+    no_cache_data = False
 
     # these could be moved to a yaml file later
     # task config options

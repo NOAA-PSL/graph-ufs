@@ -165,6 +165,14 @@ def add_emulator_arguments(emulator, parser) -> None:
                     nargs="+",
                     help=f"{k}: default {v}",
                 )
+            elif isinstance(v,bool):
+                parser.add_argument(
+                    name,
+                    dest=k,
+                    action="store_true",
+                    required=False,
+                    help=f"{k}: default {v}",
+                )
             else:
                 parser.add_argument(
                     name,

@@ -29,7 +29,8 @@ class ReplayEmulator:
     }
     wb2_obs_url = ""
     
-    local_store_path = None
+    local_store_path = None     # directory where zarr file, model weights etc are stored
+    no_cache_data = None        # don't cache or use zarr dataset downloaded from GCS on disk
 
     # these could be moved to a yaml file later
     # task config options
@@ -243,7 +244,9 @@ class ReplayEmulator:
         all_xds = self.subsample_dataset(xds, new_time=all_new_time)
 
         # download only missing dates and write them to disk
-        if os.path.exists(local_data_path):
+        if self.no_cache_data:
+            logging.info(f"Downloading data for {len(all_xds.time.values)} time stamps.")
+        elif os.path.exists(local_data_path):
             # figure out missing dates
             xds_on_disk = xr.open_zarr(local_data_path)
             missing_dates = set(all_xds.time.values) - set(xds_on_disk.time.values)
