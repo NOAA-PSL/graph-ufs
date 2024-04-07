@@ -27,6 +27,7 @@ from jax import (
     local_device_count,
     device_count,
     print_environment_info,
+    distributed,
 )
 from graphcast.xarray_jax import pmap
 from jax.lax import pmean
@@ -122,6 +123,7 @@ def optimize(
     opt_state = optimizer.init(params)
     num_gpus = emulator.num_gpus
     mpi_size = emulator.mpi_size
+    use_jax_distributed = emulator.use_jax_distributed
 
     @hk.transform_with_state
     def loss_fn(emulator, inputs, targets, forcings):
@@ -168,23 +170,25 @@ def optimize(
             diagnostics = pmean(diagnostics, axis_name="optim_step")
             next_state = pmean(next_state, axis_name="optim_step")
 
-            # aggregate accross nodes
-            # use a helpfer function for grads, which is a dict of dicts,
-            # "layer_name" & "weights/bias" being the two keys
-            def aggregate_across_nodes(d):
-                if isinstance(d, dict):
-                    return {k: aggregate_across_nodes(v) for k, v in d.items()}
-                elif isinstance(d, jnp.ndarray):
-                    d, _ = mpi4jax.allreduce(d, op=MPI.SUM, comm=MPI.COMM_WORLD)
-                    d = d / mpi_size
-                    return d
-                else:
-                    return d
+            # manually aggregate results accross nodes. if emulator.use_jax_distributed
+            # is turned on, there is no need for this code.
+            if not use_jax_distributed:
+                # use a helpfer function for grads, which is a dict of dicts,
+                # "layer_name" & "weights/bias" being the two keys
+                def aggregate_across_nodes(d):
+                    if isinstance(d, dict):
+                        return {k: aggregate_across_nodes(v) for k, v in d.items()}
+                    elif isinstance(d, jnp.ndarray):
+                        d, _ = mpi4jax.allreduce(d, op=MPI.SUM, comm=MPI.COMM_WORLD)
+                        d = d / mpi_size
+                        return d
+                    else:
+                        return d
 
-            loss = aggregate_across_nodes(loss)
-            grads = aggregate_across_nodes(grads)
-            diagnostics = aggregate_across_nodes(diagnostics)
-            next_state = aggregate_across_nodes(next_state)
+                loss = aggregate_across_nodes(loss)
+                grads = aggregate_across_nodes(grads)
+                diagnostics = aggregate_across_nodes(diagnostics)
+                next_state = aggregate_across_nodes(next_state)
 
             return (loss, (diagnostics, next_state)), grads
 
@@ -425,6 +429,10 @@ def init_devices(emulator):
             "NCCL_PROTO": "SIMPLE,LL,LL128",
         }
     )
+
+    # distributed
+    if emulator.use_jax_distributed:
+        distributed.initialize()
 
     # are there gpus?
     try:

@@ -74,6 +74,7 @@ class ReplayEmulator:
     # others
     num_gpus = None                  # number of GPUs to use for training
     log_only_rank0 = None            # log only messages from rank 0
+    use_jax_distributed = None       # Use jax's distributed mechanism, no need for manula mpi4jax calls
 
     def __init__(self):
 
