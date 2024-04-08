@@ -234,10 +234,13 @@ class ReplayEmulator:
         )
 
         # split the dataset across nodes
+        # make sure work is _exactly_ equally distirubuted to prevent hangs
+        # when the number of time stamps is not evenly divisible by the number of ranks,
+        # we discard whatever data is left over. Not a problem because parallelization is not done for testing.
         if self.mpi_size > 1:
             mpi_chunk_size = len(all_new_time) // self.mpi_size
             start = self.mpi_rank * mpi_chunk_size
-            end = (self.mpi_rank + 1) * mpi_chunk_size if self.mpi_rank < self.mpi_size - 1 else None
+            end = (self.mpi_rank + 1) * mpi_chunk_size
             all_new_time = all_new_time[start:end]
             logging.info(f"MPI rank {self.mpi_rank}: {all_new_time[0]} to {all_new_time[-1]} : {len(all_new_time)} time stamps.")
 
