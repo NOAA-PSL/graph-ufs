@@ -4,6 +4,7 @@ from .training import (
     predict,
     init_model,
     init_devices,
+    run_forward,
 )
 from .utils import (
     DataGenerator,

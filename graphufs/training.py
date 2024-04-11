@@ -78,6 +78,12 @@ def construct_wrapped_graphcast(emulator):
     return predictor
 
 
+@hk.transform_with_state
+def run_forward(emulator, inputs, targets_template, forcings):
+    predictor = construct_wrapped_graphcast(emulator)
+    return predictor(inputs, targets_template=targets_template, forcings=forcings)
+
+
 def init_model(emulator, data: dict):
     """Initialize model with random weights.
 
