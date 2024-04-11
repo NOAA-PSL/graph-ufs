@@ -411,24 +411,28 @@ def init_devices(emulator):
     # Set XLA flags before any JAX library calls for them
     # to take effect.
 
-    # recommened optimization flags
-    os.environ["XLA_FLAGS"] = (
-        "--xla_gpu_enable_triton_softmax_fusion=true "
-        "--xla_gpu_triton_gemm_any=True "
-        "--xla_gpu_enable_async_collectives=true "
-        "--xla_gpu_enable_latency_hiding_scheduler=true "
-        "--xla_gpu_enable_highest_priority_async_stream=true "
-        f"--xla_force_host_platform_device_count={emulator.num_gpus}"
-    )
+    # this one is needed for multiple logical devices
+    os.environ["XLA_FLAGS"] = f"--xla_force_host_platform_device_count={emulator.num_gpus} "
 
-    # nccl flags
-    os.environ.update(
-        {
-            "NCCL_LL128_BUFFSIZE": "-2",
-            "NCCL_LL_BUFFSIZE": "-2",
-            "NCCL_PROTO": "SIMPLE,LL,LL128",
-        }
-    )
+    if emulator.use_xla_flags:
+
+        # recommened optimization flags
+        os.environ["XLA_FLAGS"] += (
+            "--xla_gpu_enable_triton_softmax_fusion=true "
+            "--xla_gpu_triton_gemm_any=True "
+            "--xla_gpu_enable_async_collectives=true "
+            "--xla_gpu_enable_latency_hiding_scheduler=true "
+            "--xla_gpu_enable_highest_priority_async_stream=true "
+        )
+
+        # nccl flags
+        os.environ.update(
+            {
+                "NCCL_LL128_BUFFSIZE": "-2",
+                "NCCL_LL_BUFFSIZE": "-2",
+                "NCCL_PROTO": "SIMPLE,LL,LL128",
+            }
+        )
 
     # distributed
     if emulator.use_jax_distributed:
