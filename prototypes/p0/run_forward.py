@@ -9,7 +9,7 @@ import optax
 from ufs2arco.timer import Timer
 
 from simple_emulator import P0Emulator
-from graphufs import run_forward, DataGenerator
+from graphufs import run_forward, DataGenerator, init_devices
 
 
 if __name__ == "__main__":
@@ -22,6 +22,9 @@ if __name__ == "__main__":
     localtime.start("Extracting Batches from Replay on GCS")
 
     gufs = P0Emulator()
+
+    # for multi-gpu training
+    init_devices(gufs)
 
     # data generator
     generator = DataGenerator(

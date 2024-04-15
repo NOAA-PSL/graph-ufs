@@ -178,7 +178,7 @@ def optimize(
 
             # manually aggregate results accross nodes. if emulator.use_jax_distributed
             # is turned on, there is no need for this code.
-            if not use_jax_distributed:
+            if (not use_jax_distributed) and (mpi_size > 1):
                 # use a helpfer function for grads, which is a dict of dicts,
                 # "layer_name" & "weights/bias" being the two keys
                 def aggregate_across_nodes(d):
