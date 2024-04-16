@@ -17,6 +17,7 @@ class Normalizer():
     time_skip = None    # integer used to skip in time
     open_zarr_kwargs = None
     to_zarr_kwargs = None
+    load_full_dataset = False
 
     def __init__(self, **kwargs):
         for key, val in kwargs.items():
@@ -50,8 +51,8 @@ class Normalizer():
         localtime.stop()
 
         # load if not 3D
-        if "pfull" not in ds.dims:
-            localtime.start("loading 2D variable")
+        if self.load_full_dataset:
+            localtime.start("Loading the whole dataset...")
             ds = ds.load();
             localtime.stop()
 
