@@ -1,0 +1,54 @@
+import subprocess
+
+from graphufs.normalizer import Normalizer
+
+
+def main(varname):
+
+    normer = Normalizer(
+        path_in="gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.zarr",
+        path_out="gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/statistics-1993-2019",
+        start_date=None, # original start date
+        end_date="2019",
+        time_skip=None, # original 3hr
+        open_zarr_kwargs={
+            "storage_options": {"token": "anon"},
+        },
+        to_zarr_kwargs={
+            "mode":"a",
+            "storage_options": {"token": "/contrib/Tim.Smith/.gcs/replay-service-account.json"},
+        },
+    )
+    normer(varname)
+
+
+def submit_slurm_job(varname):
+
+    jobscript = f"#!/bin/bash\n\n"+\
+        f"#SBATCH -J {varname}_norm\n"+\
+        f"#SBATCH -o slurm/normalization/{varname}.%j.out\n"+\
+        f"#SBATCH -e slurm/normalization/{varname}.%j.err\n"+\
+        f"#SBATCH --nodes=1\n"+\
+        f"#SBATCH --ntasks=1\n"+\
+        f"#SBATCH --cpus-per-task=30\n"+\
+        f"#SBATCH --partition=compute\n"+\
+        f"#SBATCH -t 120:00:00\n\n"+\
+        f"source /contrib/Tim.Smith/miniconda3/etc/profile.d/conda.sh\n"+\
+        f"conda activate graphufs\n"+\
+        f"python -c 'from calc_normalization import main ; main({varname})'"
+
+    scriptname = f"job-scripts/submit_normalization_{varname}.sh"
+    with open(scriptname, "w") as f:
+        f.write(jobscript)
+
+    subprocess.run(f"sbatch {scriptname}", shell=True)
+
+if __name__ == "__main__":
+
+    path_in = "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.zarr"
+    ds = xr.open_zarr(
+        path_in,
+        storage_options={"token": "anon"},
+    )
+    for key in ["acond"]: #ds.data_vars:
+        submit_slurm_job(key)
