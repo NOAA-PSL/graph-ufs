@@ -7,7 +7,7 @@ def main(varname):
 
     normer = Normalizer(
         path_in="gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.zarr",
-        path_out="gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/statistics-1993-2019",
+        path_out="gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/statistics.1993-2019",
         start_date=None, # original start date
         end_date="2019",
         time_skip=None, # original 3hr
@@ -34,7 +34,7 @@ def submit_slurm_job(varname):
         f"#SBATCH --partition=compute\n"+\
         f"#SBATCH -t 120:00:00\n\n"+\
         f"source /contrib/Tim.Smith/miniconda3/etc/profile.d/conda.sh\n"+\
-        f"conda activate graphufs\n"+\
+        f"conda activate graphufs-cpu\n"+\
         f"python -c 'from calc_normalization import main ; main({varname})'"
 
     scriptname = f"job-scripts/submit_normalization_{varname}.sh"
