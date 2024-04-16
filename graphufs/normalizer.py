@@ -32,6 +32,11 @@ class Normalizer():
 
     def __call__(self, data_vars=None):
 
+        walltime = Timer()
+        localtime = Timer()
+        walltime.start()
+
+        localtime.start("Setup")
         ds = xr.open_zarr(self.path_in, **self.open_zarr_kwargs)
 
         # select variables
@@ -42,11 +47,15 @@ class Normalizer():
 
         # subsample in time
         ds = self.subsample_time(ds)
+        localtime.stop()
+
+        # load if not 3D
+        if "pfull" not in ds.dims:
+            localtime.start("loading 2D variable")
+            ds = ds.load();
+            localtime.stop()
 
         # do the computations
-        walltime = Timer()
-        localtime = Timer()
-
         localtime.start("Computing mean")
         self.calc_mean_by_level(ds)
         localtime.stop()
