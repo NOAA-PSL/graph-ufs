@@ -4,21 +4,19 @@ import xarray as xr
 from ufs2arco.timer import Timer
 
 
-class Normalizer():
-    """class for computing normalization statistics:
-    * mean_by_level
-    * stddev_by_level
-    * diffs_stddev_by_level
-    """
+class Normalizer:
+    """Class for computing normalization statistics.
 
-    path_in = None      # original dataset
-    path_out = None     # path to save normalization statistics
-    start_date = None   # start date to subsample data
-    end_date = None     # end date to subsample data, inclusive
-    time_skip = None    # integer used to skip in time
-    open_zarr_kwargs = None
-    to_zarr_kwargs = None
-    load_full_dataset = False
+    Attributes:
+        path_in (str): Path to the original dataset.
+        path_out (str): Path to save normalization statistics.
+        start_date (str): Start date to subsample data.
+        end_date (str): End date to subsample data, inclusive.
+        time_skip (int): Integer used to skip in time.
+        open_zarr_kwargs (dict): Keyword arguments for opening zarr dataset.
+        to_zarr_kwargs (dict): Keyword arguments for saving to zarr.
+        load_full_dataset (bool): Whether to load the full dataset.
+    """
 
     def __init__(
         self,
@@ -30,8 +28,19 @@ class Normalizer():
         open_zarr_kwargs: dict = None,
         to_zarr_kwargs: dict = None,
         load_full_dataset: bool = False,
-        ):
+    ):
+        """Initializes Normalizer with specified attributes.
 
+        Args:
+            path_in (str): Path to the original dataset.
+            path_out (str): Path to save normalization statistics.
+            start_date (str, optional): Start date to subsample data.
+            end_date (str, optional): End date to subsample data, inclusive.
+            time_skip (int, optional): Integer used to skip in time.
+            open_zarr_kwargs (dict, optional): Keyword arguments for opening zarr dataset.
+            to_zarr_kwargs (dict, optional): Keyword arguments for saving to zarr.
+            load_full_dataset (bool, optional): Whether to load the full dataset.
+        """
         self.path_in = path_in
         self.path_out = path_out
         self.start_date = start_date
@@ -43,9 +52,12 @@ class Normalizer():
 
         self.delta_t = f"{self.time_skip*3} hour" if self.time_skip is not None else "3 hour"
 
-
     def __call__(self, data_vars=None):
+        """Processes the input dataset to compute normalization statistics.
 
+        Args:
+            data_vars (str or list of str, optional): Variables to select.
+        """
         walltime = Timer()
         localtime = Timer()
         walltime.start()
@@ -84,18 +96,29 @@ class Normalizer():
 
         walltime.stop("Total Walltime")
 
-
     def subsample_time(self, xds):
-        """select time period and frequency we want"""
+        """Selects a specific time period and frequency from the input dataset.
+
+        Args:
+            xds (xarray.Dataset): Input dataset.
+
+        Returns:
+            xarray.Dataset: Subsampled dataset.
+        """
         with xr.set_options(keep_attrs=True):
             rds = xds.sel(time=slice(self.start_date, self.end_date))
             rds = rds.isel(time=slice(None, None, self.time_skip))
         return rds
 
-
     def calc_diffs_stddev_by_level(self, xds):
-        """compute standard deviation of differences by level, store to zarr"""
+        """Computes the standard deviation of differences by level and stores the result in a Zarr file.
 
+        Args:
+            xds (xarray.Dataset): Input dataset.
+
+        Returns:
+            xarray.Dataset: Result dataset with standard deviation of differences by vertical level.
+        """
         with xr.set_options(keep_attrs=True):
             result = xds.diff("time")
             result = result.std(["grid_xt", "grid_yt", "time"])
@@ -112,10 +135,15 @@ class Normalizer():
         result.to_zarr(this_path_out, **self.to_zarr_kwargs)
         return result
 
-
     def calc_stddev_by_level(self, xds):
-        """compute standard deviation by level, store to zarr"""
+        """Computes the standard deviation by level and stores the result in a Zarr file.
 
+        Args:
+            xds (xarray.Dataset): Input dataset.
+
+        Returns:
+            xarray.Dataset: Result dataset with standard deviation by vertical level.
+        """
         with xr.set_options(keep_attrs=True):
             result = xds.std(["grid_xt", "grid_yt", "time"])
 
@@ -131,10 +159,15 @@ class Normalizer():
         result.to_zarr(this_path_out, **self.to_zarr_kwargs)
         return result
 
-
     def calc_mean_by_level(self, xds):
-        """compute mean by level, store to zarr"""
+        """Computes the mean by level and stores the result in a Zarr file.
 
+        Args:
+            xds (xarray.Dataset): Input dataset.
+
+        Returns:
+            xarray.Dataset: Result dataset with mean by vertical level.
+        """
         with xr.set_options(keep_attrs=True):
             result = xds.mean(["grid_xt", "grid_yt", "time"])
 
@@ -150,8 +183,14 @@ class Normalizer():
         result.to_zarr(this_path_out, **self.to_zarr_kwargs)
         return result
 
-
     @staticmethod
     def _time2str(xval):
-        """turn an xarray numpy.datetime64 -> string at hourly rep"""
+        """Converts an xarray numpy.datetime64 object to a string representation at hourly resolution.
+
+        Args:
+            xval (xarray.DataArray[numpy.datetime64]): Input datetime object.
+
+        Returns:
+            str: String representation of the datetime object.
+        """
         return str(xval.values.astype("M8[h]"))
