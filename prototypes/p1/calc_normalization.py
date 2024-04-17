@@ -1,3 +1,4 @@
+import xarray as xr
 import subprocess
 
 from graphufs.normalizer import Normalizer
@@ -5,28 +6,26 @@ from graphufs.normalizer import Normalizer
 
 def main(varname):
 
-    path_in = "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.zarr"
+    path_in = "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr" #/fv3.zarr"
     open_zarr_kwargs = {"storage_options": {"token": "anon"}}
-    ds = xr.open_zarr(path_in, **open_zarr_kwargs)
-    load_full_dataset = "pfull" in ds[varname].dims
 
     normer = Normalizer(
         path_in=path_in,
-        path_out="gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/statistics.1993-2019",
+        path_out="statistics.1993-2019", #"gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/statistics.1993-2019",
         start_date=None, # original start date
         end_date="2019",
-        time_skip=None, # original 3hr
-        load_full_dataset=load_full_dataset,
+        time_skip=None,
+        load_full_dataset=True,
         open_zarr_kwargs=open_zarr_kwargs,
         to_zarr_kwargs={
             "mode":"a",
-            "storage_options": {"token": "/contrib/Tim.Smith/.gcs/replay-service-account.json"},
+        #    "storage_options": {"token": "/contrib/Tim.Smith/.gcs/replay-service-account.json"},
         },
     )
     normer(varname)
 
 
-def submit_slurm_job(varname):
+def submit_slurm_job(varname, partition="compute"):
 
     jobscript = f"#!/bin/bash\n\n"+\
         f"#SBATCH -J {varname}_norm\n"+\
@@ -35,11 +34,11 @@ def submit_slurm_job(varname):
         f"#SBATCH --nodes=1\n"+\
         f"#SBATCH --ntasks=1\n"+\
         f"#SBATCH --cpus-per-task=30\n"+\
-        f"#SBATCH --partition=compute\n"+\
+        f"#SBATCH --partition={partition}\n"+\
         f"#SBATCH -t 120:00:00\n\n"+\
         f"source /contrib/Tim.Smith/miniconda3/etc/profile.d/conda.sh\n"+\
         f"conda activate graphufs-cpu\n"+\
-        f"python -c 'from calc_normalization import main ; main({varname})'"
+        f"python -c 'from calc_normalization import main ; main(\"{varname}\")'"
 
     scriptname = f"job-scripts/submit_normalization_{varname}.sh"
     with open(scriptname, "w") as f:
@@ -49,10 +48,11 @@ def submit_slurm_job(varname):
 
 if __name__ == "__main__":
 
-    path_in = "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.zarr"
+    path_in = "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr" #/fv3.zarr"
     ds = xr.open_zarr(
         path_in,
         storage_options={"token": "anon"},
     )
-    for key in ["acond"]: #ds.data_vars:
-        submit_slurm_job(key)
+    for key in ds.data_vars:
+        partition = "compute" if "pfull" not in ds[key].dims else "highmem"
+        submit_slurm_job(key, partition=partition)
