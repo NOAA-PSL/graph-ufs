@@ -54,7 +54,7 @@ try:
     from mpi4py import MPI
     import mpi4jax
 except:
-    pass
+    logging.warning("Import failed for either mpi4py or mpi4jax.")
 
 
 def construct_wrapped_graphcast(emulator):

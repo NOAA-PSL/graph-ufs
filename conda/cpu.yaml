@@ -40,8 +40,3 @@ dependencies:
     - xesmf
 # legit progress bar
     - tqdm
-# pip
-    - pip
-# pip packages
-    - pip:
-        - mpi4jax
