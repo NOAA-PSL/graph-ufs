@@ -1,6 +1,7 @@
+import os
 import numpy as np
 import xarray as xr
-from timer import Timer
+from ufs2arco.timer import Timer
 
 
 class Normalizer():
@@ -19,16 +20,28 @@ class Normalizer():
     to_zarr_kwargs = None
     load_full_dataset = False
 
-    def __init__(self, **kwargs):
-        for key, val in kwargs.items():
-            try:
-                getattr(key)
-            except:
-                raise KeyError(f"Normalizer.__init__: can't find attr {key}")
+    def __init__(
+        self,
+        path_in: str,
+        path_out: str,
+        start_date: str = None,
+        end_date: str = None,
+        time_skip: int = None,
+        open_zarr_kwargs: dict = None,
+        to_zarr_kwargs: dict = None,
+        load_full_dataset: bool = False,
+        ):
 
-            setattr(self, key, val)
+        self.path_in = path_in
+        self.path_out = path_out
+        self.start_date = start_date
+        self.end_date = end_date
+        self.time_skip = time_skip
+        self.open_zarr_kwargs = open_zarr_kwargs if open_zarr_kwargs is not None else dict()
+        self.to_zarr_kwargs = to_zarr_kwargs if to_zarr_kwargs is not None else dict()
+        self.load_full_dataset = load_full_dataset
 
-        self.delta_t = f"{self.time_skip*3} hour"
+        self.delta_t = f"{self.time_skip*3} hour" if self.time_skip is not None else "3 hour"
 
 
     def __call__(self, data_vars=None):
@@ -89,8 +102,8 @@ class Normalizer():
 
         for key in result.data_vars:
             result[key].attrs["description"] = f"standard deviation of temporal {self.delta_t} difference over lat, lon, time"
-            result[key].attrs["start_date"] = self._time2str(xds["time"][0])
-            result[key].attrs["end_date"] = self._time2str(xds["time"][-1])
+            result[key].attrs["stats_start_date"] = self._time2str(xds["time"][0])
+            result[key].attrs["stats_end_date"] = self._time2str(xds["time"][-1])
 
         this_path_out = os.path.join(
             self.path_out,
@@ -108,8 +121,8 @@ class Normalizer():
 
         for key in result.data_vars:
             result[key].attrs["description"] = "standard deviation over lat, lon, time"
-            result[key].attrs["start_date"] = self._time2str(xds["time"][0])
-            result[key].attrs["end_date"] = self._time2str(xds["time"][-1])
+            result[key].attrs["stats_start_date"] = self._time2str(xds["time"][0])
+            result[key].attrs["stats_end_date"] = self._time2str(xds["time"][-1])
 
         this_path_out = os.path.join(
             self.path_out,
@@ -127,8 +140,8 @@ class Normalizer():
 
         for key in result.data_vars:
             result[key].attrs["description"] = "average over lat, lon, time"
-            result[key].attrs["start_date"] = self._time2str(xds["time"][0])
-            result[key].attrs["end_date"] = self._time2str(xds["time"][-1])
+            result[key].attrs["stats_start_date"] = self._time2str(xds["time"][0])
+            result[key].attrs["stats_end_date"] = self._time2str(xds["time"][-1])
 
         this_path_out = os.path.join(
             self.path_out,
