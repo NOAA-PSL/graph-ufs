@@ -1,5 +1,6 @@
 
 import pytest
+from functools import partial
 import numpy as np
 from numpy.testing import assert_allclose
 from shutil import rmtree
@@ -7,9 +8,13 @@ from shutil import rmtree
 import haiku as hk
 import jax
 
-from graphcast.graphcast import GraphCast
-from graphcast.stacked_graphcast import StackedGraphCast
 from graphcast.model_utils import dataset_to_stacked, lat_lon_to_leading_axes
+
+from graphcast.graphcast import GraphCast
+from graphcast.casting import Bfloat16Cast
+
+from graphcast.stacked_graphcast import StackedGraphCast
+from graphcast.stacked_casting import StackedBfloat16Cast
 
 from p0 import P0Emulator
 from graphufs.dataset import GraphUFSDataset
@@ -19,14 +24,19 @@ _idx = 0
 # the models
 # maybe these definitions should be in an actual module, and we import them?
 # whatever
+
 @hk.transform_with_state
-def original_graphcast(emulator, inputs, targets, forcings):
+def original_graphcast(emulator, inputs, targets, forcings, do_bfloat16):
     predictor = GraphCast(emulator.model_config, emulator.task_config)
+    if do_bfloat16:
+        predictor = Bfloat16Cast(predictor)
     return predictor(inputs, targets, forcings)
 
 @hk.transform_with_state
-def stacked_graphcast(emulator, inputs):
+def stacked_graphcast(emulator, inputs, do_bfloat16):
     predictor = StackedGraphCast(emulator.model_config, emulator.task_config)
+    if do_bfloat16:
+        predictor = StackedBfloat16Cast(predictor)
     return predictor(inputs)
 
 # establish all this stuff once
@@ -77,22 +87,31 @@ def stacked_params(p0, sample_xdata):
     yield params, state
 
 # at last, test some models
-def test_stacked_graphcast(p0, sample_stacked_data, sample_xdata):
+@pytest.mark.parametrize(
+    "do_bfloat16, atol",
+    [
+        (False,     1e-4),
+        (True,      1e-1),
+    ],
+)
+def test_stacked_graphcast(p0, sample_stacked_data, sample_xdata, do_bfloat16, atol):
 
     # run stacked graphcast
     inputs, _ = sample_stacked_data
 
-    init = jax.jit( stacked_graphcast.init )
+    init = jax.jit( stacked_graphcast.init, static_argnames=["do_bfloat16"] )
 
     test_params, test_state = init(
         emulator=p0,
         inputs=inputs,
+        do_bfloat16=do_bfloat16,
         rng=jax.random.PRNGKey(0),
     )
-    sgc = jax.jit( stacked_graphcast.apply )
+    sgc = jax.jit( stacked_graphcast.apply, static_argnames=["do_bfloat16"]  )
     test, _ = sgc(
         emulator=p0,
         inputs=inputs,
+        do_bfloat16=do_bfloat16,
         params=test_params,
         state=test_state,
         rng=jax.random.PRNGKey(0),
@@ -101,21 +120,23 @@ def test_stacked_graphcast(p0, sample_stacked_data, sample_xdata):
     # run original graphcast
     xinputs, xtargets, xforcings = sample_xdata
 
-    init = jax.jit( original_graphcast.init )
+    init = jax.jit( original_graphcast.init, static_argnames=["do_bfloat16"]  )
 
     expected_params, expected_state = init(
         emulator=p0,
         inputs=xinputs,
         targets=xtargets,
         forcings=xforcings,
+        do_bfloat16=do_bfloat16,
         rng=jax.random.PRNGKey(0),
     )
-    gc = jax.jit( original_graphcast.apply )
+    gc = jax.jit( original_graphcast.apply, static_argnames=["do_bfloat16"]  )
     expected, _ = gc(
         emulator=p0,
         inputs=xinputs,
         targets=xtargets,
         forcings=xforcings,
+        do_bfloat16=do_bfloat16,
         params=expected_params,
         state=expected_state,
         rng=jax.random.PRNGKey(0),
@@ -135,4 +156,4 @@ def test_stacked_graphcast(p0, sample_stacked_data, sample_xdata):
     print("min |test - expected| / |test| = ", np.min(rel_diff) )
     print("avg |test - expected| / |test| = ", np.mean(rel_diff) )
     print()
-    assert_allclose(test, expected, atol=1e-4)
+    assert_allclose(test, expected, atol=atol)
