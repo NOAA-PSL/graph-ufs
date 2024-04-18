@@ -156,8 +156,11 @@ if __name__ == "__main__":
 
         # create predictions and targets zarr file for WB2
         predictions_zarr_name = f"{gufs.local_store_path}/graphufs_predictions.zarr"
+        targets_zarr_name = f"{gufs.local_store_path}/graphufs_targets.zarr"
         if os.path.exists(predictions_zarr_name):
             shutil.rmtree(predictions_zarr_name)
+        if os.path.exists(targets_zarr_name):
+            shutil.rmtree(targets_zarr_name)
 
         stats = {}
         for c in range(gufs.chunks_per_epoch):
@@ -187,6 +190,11 @@ if __name__ == "__main__":
             predictions = convert_wb2_format(gufs, predictions, inittimes)
             predictions = predictions.dropna("time")
             predictions.to_zarr(predictions_zarr_name, append_dim="time" if c else None)
+
+            # write also targets to compute metrics against it with wb2
+            targets = convert_wb2_format(gufs, targets, inittimes)
+            targets = targets.dropna("time")
+            targets.to_zarr(targets_zarr_name, append_dim="time" if c else None)
 
         logging.info("--------- Statistiscs ---------")
         for k, v in stats.items():
