@@ -457,7 +457,7 @@ def init_devices(emulator):
                 f"Using fewer gpus than available: {emulator.num_gpus} out of {N}."
             )
             gpu_devices_str = ",".join(str(i) for i in range(emulator.num_gpus))
-            os.environ["XLA_FLAGS"] = f"--xla_gpu_devices={gpu_devices_str}"
+            os.environ["XLA_FLAGS"] += f" --xla_gpu_devices={gpu_devices_str}"
         else:
             emulator.num_gpus = N
             logging.info(f"Using {N} GPUs.")
