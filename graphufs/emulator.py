@@ -11,6 +11,7 @@ from jax import tree_util
 from ufs2arco.regrid.ufsregridder import UFSRegridder
 from graphcast.graphcast import ModelConfig, TaskConfig
 from graphcast.data_utils import extract_inputs_targets_forcings
+from graphcast.model_utils import dataset_to_stacked
 
 class ReplayEmulator:
     """An emulator based on UFS Replay data. This manages all model configuration settings and normalization fields. Currently it is designed to be inherited for a specific use-case, and this could easily be generalized to read in settings via a configuration file (yaml, json, etc). Be sure to register any inherited class as a pytree for it to work with JAX.
@@ -120,12 +121,17 @@ class ReplayEmulator:
             self.input_variables + self.target_variables + self.forcing_variables
         ))
 
-        self.norm = {}
-        self.norm["mean"], self.norm["std"], self.norm["stddiff"] = self.load_normalization()
-
         # convert some types
         self.delta_t = pd.Timedelta(self.delta_t)
         self.input_duration = pd.Timedelta(self.input_duration)
+
+        # get normalization statistics
+        self.norm = {}
+        self.stacked_norm = {}
+        self.norm["mean"], self.norm["std"], self.norm["stddiff"] = self.load_normalization()
+        for key in self.norm.keys():
+            input_norms, target_norms = self.normalization_to_stacked(self.norm[key], preserved_dims=tuple())
+            self.stacked_norm[key] = {"inputs": input_norms, "targets": target_norms}
 
 
     @property
@@ -141,6 +147,11 @@ class ReplayEmulator:
     def n_forecast(self):
         """Number of steps covered by a single forecast, including initial condition(s)"""
         return self.time_per_forecast // self.delta_t
+
+    @property
+    def n_target(self):
+        """Number of steps in the target, doesn't include initial condition(s)"""
+        return self.target_lead_time // self.delta_t
 
 
     def open_dataset(self, **kwargs):
@@ -451,6 +462,35 @@ class ReplayEmulator:
         diffs_stddev_by_level = diffs_stddev_by_level[myvars]
 
         return mean_by_level, stddev_by_level, diffs_stddev_by_level
+
+    def normalization_to_stacked(self, xds, **kwargs):
+        """
+        kwargs passed to graphcast.model_utils.dataset_to_stacked
+        """
+
+        def stackit(xds, varnames, n_time, **kwargs):
+            norms = xds[[x for x in varnames if x in xds]]
+            # do this to replicate across time dimension
+            norms = xr.concat(
+                [norms.copy() for _ in range(n_time)],
+                dim="time",
+            )
+            dimorder = ("batch", "time", "level", "lat", "lon")
+            dimorder = tuple(x for x in dimorder if x in norms.dims)
+            norms = norms.transpose(*dimorder)
+            return dataset_to_stacked(norms, **kwargs)
+
+        input_norms = stackit(xds, self.input_variables, n_time=self.n_input, **kwargs)
+        forcing_norms = stackit(xds, self.forcing_variables, n_time=self.n_target, **kwargs)
+        target_norms = stackit(xds, self.target_variables, n_time=self.n_target, **kwargs)
+        input_norms = xr.concat(
+            [
+                input_norms,
+                forcing_norms,
+            ],
+            dim="channels",
+        )
+        return input_norms.data, target_norms.data
 
 
     @staticmethod

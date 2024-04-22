@@ -51,9 +51,9 @@ def stacked_graphcast(emulator, inputs, last_input_channel_mapping, do_bfloat16,
     if do_inputs_and_residuals:
         predictor = StackedInputsAndResiduals(
             predictor,
-            mean_by_level=emulator.norm["mean"],
-            stddev_by_level=emulator.norm["std"],
-            diffs_stddev_by_level=emulator.norm["stddiff"],
+            mean_by_level=emulator.stacked_norm["mean"],
+            stddev_by_level=emulator.stacked_norm["std"],
+            diffs_stddev_by_level=emulator.stacked_norm["stddiff"],
             last_input_channel_mapping=last_input_channel_mapping,
         )
     return predictor(inputs)
@@ -79,9 +79,9 @@ def sample_xdata(sample_dataset):
 @pytest.mark.parametrize(
     "do_bfloat16, do_inputs_and_residuals, atol",
     [
-        #(False, False, 1e-4),
-        #(True, False, 1e-1),
-        (False, True, 1e-1),
+        (False, False, 1e-4),
+        (True, False, 1e-1),
+        (False, True, 1e-2),
     ],
 )
 def test_stacked_graphcast(p0, sample_stacked_data, sample_xdata, do_bfloat16, do_inputs_and_residuals, atol):
@@ -150,7 +150,7 @@ def test_stacked_graphcast(p0, sample_stacked_data, sample_xdata, do_bfloat16, d
 
     # compare
     abs_diff = np.abs(test - expected).values
-    rel_diff = abs_diff / np.abs(expected).values
+    rel_diff = np.where(np.isclose(expected, 0.), 0., abs_diff / np.abs(expected).values)
 
     print("max |test - expected| = ", np.max(abs_diff) )
     print("min |test - expected| = ", np.min(abs_diff) )

@@ -8,7 +8,6 @@ import xarray as xr
 from graphufs import run_forward
 from ufs2arco.timer import Timer
 
-from graphcast.model_utils import dataset_to_stacked
 
 def get_chunk_data(generator, data: dict):
     """Get multiple training batches.
@@ -155,13 +154,6 @@ def save_checkpoint(gufs, params, ckpt_path: str) -> None:
         )
         checkpoint.dump(f, ckpt)
 
-def normalization_to_stacked(emulator, xds, **kwargs):
-
-    input_norms = xds[[x for x in emulator.input_variables if x in xds]]
-    forcing_norms = xds[[x for x in emulator.forcing_variables if x in xds]]
-    input_norms_stacked = dataset_to_stacked(input_norms, **kwargs)
-    forcing_norms_stacked = dataset_to_stacked(forcing_norms, **kwargs)
-    return xr.concat([input_norms_stacked, forcing_norms_stacked], dim="channels")
 
 def product_dict(**kwargs):
     keys = kwargs.keys()
