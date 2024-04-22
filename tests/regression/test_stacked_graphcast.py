@@ -82,6 +82,7 @@ def sample_xdata(sample_dataset):
         (False, False, 1e-4),
         (True, False, 1e-1),
         (False, True, 1e-2),
+        (True, True, 50),
     ],
 )
 def test_stacked_graphcast(p0, sample_stacked_data, sample_xdata, do_bfloat16, do_inputs_and_residuals, atol):
@@ -97,9 +98,9 @@ def test_stacked_graphcast(p0, sample_stacked_data, sample_xdata, do_bfloat16, d
     last_input_channel_mapping = get_last_input_mapping(input_idx, target_idx)
 
 
-    # run stacked graphcast
+    # initialize parameters and state
+    # we can use the same for StackedGraphCast and GraphCast
     init = jax.jit( stacked_graphcast.init, static_argnames=["do_bfloat16", "do_inputs_and_residuals"] )
-
     test_params, test_state = init(
         emulator=p0,
         inputs=inputs,
@@ -108,6 +109,10 @@ def test_stacked_graphcast(p0, sample_stacked_data, sample_xdata, do_bfloat16, d
         do_inputs_and_residuals=do_inputs_and_residuals,
         rng=jax.random.PRNGKey(0),
     )
+    expected_params = test_params.copy()
+    expected_state = test_state.copy()
+
+    # run stacked graphcast
     sgc = jax.jit( stacked_graphcast.apply, static_argnames=["do_bfloat16", "do_inputs_and_residuals"]  )
     test, _ = sgc(
         emulator=p0,
@@ -121,18 +126,6 @@ def test_stacked_graphcast(p0, sample_stacked_data, sample_xdata, do_bfloat16, d
     )
 
     # run original graphcast
-
-    init = jax.jit( original_graphcast.init, static_argnames=["do_bfloat16", "do_inputs_and_residuals"]  )
-
-    expected_params, expected_state = init(
-        emulator=p0,
-        inputs=xinputs,
-        targets=xtargets,
-        forcings=xforcings,
-        do_bfloat16=do_bfloat16,
-        do_inputs_and_residuals=do_inputs_and_residuals,
-        rng=jax.random.PRNGKey(0),
-    )
     gc = jax.jit( original_graphcast.apply, static_argnames=["do_bfloat16", "do_inputs_and_residuals"]  )
     expected, _ = gc(
         emulator=p0,
