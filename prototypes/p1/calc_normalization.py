@@ -1,17 +1,17 @@
 import xarray as xr
 import subprocess
 
-from graphufs.normalizer import Normalizer, add_derived_vars
+from graphufs import StatisticsComputer, add_derived_vars
 
 def main(varname):
 
     path_in = "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr" #/fv3.zarr"
     open_zarr_kwargs = {"storage_options": {"token": "anon"}}
     ds = xr.open_zarr(path_in, **open_zarr_kwargs)
-    add_derived_vars(ds)
+    ds = add_derived_vars(ds)
     load_full_dataset = "pfull" not in ds[varname]
 
-    normer = Normalizer(
+    normer = StatisticsComputer(
         path_in=path_in,
         path_out="gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/statistics.1993-2019",
         start_date=None, # original start date
@@ -55,7 +55,7 @@ if __name__ == "__main__":
         path_in,
         storage_options={"token": "anon"},
     )
-    add_derived_vars(ds)
+    ds = add_derived_vars(ds)
 
     for key in ds.data_vars:
-        submit_slurm_job(key, partition=partition)
+        submit_slurm_job(key)

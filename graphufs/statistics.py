@@ -5,7 +5,7 @@ from ufs2arco.timer import Timer
 
 from graphcast import data_utils
 
-class Normalizer:
+class StatisticsComputer:
     """Class for computing normalization statistics.
 
     Attributes:
@@ -19,6 +19,8 @@ class Normalizer:
         load_full_dataset (bool): Whether to load the full dataset.
     """
 
+    dims = ("time", "grid_yt", "grid_xt")
+
     def __init__(
         self,
         path_in: str,
@@ -30,7 +32,7 @@ class Normalizer:
         to_zarr_kwargs: dict = None,
         load_full_dataset: bool = False,
     ):
-        """Initializes Normalizer with specified attributes.
+        """Initializes StatisticsComputer with specified attributes.
 
         Args:
             path_in (str): Path to the original dataset.
@@ -65,7 +67,7 @@ class Normalizer:
 
         localtime.start("Setup")
         ds = xr.open_zarr(self.path_in, **self.open_zarr_kwargs)
-        add_derived_vars(ds)
+        ds = add_derived_vars(ds)
 
         # select variables
         if data_vars is not None:
@@ -123,7 +125,8 @@ class Normalizer:
         """
         with xr.set_options(keep_attrs=True):
             result = xds.diff("time")
-            result = result.std(["grid_xt", "grid_yt", "time"])
+            dims = list(d for d in self.dims if d in result.dims)
+            result = result.std(dims)
 
         for key in result.data_vars:
             result[key].attrs["description"] = f"standard deviation of temporal {self.delta_t} difference over lat, lon, time"
@@ -147,7 +150,8 @@ class Normalizer:
             xarray.Dataset: Result dataset with standard deviation by vertical level.
         """
         with xr.set_options(keep_attrs=True):
-            result = xds.std(["grid_xt", "grid_yt", "time"])
+            dims = list(d for d in self.dims if d in xds.dims)
+            result = xds.std(dims)
 
         for key in result.data_vars:
             result[key].attrs["description"] = "standard deviation over lat, lon, time"
@@ -171,7 +175,8 @@ class Normalizer:
             xarray.Dataset: Result dataset with mean by vertical level.
         """
         with xr.set_options(keep_attrs=True):
-            result = xds.mean(["grid_xt", "grid_yt", "time"])
+            dims = list(d for d in self.dims if d in xds.dims)
+            result = xds.mean(dims)
 
         for key in result.data_vars:
             result[key].attrs["description"] = "average over lat, lon, time"
@@ -203,3 +208,5 @@ def add_derived_vars(xds):
         xds = xds.rename({"time": "datetime", "grid_xt": "lon", "grid_yt": "lat", "pfull": "level"})
         data_utils.add_derived_vars(xds)
         xds = xds.rename({"datetime": "time", "lon": "grid_xt", "lat": "grid_yt", "level": "pfull"})
+
+    return xds
