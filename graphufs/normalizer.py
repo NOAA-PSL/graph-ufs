@@ -3,6 +3,7 @@ import numpy as np
 import xarray as xr
 from ufs2arco.timer import Timer
 
+from graphcast import data_utils
 
 class Normalizer:
     """Class for computing normalization statistics.
@@ -64,6 +65,7 @@ class Normalizer:
 
         localtime.start("Setup")
         ds = xr.open_zarr(self.path_in, **self.open_zarr_kwargs)
+        add_derived_vars(ds)
 
         # select variables
         if data_vars is not None:
@@ -194,3 +196,10 @@ class Normalizer:
             str: String representation of the datetime object.
         """
         return str(xval.values.astype("M8[h]"))
+
+def add_derived_vars(xds):
+
+    with xr.set_options(keep_attrs=True):
+        xds = xds.rename({"time": "datetime", "grid_xt": "lon", "grid_yt": "lat", "pfull": "level"})
+        data_utils.add_derived_vars(xds)
+        xds = xds.rename({"datetime": "time", "lon": "grid_xt", "lat": "grid_yt", "level": "pfull"})
