@@ -8,18 +8,20 @@ def main(varname):
 
     path_in = "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr" #/fv3.zarr"
     open_zarr_kwargs = {"storage_options": {"token": "anon"}}
+    ds = xr.open_zarr(path_in, **open_zarr_kwargs)
+    load_full_dataset = "pfull" not in ds[varname]
 
     normer = Normalizer(
         path_in=path_in,
-        path_out="statistics.1993-2019", #"gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/statistics.1993-2019",
+        path_out="gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/statistics.1993-2019",
         start_date=None, # original start date
         end_date="2019",
         time_skip=None,
-        load_full_dataset=True,
+        load_full_dataset=load_full_dataset,
         open_zarr_kwargs=open_zarr_kwargs,
         to_zarr_kwargs={
             "mode":"a",
-        #    "storage_options": {"token": "/contrib/Tim.Smith/.gcs/replay-service-account.json"},
+            "storage_options": {"token": "/contrib/Tim.Smith/.gcs/replay-service-account.json"},
         },
     )
     normer(varname)
@@ -54,5 +56,4 @@ if __name__ == "__main__":
         storage_options={"token": "anon"},
     )
     for key in ds.data_vars:
-        partition = "compute" if "pfull" not in ds[key].dims else "highmem"
         submit_slurm_job(key, partition=partition)
