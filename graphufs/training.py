@@ -179,17 +179,14 @@ def optimize(
             # manually aggregate results accross nodes. if emulator.use_jax_distributed
             # is turned on, there is no need for this code.
             if (not use_jax_distributed) and (mpi_size > 1):
-                # use a helpfer function for grads, which is a dict of dicts,
-                # "layer_name" & "weights/bias" being the two keys
+                # use a helpfer function for grads and other trees
                 def aggregate_across_nodes(d):
-                    if isinstance(d, dict):
-                        return {k: aggregate_across_nodes(v) for k, v in d.items()}
-                    elif isinstance(d, jnp.ndarray):
+                    def aggregate(d):
                         d, _ = mpi4jax.allreduce(d, op=MPI.SUM, comm=MPI.COMM_WORLD)
                         d = d / mpi_size
                         return d
-                    else:
-                        return d
+
+                    return tree_util.tree_map(lambda x: aggregate(x), d)
 
                 loss = aggregate_across_nodes(loss)
                 grads = aggregate_across_nodes(grads)
@@ -205,12 +202,7 @@ def optimize(
 
         # Remove the first dimension (device dimension), which is added due to pmap
         def remove_first_dim(d):
-            if isinstance(d, dict):
-                return {k: remove_first_dim(v) for k, v in d.items()}
-            elif isinstance(d, jnp.ndarray):
-                return d[0]
-            else:
-                return d
+            return tree_util.tree_map(lambda x: x[0], d)
 
         loss = remove_first_dim(loss)
         grads = remove_first_dim(grads)
@@ -418,7 +410,9 @@ def init_devices(emulator):
     # to take effect.
 
     # this one is needed for multiple logical devices
-    os.environ["XLA_FLAGS"] = f"--xla_force_host_platform_device_count={emulator.num_gpus} "
+    os.environ[
+        "XLA_FLAGS"
+    ] = f"--xla_force_host_platform_device_count={emulator.num_gpus} "
 
     if emulator.use_xla_flags:
 
