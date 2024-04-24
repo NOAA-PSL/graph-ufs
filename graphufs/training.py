@@ -171,10 +171,11 @@ def optimize(
             )
 
             # aggregate across local devices
-            grads = pmean(grads, axis_name="optim_step")
-            loss = pmean(loss, axis_name="optim_step")
-            diagnostics = pmean(diagnostics, axis_name="optim_step")
-            next_state = pmean(next_state, axis_name="optim_step")
+            if num_gpus > 1:
+                grads = pmean(grads, axis_name="optim_step")
+                loss = pmean(loss, axis_name="optim_step")
+                diagnostics = pmean(diagnostics, axis_name="optim_step")
+                next_state = pmean(next_state, axis_name="optim_step")
 
             # manually aggregate results accross nodes. if emulator.use_jax_distributed
             # is turned on, there is no need for this code.
@@ -195,19 +196,24 @@ def optimize(
 
             return (loss, (diagnostics, next_state)), grads
 
-        # pmap batch processing into multiple GPUs
-        (loss, (diagnostics, next_state)), grads = pmap(
-            process_batch, dim="optim_step"
-        )(input_batches, target_batches, forcing_batches)
+        if num_gpus > 1:
+            # pmap batch processing into multiple GPUs
+            (loss, (diagnostics, next_state)), grads = pmap(
+                process_batch, dim="optim_step"
+            )(input_batches, target_batches, forcing_batches)
 
-        # Remove the first dimension (device dimension), which is added due to pmap
-        def remove_first_dim(d):
-            return tree_util.tree_map(lambda x: x[0], d)
+            # Remove the first dimension (device dimension), which is added due to pmap
+            def remove_first_dim(d):
+                return tree_util.tree_map(lambda x: x[0], d)
 
-        loss = remove_first_dim(loss)
-        grads = remove_first_dim(grads)
-        diagnostics = remove_first_dim(diagnostics)
-        next_state = remove_first_dim(next_state)
+            loss = remove_first_dim(loss)
+            grads = remove_first_dim(grads)
+            diagnostics = remove_first_dim(diagnostics)
+            next_state = remove_first_dim(next_state)
+        else:
+            (loss, (diagnostics, next_state)), grads = process_batch(
+                input_batches, target_batches, forcing_batches
+            )
 
         # update parameters
         updates, opt_state = optimizer.update(grads, opt_state, params)
@@ -216,6 +222,7 @@ def optimize(
 
     optim_step_jitted = jit(optim_step)
 
+    optim_steps = []
     loss_values = []
     loss_by_var = {k: list() for k in target_batches.data_vars}
 
@@ -254,13 +261,13 @@ def optimize(
         # Since we are doing num_gpus steps per iteration, repeat the losses.
         # Note that pmean() has averaged the losses from different gpus.
         # This is necessary to obtain loss datasets of n_steps size.
-        for i in range(num_gpus):
-            loss_values.append(loss)
-        for key, val in diagnostics.items():
-            for i in range(num_gpus):
-                loss_by_var[key].append(val)
-
         if emulator.mpi_rank == 0:
+            for i in range(num_gpus):
+                loss_values.append(loss)
+            for key, val in diagnostics.items():
+                for i in range(num_gpus):
+                    loss_by_var[key].append(val)
+
             mean_grad = np.mean(
                 tree_util.tree_flatten(
                     tree_util.tree_map(lambda x: np.abs(x).mean(), grads)
@@ -276,6 +283,7 @@ def optimize(
 
     # save losses for each batch
     loss_ds = xr.Dataset()
+
     if emulator.mpi_rank == 0:
         loss_fname = os.path.join(emulator.local_store_path, "loss.nc")
         previous_optim_steps = 0
