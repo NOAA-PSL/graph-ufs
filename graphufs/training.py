@@ -234,15 +234,8 @@ def optimize(
     for k in range(0, n_steps, num_gpus):
         # When the number of batches is not evenly divisible by num_gpus
         # the last set of batches may not be enough for all gpus. We skip
-        # training because aggregation can corrupt final result. Passing
-        # a shorter list of devices may solve it, but the jitted optim
-        # function don't like that.
+        # training because aggregation can corrupt final result.
         if k + num_gpus > n_steps:
-            # repeat losses, see below for why?
-            n_repeat = n_steps - k
-            loss_values = loss_values + [loss_values[-1]] * n_repeat
-            for k, v in loss_by_var.items():
-                loss_by_var[k] = v + [v[-1]] * n_repeat
             break
 
         # the slice should provide for all gpus
@@ -258,15 +251,12 @@ def optimize(
             state=state,
         )
 
-        # Since we are doing num_gpus steps per iteration, repeat the losses.
-        # Note that pmean() has averaged the losses from different gpus.
-        # This is necessary to obtain loss datasets of n_steps size.
+        # update progress bar from rank 0
         if emulator.mpi_rank == 0:
-            for i in range(num_gpus):
-                loss_values.append(loss)
+            optim_steps.append(k // num_gpus)
+            loss_values.append(loss)
             for key, val in diagnostics.items():
-                for i in range(num_gpus):
-                    loss_by_var[key].append(val)
+                loss_by_var[key].append(val)
 
             mean_grad = np.mean(
                 tree_util.tree_flatten(
@@ -291,7 +281,7 @@ def optimize(
             stored_loss_ds = xr.open_dataset(loss_fname)
             previous_optim_steps = len(stored_loss_ds.optim_step)
 
-        loss_ds["optim_step"] = input_batches["optim_step"] + previous_optim_steps
+        loss_ds["optim_step"] = [x + previous_optim_steps for x in optim_steps]
         loss_ds.attrs["batch_size"] = len(input_batches["batch"])
         loss_ds["var_index"] = xr.DataArray(
             np.arange(len(loss_by_var)),
