@@ -75,6 +75,30 @@ def sample_stacked_data(sample_dataset):
 def sample_xdata(sample_dataset):
     yield sample_dataset.get_xarrays(_idx)
 
+@pytest.fixture(scope="module")
+def parameters(p0, sample_stacked_data, sample_xdata):
+
+    # get the data
+    inputs, _ = sample_stacked_data
+    xinputs, xtargets, xforcings = sample_xdata
+
+    # get the input mapping
+    input_idx = get_channel_index(xinputs)
+    target_idx = get_channel_index(xtargets)
+    last_input_channel_mapping = get_last_input_mapping(input_idx, target_idx)
+
+    init = jax.jit( stacked_graphcast.init, static_argnames=["do_bfloat16", "do_inputs_and_residuals"] )
+    params, state = init(
+        emulator=p0,
+        inputs=inputs,
+        last_input_channel_mapping=last_input_channel_mapping,
+        do_bfloat16=True,
+        do_inputs_and_residuals=True,
+        rng=jax.random.PRNGKey(0),
+    )
+
+    return params, state
+
 def print_stats(test, expected):
     abs_diff = np.abs(test - expected).values
     rel_diff = np.where(np.isclose(expected, 0.), 0., abs_diff / np.abs(expected).values)
@@ -100,7 +124,7 @@ def print_stats(test, expected):
 )
 class TestStackedGraphCast():
 
-    def test_sample(self, p0, sample_stacked_data, sample_xdata, do_bfloat16, do_inputs_and_residuals, atol):
+    def test_sample(self, p0, sample_stacked_data, sample_xdata, parameters, do_bfloat16, do_inputs_and_residuals, atol):
 
         # get the data
         inputs, _ = sample_stacked_data
@@ -111,18 +135,8 @@ class TestStackedGraphCast():
         target_idx = get_channel_index(xtargets)
         last_input_channel_mapping = get_last_input_mapping(input_idx, target_idx)
 
-
         # initialize parameters and state
-        # we can use the same for StackedGraphCast and GraphCast
-        init = jax.jit( stacked_graphcast.init, static_argnames=["do_bfloat16", "do_inputs_and_residuals"] )
-        test_params, test_state = init(
-            emulator=p0,
-            inputs=inputs,
-            last_input_channel_mapping=last_input_channel_mapping,
-            do_bfloat16=do_bfloat16,
-            do_inputs_and_residuals=do_inputs_and_residuals,
-            rng=jax.random.PRNGKey(0),
-        )
+        test_params, test_state = parameters
         expected_params = test_params.copy()
         expected_state = test_state.copy()
 
