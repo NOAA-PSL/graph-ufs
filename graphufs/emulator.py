@@ -76,17 +76,6 @@ class ReplayEmulator:
         if self.local_store_path is None:
             warnings.warng("ReplayEmulator.__init__: no local_store_path set, data will always be accessed remotely. Proceed with patience.")
 
-        # need to sort input variables so that the targets are listed first
-        # this is important for StackedGraphCast implementation, because
-        # the predictions that are also input variables are normalized differently
-        # than predictions that are not input variables (if we have any)
-        # i.e., we normalize using the residuals not just flat/regular normalization
-        # Also, StackedGraphCast assume that all prediction variables are also inputs
-        self.input_variables = \
-            tuple(x for x in self.target_variables if x in self.input_variables) \
-            + \
-            tuple(set(self.input_variables) - set(self.target_variables))
-
         if any(x not in self.input_variables for x in self.target_variables):
             raise NotImplementedError(f"StackedGraphCast cannot predict target variables that are not also inputs")
 
