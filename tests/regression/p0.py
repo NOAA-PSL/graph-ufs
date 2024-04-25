@@ -67,6 +67,17 @@ class P0Emulator(ReplayEmulator):
     batch_size = 16
     num_epochs = 1
 
+    # loss weighting, defaults to GraphCast implementation
+    weight_loss_per_latitude = True
+    weight_loss_per_level = True
+    loss_weights_per_variable = {
+        "tmp2m"         : 1.0,
+        "ugrd10m"       : 0.1,
+        "vgrd10m"       : 0.1,
+        "pressfc"       : 0.1,
+        "prateb_ave"    : 0.1,
+    }
+
     # model config options
     resolution = 1.0
     mesh_size = 2

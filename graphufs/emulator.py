@@ -12,6 +12,9 @@ from ufs2arco.regrid.ufsregridder import UFSRegridder
 from graphcast.graphcast import ModelConfig, TaskConfig
 from graphcast.data_utils import extract_inputs_targets_forcings
 from graphcast.model_utils import dataset_to_stacked
+from graphcast.losses import normalized_level_weights, normalized_latitude_weights
+
+from .utils import get_channel_index
 
 class ReplayEmulator:
     """An emulator based on UFS Replay data. This manages all model configuration settings and normalization fields. Currently it is designed to be inherited for a specific use-case, and this could easily be generalized to read in settings via a configuration file (yaml, json, etc). Be sure to register any inherited class as a pytree for it to work with JAX.
@@ -60,6 +63,17 @@ class ReplayEmulator:
     hidden_layers = None
     radius_query_fraction_edge_length = None
     mesh2grid_edge_normalization_factor = None
+
+    # loss weighting, defaults to GraphCast implementation
+    weight_loss_per_latitude = True
+    weight_loss_per_level = True
+    loss_weights_per_variable = {
+        "tmp2m"         : 1.0,
+        "ugrd10m"       : 0.1,
+        "vgrd10m"       : 0.1,
+        "pressfc"       : 0.1,
+        "prateb_ave"    : 0.1,
+    }
 
     # this is used for initializing the state in the gradient computation
     grad_rng_seed = None
@@ -480,6 +494,35 @@ class ReplayEmulator:
             dim="channels",
         )
         return input_norms.data, target_norms.data
+
+
+    def calc_loss_weights(self, xtargets, targets):
+
+        weights = np.ones_like(targets)
+
+        # 1. compute latitude weighting
+        if self.weight_loss_per_latitude:
+            lat_weights = normalized_latitude_weights(xtargets)
+            weights *= lat_weights.data[...,None][...,None][...,None]
+
+        # 2. compute per variable weighting
+        target_idx = get_channel_index(xtargets)
+        for ichannel in range(targets.shape[-1]):
+            varname = target_idx[ichannel]["varname"]
+            if varname in self.loss_weights_per_variable:
+                weights[..., ichannel] *= self.loss_weights_per_variable[varname]
+
+        # 3. compute per level weighting
+        if self.weight_loss_per_level:
+            level_weights = normalized_level_weights(xtargets)
+            for ichannel in range(targets.shape[-1]):
+                if "level" in target_idx[ichannel].keys():
+                    ilevel = target_idx[ichannel]["level"]
+                    weights[..., ichannel] *= level_weights.isel(level=ilevel).data
+
+        # do we need to put this on the device(s)?
+        return weights
+
 
 
     @staticmethod

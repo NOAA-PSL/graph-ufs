@@ -5,7 +5,7 @@ from jax.random import PRNGKey
 import threading
 import xarray as xr
 
-from graphufs import run_forward
+from .training import run_forward
 from ufs2arco.timer import Timer
 
 

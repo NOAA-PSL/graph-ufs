@@ -78,9 +78,9 @@ def original_loss(emulator, inputs, targets, forcings, do_bfloat16, do_inputs_an
     return result
 
 @hk.transform_with_state
-def stacked_loss(emulator, inputs, targets, last_input_channel_mapping, do_bfloat16, do_inputs_and_residuals):
+def stacked_loss(emulator, inputs, targets, weights, last_input_channel_mapping, do_bfloat16, do_inputs_and_residuals):
     stacked_graphcast = wrap_stacked_graphcast(emulator, last_input_channel_mapping, do_bfloat16, do_inputs_and_residuals)
-    loss, diagnostics = stacked_graphcast.loss(inputs, targets)
+    loss, diagnostics = stacked_graphcast.loss(inputs, targets, weights=weights)
     return loss.squeeze(), diagnostics.squeeze()
 
 # establish all this stuff once
@@ -154,6 +154,24 @@ def print_stats(test, expected):
     print("avg |test - expected| / |test| = ", np.mean(rel_diff) )
     print()
 
+def print_loss_stats(test_loss, test_diagnostics, expected_loss, expected_diagnostics):
+    test_var_loss = np.sum(list(test_diagnostics.values()))
+    print("Total Loss: ")
+    print(f"  test     : {test_loss:1.2e}")
+    print(f"  test_var : {test_var_loss:1.2e}")
+    print(f"  expected : {expected_loss:1.2e}")
+    print(f"  abs_diff : {np.abs(test_var_loss - expected_loss):1.2e}")
+    print(f"  rel_diff : {np.abs(test_var_loss - expected_loss)/np.abs(expected_loss):1.2e}")
+    print()
+    print("Diagnostics:    test    expected  abs_diff  rel_diff")
+    for key in test_diagnostics.keys():
+        t = float(test_diagnostics[key])
+        e = float(expected_diagnostics[key])
+        d = np.abs(t-e)
+        rd = np.abs(d) / e
+        print(f"    {key:<8s}: {t:1.2e}, {e:1.2e}, {d:1.2e}, {rd:1.2e}")
+
+
 # at last, test some models
 @pytest.mark.parametrize(
     "do_bfloat16, do_inputs_and_residuals, atol",
@@ -212,11 +230,13 @@ class TestStackedGraphCast():
         expected_state = test_state.copy()
 
         # run stacked graphcast
+        weights = p0.calc_loss_weights(xtargets=xtargets, targets=targets)
         sgc_loss = jax.jit( stacked_loss.apply, static_argnames=["do_bfloat16", "do_inputs_and_residuals"]  )
-        test_loss, test_diagnostics = sgc_loss(
+        (test_loss, test_diagnostics), _ = sgc_loss(
             emulator=p0,
             inputs=inputs,
             targets=targets,
+            weights=weights,
             last_input_channel_mapping=last_input_channel_mapping,
             do_bfloat16=do_bfloat16,
             do_inputs_and_residuals=do_inputs_and_residuals,
@@ -227,7 +247,7 @@ class TestStackedGraphCast():
 
         # run original graphcast
         gc_loss = jax.jit( original_loss.apply, static_argnames=["do_bfloat16", "do_inputs_and_residuals"] )
-        expected_loss, expected_diagnostics = gc_loss(
+        (expected_loss, expected_diagnostics), _ = gc_loss(
             emulator=p0,
             inputs=xinputs,
             targets=xtargets,
@@ -238,6 +258,34 @@ class TestStackedGraphCast():
             state=expected_state,
             rng=jax.random.PRNGKey(0),
         )
-        print(test_loss, test_diagnostics)
-        print(expected_loss, expected_diagnostics)
 
+        # convert channel diagnostics to variable
+        # in order to match graphcast loss, since they average over variable first before summing
+        target_idx = get_channel_index(xtargets)
+        test_var_diagnostics = {k: 0. for k in p0.target_variables}
+        test_var_count = {k: 0 for k in p0.target_variables}
+        for ichannel, val in enumerate(test_diagnostics):
+            varname = target_idx[ichannel]["varname"]
+            test_var_diagnostics[varname] += val
+            test_var_count[varname] += 1
+
+        for varname in p0.target_variables:
+            test_var_diagnostics[varname] /= test_var_count[varname]
+
+        # for some reason GraphCast "diagnostics" is not weighted
+        for varname in p0.target_variables:
+            if varname in p0.loss_weights_per_variable.keys():
+                expected_diagnostics[varname] *= p0.loss_weights_per_variable[varname]
+
+        print_loss_stats(test_loss, test_var_diagnostics, expected_loss, expected_diagnostics)
+
+        rtol = 1e-7
+        if do_bfloat16:
+            rtol = 1e-3 if do_inputs_and_residuals else 1e-2
+
+        # check mean here with code just for order of magnitude since summation will be different
+        assert_allclose(test_loss, np.mean(test_diagnostics), rtol=rtol)
+
+        # compare to GraphCast
+        compare_loss = np.sum(list(test_var_diagnostics.values()))
+        assert_allclose(compare_loss, expected_loss, rtol=rtol)
