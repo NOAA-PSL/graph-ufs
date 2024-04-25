@@ -1,103 +1,61 @@
-"""
-A first draft for computing the normalization fields using the years 1993-1997 (just making use of the last hours of 1993 thanks to the IAU) subset at 6hour frequency from the 1 degree Replay dataset.
-
-This should take a more careful grid cell weighted average, and there are a lot of hard coded values that should be generalized.
-"""
-import numpy as np
 import xarray as xr
-from timer import Timer
+import subprocess
 
-def preprocess_time(xds):
+from graphufs import StatisticsComputer, add_derived_vars
 
-    # 1. get training data: 1993-1997 (inclustive)
-    rds = xds.sel(time=slice(None, "1997"))
-    assert rds.time[-1].dt.year == 1997
-    assert rds.time[-1].dt.month == 12
-    assert rds.time[-1].dt.day == 31
-    assert rds.time[-1].dt.hour == 21
+def main(varname):
 
-    # 2. Subsample to 6 hourly
-    rds = rds.isel(time=slice(None, None, 2))
-    assert rds.time[ 1].dt.hour == 0
-    assert rds.time[-1].dt.hour == 18
+    path_in = "gs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/03h-freq/zarr/fv3.zarr"
+    open_zarr_kwargs = {"storage_options": {"token": "anon"}}
+    ds = xr.open_zarr(path_in, **open_zarr_kwargs)
+    ds = add_derived_vars(ds)
+    load_full_dataset = "pfull" not in ds[varname]
 
-    return rds
-
-
-def calc_diffs_stddev_by_level(xds):
-
-    with xr.set_options(keep_attrs=True):
-        result = xds.diff("time")
-        result = result.std(["grid_xt", "grid_yt", "time"])
-
-    for key in result.data_vars:
-        result[key].attrs["description"] = "std of 6 hourly difference over lat, lon, time (1993-1997, inclusive)"
-    return result
-
-def calc_stddev_by_level(xds):
-
-    with xr.set_options(keep_attrs=True):
-        result = xds.std(["grid_xt", "grid_yt", "time"])
-
-    for key in result.data_vars:
-        result[key].attrs["description"] = "std over lat, lon, time (1993-1997, inclusive)"
-    return result
-
-
-def calc_mean_by_level(xds):
-
-    with xr.set_options(keep_attrs=True):
-        result = xds.mean(["grid_xt", "grid_yt", "time"])
-
-    for key in result.data_vars:
-        result[key].attrs["description"] = "avg over lat, lon, time (1993-1997, inclusive)"
-    return result
-
-
-def main():
-
-    rds = xr.open_zarr(
-        "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/03h-freq/zarr/fv3.zarr",
-        storage_options={"token": "anon"},
+    normer = StatisticsComputer(
+        path_in=path_in,
+        path_out="gs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/03h-freq/fv3.statistics.1993-1997",
+        start_date=None, # original start date
+        end_date="1997",
+        time_skip=2,
+        load_full_dataset=load_full_dataset,
+        open_zarr_kwargs=open_zarr_kwargs,
+        to_zarr_kwargs={
+            "mode":"a",
+            "storage_options": {"token": "/contrib/Tim.Smith/.gcs/replay-service-account.json"},
+        },
     )
-
-    rds = preprocess_time(rds)
-
-    out_dir = "../zstores/ufs-hr1/1.00-degree/normalization"
-
-    localtime = Timer()
-
-    for basename, func in zip(
-            ["mean_by_level.zarr", "stddev_by_level.zarr", "diffs_stddev_by_level.zarr"],
-            [calc_mean_by_level, calc_stddev_by_level, calc_diffs_stddev_by_level]):
-
-        fname = f"{out_dir}/{basename}"
-        localtime.start(f"Writing {fname}")
-        result = func(rds)
-        result.to_zarr(fname, mode="w")
-        localtime.stop(f"Done with {fname}")
-        print()
+    normer(varname)
 
 
-if __name__ == "__main__":
-
-    import subprocess
+def submit_slurm_job(varname, partition="compute"):
 
     jobscript = f"#!/bin/bash\n\n"+\
-        f"#SBATCH -J calc_normalization\n"+\
-        f"#SBATCH -o slurm/calc_normalization.%j.out\n"+\
-        f"#SBATCH -e slurm/calc_normalization.%j.err\n"+\
+        f"#SBATCH -J {varname}_norm\n"+\
+        f"#SBATCH -o slurm/normalization/{varname}.%j.out\n"+\
+        f"#SBATCH -e slurm/normalization/{varname}.%j.err\n"+\
         f"#SBATCH --nodes=1\n"+\
         f"#SBATCH --ntasks=1\n"+\
         f"#SBATCH --cpus-per-task=30\n"+\
-        f"#SBATCH --partition=compute\n"+\
+        f"#SBATCH --partition={partition}\n"+\
         f"#SBATCH -t 120:00:00\n\n"+\
         f"source /contrib/Tim.Smith/miniconda3/etc/profile.d/conda.sh\n"+\
-        f"conda activate ufn\n"+\
-        f"python -c 'from calc_normalization import main ; main()'"
+        f"conda activate graphufs-cpu\n"+\
+        f"python -c 'from calc_normalization import main ; main(\"{varname}\")'"
 
-    scriptname = "submit_normalization.sh"
+    scriptname = f"job-scripts/submit_normalization_{varname}.sh"
     with open(scriptname, "w") as f:
         f.write(jobscript)
 
     subprocess.run(f"sbatch {scriptname}", shell=True)
+
+if __name__ == "__main__":
+
+    path_in = "gs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/03h-freq/zarr/fv3.zarr"
+    ds = xr.open_zarr(
+        path_in,
+        storage_options={"token": "anon"},
+    )
+    ds = add_derived_vars(ds)
+
+    for key in ds.data_vars:
+        submit_slurm_job(key)
