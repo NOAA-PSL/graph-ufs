@@ -220,7 +220,9 @@ def optimize(
         params = optax.apply_updates(params, updates)
         return params, loss, diagnostics, opt_state, grads
 
-    optim_step_jitted = jit(optim_step)
+    if not hasattr(optimize, "optim_step_jitted"):
+        logging.info("Jitting optim_step")
+        optimize.optim_step_jitted = jit(optim_step)
 
     optim_steps = []
     loss_values = []
@@ -241,7 +243,7 @@ def optimize(
         # the slice should provide for all gpus
         sl = slice(k, k + num_gpus)
 
-        params, loss, diagnostics, opt_state, grads = optim_step_jitted(
+        params, loss, diagnostics, opt_state, grads = optimize.optim_step_jitted(
             opt_state=opt_state,
             emulator=emulator,
             input_batches=input_batches.isel(optim_step=sl),
