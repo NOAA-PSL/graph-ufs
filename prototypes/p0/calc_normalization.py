@@ -9,11 +9,11 @@ def main(varname):
     open_zarr_kwargs = {"storage_options": {"token": "anon"}}
     ds = xr.open_zarr(path_in, **open_zarr_kwargs)
     ds = add_derived_vars(ds)
-    load_full_dataset = "pfull" not in ds[varname]
+    load_full_dataset = "pfull" not in ds[varname].dims
 
     normer = StatisticsComputer(
         path_in=path_in,
-        path_out="gs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/03h-freq/fv3.statistics.1993-1997",
+        path_out="gs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/fv3.statistics.1993-1997",
         start_date=None, # original start date
         end_date="1997",
         time_skip=2,
