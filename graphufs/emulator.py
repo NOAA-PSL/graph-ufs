@@ -28,7 +28,6 @@ class ReplayEmulator:
         "stddiff": "",
     }
     wb2_obs_url = ""
-    
     local_store_path = None     # directory where zarr file, model weights etc are stored
     no_cache_data = None        # don't cache or use zarr dataset downloaded from GCS on disk
 
@@ -77,13 +76,13 @@ class ReplayEmulator:
     use_jax_distributed = None       # Use jax's distributed mechanism, no need for manula mpi4jax calls
     use_xla_flags = None             # Use recommended flags for XLA and NCCL https://jax.readthedocs.io/en/latest/gpu_performance_tips.html
 
-    def __init__(self):
+    def __init__(self, mpi_rank=None, mpi_size=None):
 
         if self.local_store_path is None:
             warnings.warng("ReplayEmulator.__init__: no local_store_path set, data will always be accessed remotely. Proceed with patience.")
 
-        self.mpi_rank = None
-        self.mpi_size = None
+        self.mpi_rank = mpi_rank
+        self.mpi_size = mpi_size
 
         pfull = self._get_replay_vertical_levels()
         levels = pfull.sel(
@@ -435,29 +434,6 @@ class ReplayEmulator:
         mean_by_level = open_normalization("mean")
         stddev_by_level = open_normalization("std")
         diffs_stddev_by_level = open_normalization("stddiff")
-
-        # hacky, just copying these from graphcast demo to get moving
-        mean_by_level['year_progress'] = 0.49975101137533784
-        mean_by_level['year_progress_sin'] = -0.0019232822626236157
-        mean_by_level['year_progress_cos'] = 0.01172127404282719
-        mean_by_level['day_progress'] = 0.49861110098039113
-        mean_by_level['day_progress_sin'] = -1.0231613285011715e-08
-        mean_by_level['day_progress_cos'] = 2.679492657383283e-08
-
-        stddev_by_level['year_progress'] = 0.29067483157079654
-        stddev_by_level['year_progress_sin'] = 0.7085840482846367
-        stddev_by_level['year_progress_cos'] = 0.7055264413169846
-        stddev_by_level['day_progress'] = 0.28867401335991755
-        stddev_by_level['day_progress_sin'] = 0.7071067811865475
-        stddev_by_level['day_progress_cos'] = 0.7071067888988349
-
-        diffs_stddev_by_level['year_progress'] = 0.024697753562180874
-        diffs_stddev_by_level['year_progress_sin'] = 0.0030342521761048467
-        diffs_stddev_by_level['year_progress_cos'] = 0.0030474038590028816
-        diffs_stddev_by_level['day_progress'] = 0.4330127018922193
-        diffs_stddev_by_level['day_progress_sin'] = 0.9999999974440369
-        diffs_stddev_by_level['day_progress_cos'] = 1.0
-
         return mean_by_level, stddev_by_level, diffs_stddev_by_level
 
 
@@ -494,7 +470,7 @@ class ReplayEmulator:
         for reference.
         """
         children = tuple()
-        aux_data = dict() # in the future could be {"config_filename": self.config_filename}
+        aux_data = {"mpi_rank": self.mpi_rank, "mpi_size": self.mpi_size}
         return (children, aux_data)
 
 
