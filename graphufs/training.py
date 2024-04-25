@@ -28,6 +28,7 @@ from jax import (
     device_count,
     print_environment_info,
     distributed,
+    block_until_ready,
 )
 from graphcast.xarray_jax import pmap
 from jax.lax import pmean
@@ -139,16 +140,18 @@ def optimize(
             lambda x: unwrap_data(x.mean(), require_jax=True), (loss, diagnostics)
         )
 
+    # since optim_step jitting is confused by these variables in a loop
+    # pass them indirectly so that jitting only happens in the first step
+    input_batches_cur = None
+    target_batches_cur = None
+    forcing_batches_cur = None
+
     def optim_step(
         params,
         state,
         opt_state,
         emulator,
-        input_batches,
-        target_batches,
-        forcing_batches,
     ):
-
         """Note that this function has to be definied within optimize so that we do not
         pass optimizer as an argument. Otherwise we get some craazy jax errors"""
 
@@ -200,7 +203,7 @@ def optimize(
             # pmap batch processing into multiple GPUs
             (loss, (diagnostics, next_state)), grads = pmap(
                 process_batch, dim="optim_step"
-            )(input_batches, target_batches, forcing_batches)
+            )(input_batches_cur, target_batches_cur, forcing_batches_cur)
 
             # Remove the first dimension (device dimension), which is added due to pmap
             def remove_first_dim(d):
@@ -212,7 +215,7 @@ def optimize(
             next_state = remove_first_dim(next_state)
         else:
             (loss, (diagnostics, next_state)), grads = process_batch(
-                input_batches, target_batches, forcing_batches
+                input_batches_cur, target_batches_cur, forcing_batches_cur
             )
 
         # update parameters
@@ -220,9 +223,31 @@ def optimize(
         params = optax.apply_updates(params, updates)
         return params, loss, diagnostics, opt_state, grads
 
+    # jit optim_step only once
     if not hasattr(optimize, "optim_step_jitted"):
-        logging.info("Jitting optim_step")
+        logging.info("Started jitting optim_step")
+
+        # jit on first slice
+        sl = slice(0, num_gpus)
+        input_batches_cur=input_batches.isel(optim_step=sl)
+        target_batches_cur=target_batches.isel(optim_step=sl)
+        forcing_batches_cur=forcing_batches.isel(optim_step=sl)
+
+        # jitted function
         optimize.optim_step_jitted = jit(optim_step)
+
+        # warm up step
+        x,_,_,_,_ = optimize.optim_step_jitted(
+            params=params,
+            state=state,
+            opt_state=opt_state,
+            emulator=emulator,
+        )
+
+        # wait until value for x is ready i.e. until jitting completes
+        block_until_ready(x)
+
+        logging.info("Finished jitting optim_step")
 
     optim_steps = []
     loss_values = []
@@ -242,15 +267,14 @@ def optimize(
 
         # the slice should provide for all gpus
         sl = slice(k, k + num_gpus)
-
+        input_batches_cur=input_batches.isel(optim_step=sl)
+        target_batches_cur=target_batches.isel(optim_step=sl)
+        forcing_batches_cur=forcing_batches.isel(optim_step=sl)
         params, loss, diagnostics, opt_state, grads = optimize.optim_step_jitted(
-            opt_state=opt_state,
-            emulator=emulator,
-            input_batches=input_batches.isel(optim_step=sl),
-            target_batches=target_batches.isel(optim_step=sl),
-            forcing_batches=forcing_batches.isel(optim_step=sl),
             params=params,
             state=state,
+            opt_state=opt_state,
+            emulator=emulator,
         )
 
         # update progress bar from rank 0
