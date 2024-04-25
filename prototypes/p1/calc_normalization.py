@@ -5,7 +5,7 @@ from graphufs import StatisticsComputer, add_derived_vars
 
 def main(varname):
 
-    path_in = "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr" #/fv3.zarr"
+    path_in = "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/fv3.zarr"
     open_zarr_kwargs = {"storage_options": {"token": "anon"}}
     ds = xr.open_zarr(path_in, **open_zarr_kwargs)
     ds = add_derived_vars(ds)
@@ -13,7 +13,7 @@ def main(varname):
 
     normer = StatisticsComputer(
         path_in=path_in,
-        path_out="gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/statistics.1993-2019",
+        path_out="gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/fv3.statistics.1993-2019",
         start_date=None, # original start date
         end_date="2019",
         time_skip=None,
@@ -50,7 +50,7 @@ def submit_slurm_job(varname, partition="compute"):
 
 if __name__ == "__main__":
 
-    path_in = "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr" #/fv3.zarr"
+    path_in = "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/fv3.zarr"
     ds = xr.open_zarr(
         path_in,
         storage_options={"token": "anon"},
