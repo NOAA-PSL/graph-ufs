@@ -77,13 +77,13 @@ class ReplayEmulator:
     use_jax_distributed = None       # Use jax's distributed mechanism, no need for manula mpi4jax calls
     use_xla_flags = None             # Use recommended flags for XLA and NCCL https://jax.readthedocs.io/en/latest/gpu_performance_tips.html
 
-    def __init__(self):
+    def __init__(self, mpi_rank=None, mpi_size=None):
 
         if self.local_store_path is None:
             warnings.warng("ReplayEmulator.__init__: no local_store_path set, data will always be accessed remotely. Proceed with patience.")
 
-        self.mpi_rank = None
-        self.mpi_size = None
+        self.mpi_rank = mpi_rank
+        self.mpi_size = mpi_size
 
         pfull = self._get_replay_vertical_levels()
         levels = pfull.sel(
@@ -494,7 +494,7 @@ class ReplayEmulator:
         for reference.
         """
         children = tuple()
-        aux_data = dict() # in the future could be {"config_filename": self.config_filename}
+        aux_data = {"mpi_rank": self.mpi_rank, "mpi_size": self.mpi_size}
         return (children, aux_data)
 
 
