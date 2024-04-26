@@ -6,7 +6,7 @@ from torch.utils.data import Dataset as TorchDataset
 from xbatcher import BatchGenerator
 
 from graphcast.data_utils import extract_inputs_targets_forcings
-from graphcast.model_utils import lat_lon_to_leading_axes, dataset_to_stacked
+from graphcast.model_utils import dataset_to_stacked
 from graphcast.xarray_jax import unwrap
 
 class GraphUFSDataset(TorchDataset):
@@ -66,7 +66,7 @@ class GraphUFSDataset(TorchDataset):
                 [result, dataset_to_stacked(b)],
                 dim="channels",
             )
-        result = lat_lon_to_leading_axes(result)
+        result = result.transpose("batch", "lat", "lon", "channels")
         return result
 
     def _stack(self, a, b=None):
@@ -76,7 +76,7 @@ class GraphUFSDataset(TorchDataset):
             result (chex.Array)
         """
         xresult = self._xstack(a, b)
-        return xresult.data
+        return xresult.data.squeeze()
 
     def _open_dataset(self):
 
@@ -119,6 +119,22 @@ class GraphUFSDataset(TorchDataset):
         sample_target = sample_target.expand_dims({"batch": [idx]})
         sample_forcing = sample_forcing.expand_dims({"batch": [idx]})
         return sample_input, sample_target, sample_forcing
+
+    def get_batch_of_xarrays(self, indices : list[int]):
+        xinputs = []
+        xtargets = []
+        xforcings = []
+        for idx in indices:
+            xi, xt, xf = self.get_xarrays(idx)
+            xinputs.append(xi)
+            xtargets.append(xt)
+            xforcings.append(xf)
+
+        xinputs = xr.concat(xinputs, dim="batch")
+        xtargets = xr.concat(xtargets, dim="batch")
+        xforcings = xr.concat(xforcings, dim="batch")
+        return xinputs, xtargets, xforcings
+
 
     def get_xsample(self, idx : int):
         sample_input, sample_target, sample_forcing = self.get_xarrays(idx)

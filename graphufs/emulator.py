@@ -498,12 +498,18 @@ class ReplayEmulator:
 
     def calc_loss_weights(self, xtargets, targets):
 
-        weights = np.ones_like(targets)
+        if targets.ndim == 3:
+            weights = np.ones_like(targets)
+        else:
+            weights = np.ones_like(targets[0])
+            weights = weights[None]
 
         # 1. compute latitude weighting
         if self.weight_loss_per_latitude:
             lat_weights = normalized_latitude_weights(xtargets)
-            weights *= lat_weights.data[...,None][...,None][...,None]
+            lat_weights = lat_weights.data[...,None][...,None]
+
+            weights *= lat_weights
 
         # 2. compute per variable weighting
         target_idx = get_channel_index(xtargets)
