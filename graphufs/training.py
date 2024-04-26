@@ -140,17 +140,15 @@ def optimize(
             lambda x: unwrap_data(x.mean(), require_jax=True), (loss, diagnostics)
         )
 
-    # since optim_step jitting is confused by these variables in a loop
-    # pass them indirectly so that jitting only happens in the first step
-    input_batches_cur = None
-    target_batches_cur = None
-    forcing_batches_cur = None
-
+    
     def optim_step(
         params,
         state,
         opt_state,
         emulator,
+        input_batches,
+        target_batches,
+        forcing_batches,
     ):
         """Note that this function has to be definied within optimize so that we do not
         pass optimizer as an argument. Otherwise we get some craazy jax errors"""
@@ -203,7 +201,7 @@ def optimize(
             # pmap batch processing into multiple GPUs
             (loss, (diagnostics, next_state)), grads = pmap(
                 process_batch, dim="optim_step"
-            )(input_batches_cur, target_batches_cur, forcing_batches_cur)
+            )(input_batches, target_batches, forcing_batches)
 
             # Remove the first dimension (device dimension), which is added due to pmap
             def remove_first_dim(d):
@@ -215,7 +213,7 @@ def optimize(
             next_state = remove_first_dim(next_state)
         else:
             (loss, (diagnostics, next_state)), grads = process_batch(
-                input_batches_cur, target_batches_cur, forcing_batches_cur
+                input_batches, target_batches, forcing_batches
             )
 
         # update parameters
@@ -229,12 +227,9 @@ def optimize(
 
         # jit on first slice
         sl = slice(0, num_gpus)
-        input_batches_cur=input_batches.isel(optim_step=sl)
-        target_batches_cur=target_batches.isel(optim_step=sl)
-        forcing_batches_cur=forcing_batches.isel(optim_step=sl)
 
         # jitted function
-        optimize.optim_step_jitted = jit(optim_step)
+        optimize.optim_step_jitted = jit(optim_step) #, static_argnums=(4,5,6))
 
         # warm up step
         x,_,_,_,_ = optimize.optim_step_jitted(
@@ -242,6 +237,9 @@ def optimize(
             state=state,
             opt_state=opt_state,
             emulator=emulator,
+            input_batches=input_batches.isel(optim_step=sl),
+            target_batches=target_batches.isel(optim_step=sl),
+            forcing_batches=forcing_batches.isel(optim_step=sl),
         )
 
         # wait until value for x is ready i.e. until jitting completes
@@ -258,6 +256,12 @@ def optimize(
     if emulator.mpi_rank == 0:
         progress_bar = tqdm(total=n_steps, ncols=140, desc="Processing")
 
+    # make a deep copy of slice 0
+    sl = slice(0, num_gpus)
+    i_batches=input_batches.isel(optim_step=sl).copy(deep=True)
+    t_batches=target_batches.isel(optim_step=sl).copy(deep=True)
+    f_batches=forcing_batches.isel(optim_step=sl).copy(deep=True)
+
     for k in range(0, n_steps, num_gpus):
         # When the number of batches is not evenly divisible by num_gpus
         # the last set of batches may not be enough for all gpus. We skip
@@ -265,16 +269,31 @@ def optimize(
         if k + num_gpus > n_steps:
             break
 
-        # the slice should provide for all gpus
+        # The purpose of the following code is best described as confusing
+        # the jix.jat cache system. We start from a deepcopy of slice 0 where the jitting
+        # is carried out, and sneakly update its values. If you use xarray update/copy etc
+        # the cache system somehow notices, and either becomes slow or messes up the result
+        # Copying variable values individually avoids both, fast and produces same results as before
         sl = slice(k, k + num_gpus)
-        input_batches_cur=input_batches.isel(optim_step=sl)
-        target_batches_cur=target_batches.isel(optim_step=sl)
-        forcing_batches_cur=forcing_batches.isel(optim_step=sl)
+        i1_batches=input_batches.isel(optim_step=sl)
+        t1_batches=target_batches.isel(optim_step=sl)
+        f1_batches=forcing_batches.isel(optim_step=sl)
+        for var_name, var in i1_batches.data_vars.items():
+            i_batches[var_name] = i_batches[var_name].copy(deep=False,data=var.values)
+        for var_name, var in t1_batches.data_vars.items():
+            t_batches[var_name] = t_batches[var_name].copy(deep=False,data=var.values)
+        for var_name, var in f1_batches.data_vars.items():
+            f_batches[var_name] = f_batches[var_name].copy(deep=False,data=var.values)
+
+        # call optimize
         params, loss, diagnostics, opt_state, grads = optimize.optim_step_jitted(
             params=params,
             state=state,
             opt_state=opt_state,
             emulator=emulator,
+            input_batches=i_batches,
+            target_batches=t_batches,
+            forcing_batches=f_batches,
         )
 
         # update progress bar from rank 0
