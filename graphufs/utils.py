@@ -1,11 +1,9 @@
 import itertools
-from graphcast import checkpoint, graphcast
-from jax import jit
-from jax.random import PRNGKey
+import logging
 import threading
+from graphcast import checkpoint, graphcast
 import xarray as xr
 
-from .training import run_forward
 from ufs2arco.timer import Timer
 
 
@@ -73,7 +71,7 @@ def get_chunk_in_parallel(
 class DataGenerator:
     """Data generator class"""
 
-    def __init__(self, emulator, mode: str, download_data: bool, n_optim_steps: int = None):
+    def __init__(self, emulator, mode: str, n_optim_steps: int = None):
         self.data = {}
         self.data_0 = {}
         self.input_thread = None
@@ -81,7 +79,6 @@ class DataGenerator:
         self.gen = emulator.get_batches(
             n_optim_steps=n_optim_steps,
             mode=mode,
-            download_data=download_data,
         )
         self.first_chunk = True
         self.generate()
@@ -99,24 +96,6 @@ class DataGenerator:
             return self.data_0;
 
 
-def init_model(gufs, data: dict):
-    """Initialize model with random weights.
-
-    Args:
-        gufs: emulator class
-        data (str): data to be used for initialization?
-    """
-    init_jitted = jit(run_forward.init)
-    params, state = init_jitted(
-        rng=PRNGKey(gufs.init_rng_seed),
-        emulator=gufs,
-        inputs=data["inputs"].sel(optim_step=0),
-        targets_template=data["targets"].sel(optim_step=0),
-        forcings=data["forcings"].sel(optim_step=0),
-    )
-    return params, state
-
-
 def load_checkpoint(ckpt_path: str, verbose: bool = False):
     """Load checkpoint.
 
@@ -131,8 +110,8 @@ def load_checkpoint(ckpt_path: str, verbose: bool = False):
     model_config = ckpt.model_config
     task_config = ckpt.task_config
     if verbose:
-        print("Model description:\n", ckpt.description, "\n")
-        print("Model license:\n", ckpt.license, "\n")
+        logging.info("Model description:\n", ckpt.description, "\n")
+        logging.info("Model license:\n", ckpt.license, "\n")
     return params, state
 
 
@@ -153,7 +132,6 @@ def save_checkpoint(gufs, params, ckpt_path: str) -> None:
             license="Public domain",
         )
         checkpoint.dump(f, ckpt)
-
 
 def product_dict(**kwargs):
     keys = kwargs.keys()
@@ -248,3 +226,78 @@ def get_last_input_mapping(inputs_index, targets_index):
             if is_match:
                 mapper[ti] = ii
     return mapper
+
+def add_emulator_arguments(emulator, parser) -> None:
+    """Add settings in Emulator class into CLI argument parser
+
+    Args:
+        emulator: emulator class
+        parser (argparse.ArgumentParser): argument parser
+    """
+    for k, v in vars(emulator).items():
+        if not k.startswith("__"):
+            name = "--" + k.replace("_", "-")
+            if v is None:
+                parser.add_argument(
+                    name,
+                    dest=k,
+                    required=False,
+                    type=int,
+                    help=f"{k}: default {v}",
+                )
+            elif isinstance(v, (tuple, list)) and len(v):
+                tp = type(v[0])
+                parser.add_argument(
+                    name,
+                    dest=k,
+                    required=False,
+                    nargs="+",
+                    type=tp,
+                    help=f"{k}: default {v}",
+                )
+            elif isinstance(v,dict) and len(v):
+                parser.add_argument(
+                    name,
+                    dest=k,
+                    required=False,
+                    nargs="+",
+                    help=f"{k}: default {v}",
+                )
+            elif isinstance(v,bool):
+                parser.add_argument(
+                    name,
+                    dest=k,
+                    action="store_true",
+                    required=False,
+                    help=f"{k}: default {v}",
+                )
+            else:
+                parser.add_argument(
+                    name,
+                    dest=k,
+                    required=False,
+                    type=type(v),
+                    default=v,
+                    help=f"{k}: default {v}",
+                )
+
+def set_emulator_options(emulator, args) -> None:
+    """Set settings in Emulator class from CLI arguments
+
+    Args:
+        emulator: emulator class
+        args: dictionary of CLI arguments
+    """
+    for arg in vars(args):
+        value = getattr(args, arg)
+        if value is not None:
+            arg_name = arg.replace("-", "_")
+            if hasattr(emulator, arg_name):
+                stored = getattr(emulator, arg_name)
+                if isinstance(stored,dict):
+                    value = {s.split(':')[0]: s.split(':')[1] for s in value}
+                elif stored is not None:
+                    attr_type = type(stored)
+                    value = attr_type(value)
+                setattr(emulator, arg_name, value)
+

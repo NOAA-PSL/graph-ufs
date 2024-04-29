@@ -1,6 +1,9 @@
 import os
+import logging
+import math
 import yaml
 import warnings
+import random
 import itertools
 import dataclasses
 import numpy as np
@@ -30,8 +33,8 @@ class ReplayEmulator:
         "stddiff": "",
     }
     wb2_obs_url = ""
-
-    local_store_path = None
+    local_store_path = None     # directory where zarr file, model weights etc are stored
+    no_cache_data = None        # don't cache or use zarr dataset downloaded from GCS on disk
 
     # these could be moved to a yaml file later
     # task config options
@@ -85,13 +88,22 @@ class ReplayEmulator:
     steps_per_chunk = None           # number of steps to train for in each chunk
     checkpoint_chunks = None         # save model after this many chunks are processed
 
-    def __init__(self):
+    # others
+    num_gpus = None                  # number of GPUs to use for training
+    log_only_rank0 = None            # log only messages from rank 0
+    use_jax_distributed = None       # Use jax's distributed mechanism, no need for manula mpi4jax calls
+    use_xla_flags = None             # Use recommended flags for XLA and NCCL https://jax.readthedocs.io/en/latest/gpu_performance_tips.html
+
+    def __init__(self, mpi_rank=None, mpi_size=None):
 
         if self.local_store_path is None:
             warnings.warng("ReplayEmulator.__init__: no local_store_path set, data will always be accessed remotely. Proceed with patience.")
 
         if any(x not in self.input_variables for x in self.target_variables):
             raise NotImplementedError(f"StackedGraphCast cannot predict target variables that are not also inputs")
+
+        self.mpi_rank = mpi_rank
+        self.mpi_size = mpi_size
 
         pfull = self._get_replay_vertical_levels()
         latitude, longitude = self._get_replay_grid(self.resolution)
@@ -260,7 +272,7 @@ class ReplayEmulator:
         n_optim_steps=None,
         drop_cftime=True,
         mode="training",
-        download_data=True,
+        allow_overlapped_chunks=None,
     ):
         """Get a dataset with all the batches of data necessary for training
 
@@ -271,7 +283,7 @@ class ReplayEmulator:
             n_optim_steps (int, optional): number of training batches to grab ... number of times we will update the parameters during optimization. If not specified, use as many as are available based on the available training data.
             drop_cftime (bool, optional): may be useful for debugging
             mode (str, optional): can be either "training", "validation" or "testing"
-            download_data (bool, optional): download data from GCS
+            allow_overlapped_chunks (bool, optional): overlapp chunks
         Returns:
             inputs, targets, forcings (xarray.Dataset): with new dimension "batch"
                 and appropriate fields for each dataset, based on the variables in :attr:`task_config`
@@ -279,28 +291,62 @@ class ReplayEmulator:
         # grab the dataset and subsample training portion at desired model time step
         # second epoch onwards should be able to read data locally
         local_data_path = os.path.join(self.local_store_path, "data.zarr")
-        if download_data:
-            xds = xr.open_zarr(self.data_url, storage_options={"token": "anon"})
-        else:
-            xds = xr.open_zarr(local_data_path)
-
-        # choose dates based on mode
+        xds = xr.open_zarr(self.data_url, storage_options={"token": "anon"})
         all_new_time = self.get_time(mode=mode)
+
+        # split the dataset across nodes
+        # make sure work is _exactly_ equally distirubuted to prevent hangs
+        # when the number of time stamps is not evenly divisible by the number of ranks,
+        # we discard whatever data is left over. Not a problem because parallelization is not done for testing.
+        if self.mpi_size > 1:
+            mpi_chunk_size = len(all_new_time) // self.mpi_size
+            start = self.mpi_rank * mpi_chunk_size
+            end = (self.mpi_rank + 1) * mpi_chunk_size
+            all_new_time = all_new_time[start:end]
+            logging.info(f"MPI rank {self.mpi_rank}: {all_new_time[0]} to {all_new_time[-1]} : {len(all_new_time)} time stamps.")
 
         # subsample in time, grab variables and vertical levels we want
         all_xds = self.subsample_dataset(xds, new_time=all_new_time)
 
+        # download only missing dates and write them to disk
+        if self.no_cache_data:
+            logging.info(f"Downloading data for {len(all_xds.time.values)} time stamps.")
+        elif os.path.exists(local_data_path):
+            # figure out missing dates
+            xds_on_disk = xr.open_zarr(local_data_path)
+            missing_dates = set(all_xds.time.values) - set(xds_on_disk.time.values)
+            xds_on_disk.close()
+            logging.info(f"Downloading missing data for {len(missing_dates)} time stamps.")
+            # download and write missing dates to disk
+            missing_xds = all_xds.sel(time=list(missing_dates))
+            missing_xds.to_zarr(local_data_path, append_dim="time")
+            # now that the data on disk is complete, reopen the dataset from disk
+            all_xds.close()
+            all_xds = xr.open_zarr(local_data_path)
+        else:
+            logging.info(f"Downloading missing data for {len(all_xds.time.values)} time stamps.")
+            all_xds.to_zarr(local_data_path)
+
         # split dataset into chunks
         chunk_size = len(all_new_time) // self.chunks_per_epoch
         all_new_time_chunks = []
+
+        # overlap chunks by lead time + input duration
+        overlap_step = (self.target_lead_time + self.input_duration) // delta_t if allow_overlapped_chunks else 0
         for i in range(self.chunks_per_epoch):
             if i == self.chunks_per_epoch - 1:
                 all_new_time_chunks.append(all_new_time[i * chunk_size:len(all_new_time)])
             else:
-                all_new_time_chunks.append(all_new_time[i * chunk_size:(i + 1) * chunk_size])
-        print(f"Chunks total: {len(all_new_time_chunks)}")
+                all_new_time_chunks.append(all_new_time[i * chunk_size:(i + 1) * chunk_size + overlap_step])
+
+        # shuffle chunks
+        if mode != "testing":
+            random.shuffle(all_new_time_chunks)
+
+        # print chunk boundaries
+        logging.info(f"Chunks total: {len(all_new_time_chunks)}")
         for chunk_id, new_time in enumerate(all_new_time_chunks):
-            print(f"Chunk {chunk_id}: {new_time[0]} to {new_time[-1]}")
+            logging.info(f"Chunk {chunk_id}: {new_time[0]} to {new_time[-1]} : {len(new_time)} time stamps")
 
         # iterate over all chunks
         for chunk_id, new_time in enumerate(all_new_time_chunks):
@@ -312,10 +358,11 @@ class ReplayEmulator:
             # figure out duration of IC(s), forecast, all of training
             data_duration = end - start
 
-            n_max_forecasts = (data_duration - self.input_duration) // self.delta_t
-            n_max_optim_steps = n_max_forecasts // self.batch_size
+            n_max_forecasts = (training_duration - input_duration) // delta_t
+            n_max_optim_steps = math.ceil(n_max_forecasts / self.batch_size)
             n_optim_steps = n_max_optim_steps if n_optim_steps is None else n_optim_steps
             n_forecasts = n_optim_steps * self.batch_size
+            n_forecasts = min(n_forecasts, n_max_forecasts)
 
             # note that this max can be violated if we sample with replacement ...
             # but I'd rather just work with epochs and use all the data
@@ -352,9 +399,8 @@ class ReplayEmulator:
 
             # subsample in time, grab variables and vertical levels we want
             xds = self.subsample_dataset(all_xds, new_time=new_time)
-            if download_data:
-                xds.to_zarr(local_data_path, append_dim="time" if os.path.exists(local_data_path) else None)
 
+            # load into RAM
             xds = xds.load();
 
             inputs = []
@@ -364,6 +410,21 @@ class ReplayEmulator:
             for i, (k, b) in enumerate(
                 itertools.product(range(n_optim_steps), range(self.batch_size))
             ):
+
+                if i >= n_max_forecasts:
+                    # If the last batch won't be full, take values from the previous batch and complete it.
+                    # Do this only for training, because in testing mode this process will mess up the output.
+                    # For testing, we will cleanup after prediction using dropna()
+                    def copy_values(ds_list):
+                        mds = ds_list[-self.batch_size].copy()
+                        mds["optim_step"] = [k]
+                        ds_list.append(mds)
+                    if mode != "testing":
+                        copy_values(inputs)
+                        copy_values(targets)
+                        copy_values(forcings)
+                        copy_values(inittimes)
+                    continue
 
                 timestamps_in_this_forecast = pd.date_range(
                     start=forecast_initial_times[i],
@@ -433,37 +494,6 @@ class ReplayEmulator:
         mean_by_level = open_normalization("mean")
         stddev_by_level = open_normalization("std")
         diffs_stddev_by_level = open_normalization("stddiff")
-
-        # hacky, just copying these from graphcast demo to get moving
-        mean_by_level['year_progress'] = 0.49975101137533784
-        mean_by_level['year_progress_sin'] = -0.0019232822626236157
-        mean_by_level['year_progress_cos'] = 0.01172127404282719
-        mean_by_level['day_progress'] = 0.49861110098039113
-        mean_by_level['day_progress_sin'] = -1.0231613285011715e-08
-        mean_by_level['day_progress_cos'] = 2.679492657383283e-08
-
-        stddev_by_level['year_progress'] = 0.29067483157079654
-        stddev_by_level['year_progress_sin'] = 0.7085840482846367
-        stddev_by_level['year_progress_cos'] = 0.7055264413169846
-        stddev_by_level['day_progress'] = 0.28867401335991755
-        stddev_by_level['day_progress_sin'] = 0.7071067811865475
-        stddev_by_level['day_progress_cos'] = 0.7071067888988349
-
-        diffs_stddev_by_level['year_progress'] = 0.024697753562180874
-        diffs_stddev_by_level['year_progress_sin'] = 0.0030342521761048467
-        diffs_stddev_by_level['year_progress_cos'] = 0.0030474038590028816
-        diffs_stddev_by_level['day_progress'] = 0.4330127018922193
-        diffs_stddev_by_level['day_progress_sin'] = 0.9999999974440369
-        diffs_stddev_by_level['day_progress_cos'] = 1.0
-
-        # need to add this one more time since the above hack has
-        # e.g. year_progress  and the sin/cos version, and we just want sin/cos version
-        # note that this can also be deleted once the hack is deleted
-        myvars = list(x for x in self.all_variables if x in mean_by_level)
-        mean_by_level = mean_by_level[myvars]
-        stddev_by_level = stddev_by_level[myvars]
-        diffs_stddev_by_level = diffs_stddev_by_level[myvars]
-
         return mean_by_level, stddev_by_level, diffs_stddev_by_level
 
     def normalization_to_stacked(self, xds, **kwargs):
@@ -581,7 +611,7 @@ class ReplayEmulator:
         for reference.
         """
         children = tuple()
-        aux_data = dict() # in the future could be {"config_filename": self.config_filename}
+        aux_data = {"mpi_rank": self.mpi_rank, "mpi_size": self.mpi_size}
         return (children, aux_data)
 
 

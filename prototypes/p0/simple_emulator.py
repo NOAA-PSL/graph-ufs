@@ -6,13 +6,14 @@ class P0Emulator(ReplayEmulator):
 
     data_url = "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/03h-freq/zarr/fv3.zarr"
     norm_urls = {
-        "mean": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/03h-freq/normalization/mean_by_level.p0.zarr",
-        "std": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/03h-freq/normalization/stddev_by_level.p0.zarr",
-        "stddiff": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/03h-freq/normalization/diffs_stddev_by_level.p0.zarr",
+        "mean": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/fv3.statistics.1993-1997/mean_by_level.zarr",
+        "std": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/fv3.statistics.1993-1997/stddev_by_level.zarr",
+        "stddiff": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/fv3.statistics.1993-1997/diffs_stddev_by_level.zarr",
     }
     wb2_obs_url = "gs://weatherbench2/datasets/era5/1959-2022-6h-64x32_equiangular_conservative.zarr"
 
     local_store_path = "./zarr-stores"
+    no_cache_data = False
 
     # these could be moved to a yaml file later
     # task config options
@@ -48,7 +49,7 @@ class P0Emulator(ReplayEmulator):
 
     # time related
     delta_t = "6h"              # the model time step
-    input_duration = "12h"    # time covered by initial condition(s), note the 1s is necessary for GraphCast code
+    input_duration = "12h"      # time covered by initial condition(s) + delta_t (necessary for GraphCast code)
     target_lead_time = "6h"     # how long is the forecast ... at what point do we compare model to targets
     training_dates = (          # bounds of training data (inclusive)
         "1994-01-01T00",        # start
@@ -85,6 +86,12 @@ class P0Emulator(ReplayEmulator):
     chunks_per_epoch = 1
     steps_per_chunk = None
     checkpoint_chunks = 1
+
+    # others
+    num_gpus = 1
+    log_only_rank0 = False
+    use_jax_distributed = False
+    use_xla_flags = False
 
 tree_util.register_pytree_node(
     P0Emulator,

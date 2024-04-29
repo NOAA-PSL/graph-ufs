@@ -14,10 +14,13 @@ from graphufs import (
     save_checkpoint,
     convert_wb2_format,
     compute_rmse_bias,
+    add_emulator_arguments,
+    set_emulator_options,
+    init_devices,
 )
-from ufs2arco.timer import Timer
 
 from simple_emulator import P0Emulator
+
 
 """
 Script to train and test graphufs over multiple chunks and epochs
@@ -53,57 +56,18 @@ def parse_args():
         dest="id",
         required=False,
         type=int,
-        default=0,
+        default=-1,
         help="ID of neural networks to resume training/testing from.",
     )
 
-    # add options from P0Emulator
-    # Todo: Handle dictionaries
-    for k, v in vars(P0Emulator).items():
-        if not k.startswith("__"):
-            name = "--" + k.replace("_", "-")
-            if v is None:
-                parser.add_argument(
-                    name,
-                    dest=k,
-                    required=False,
-                    type=int,
-                    help=f"{k}: default {v}",
-                )
-            elif isinstance(v, (tuple, list)) and len(v):
-                tp = type(v[0])
-                parser.add_argument(
-                    name,
-                    dest=k,
-                    required=False,
-                    nargs="+",
-                    type=tp,
-                    help=f"{k}: default {v}",
-                )
-            else:
-                parser.add_argument(
-                    name,
-                    dest=k,
-                    required=False,
-                    type=type(v),
-                    default=v,
-                    help=f"{k}: default {v}",
-                )
+    # add arguments from emulator
+    add_emulator_arguments(P0Emulator, parser)
 
     # parse CLI args
     args = parser.parse_args()
 
     # override options in emulator class by those from CLI
-    for arg in vars(args):
-        value = getattr(args, arg)
-        if value is not None:
-            arg_name = arg.replace("-", "_")
-            if hasattr(P0Emulator, arg_name):
-                stored = getattr(P0Emulator, arg_name)
-                if stored is not None:
-                    attr_type = type(stored)
-                    value = attr_type(value)
-                setattr(P0Emulator, arg_name, value)
+    set_emulator_options(P0Emulator, args)
 
     return args
 
@@ -113,20 +77,15 @@ if __name__ == "__main__":
     # parse arguments
     args = parse_args()
 
-    # turn off absl warnings
-    logging.getLogger("absl").setLevel(logging.CRITICAL)
-
-    # initialize emulator and open dataset
-    walltime = Timer()
-    localtime = Timer()
-
     # initialize emulator
     gufs = P0Emulator()
+
+    # for multi-gpu training
+    init_devices(gufs)
 
     # data generators
     generator = DataGenerator(
         emulator=gufs,
-        download_data=True,
         n_optim_steps=gufs.steps_per_chunk,
         mode="testing" if args.test else "training",
     )
@@ -136,18 +95,20 @@ if __name__ == "__main__":
     ckpt_id = args.id
     ckpt_path = f"{checkpoint_dir}/model_{ckpt_id}.npz"
 
-    if os.path.exists(ckpt_path):
-        localtime.start(f"Loading weights: {ckpt_path}")
+    if os.path.exists(ckpt_path) and args.id >= 0:
+        logging.info(f"Loading weights: {ckpt_path}")
         params, state = load_checkpoint(ckpt_path)
     else:
-        localtime.start("Initializing Optimizer and Parameters")
+        logging.info("Initializing Optimizer and Parameters")
         data = generator.get_data()  # just to figure out shapes
         params, state = init_model(gufs, data)
-    localtime.stop()
+        loss_name = f"{gufs.local_store_path}/loss.nc"
+        if os.path.exists(loss_name):
+            os.remove(loss_name)
 
     # training
     if not args.test:
-        walltime.start("Starting Training")
+        logging.info("Starting Training")
 
         # create checkpoint directory
         if not os.path.exists(checkpoint_dir):
@@ -158,7 +119,7 @@ if __name__ == "__main__":
         # training loop
         for e in range(gufs.num_epochs):
             for c in range(gufs.chunks_per_epoch):
-                print(f"Training on epoch {e} and chunk {c}")
+                logging.info(f"Training on epoch {e} and chunk {c}")
 
                 # get chunk of data in parallel with NN optimization
                 generator.generate()
@@ -185,14 +146,13 @@ if __name__ == "__main__":
             if e != gufs.num_epochs - 1:
                 generator = DataGenerator(
                     emulator=gufs,
-                    download_data=False,
                     n_optim_steps=gufs.steps_per_chunk,
                     mode="training",
                 )
 
     # testing
     else:
-        walltime.start("Starting Testing")
+        logging.info("Starting Testing")
 
         # create predictions and targets zarr file for WB2
         predictions_zarr_name = f"{gufs.local_store_path}/graphufs_predictions.zarr"
@@ -204,7 +164,7 @@ if __name__ == "__main__":
 
         stats = {}
         for c in range(gufs.chunks_per_epoch):
-            print(f"Testing on chunk {c}")
+            logging.info(f"Testing on chunk {c}")
 
             # get chunk of data in parallel with inference
             generator.generate()
@@ -220,22 +180,22 @@ if __name__ == "__main__":
                 forcing_batches=data["forcings"],
             )
 
-            # Compute rmse and bias comparing targets and predictions
             targets = data["targets"]
             inittimes = data["inittimes"]
+
+            # Compute rmse and bias comparing targets and predictions
             compute_rmse_bias(predictions, targets, stats, c)
 
-            # write chunk by chunk to avoid storing all of it in memory
+            # write predictions chunk by chunk to avoid storing all of it in memory
             predictions = convert_wb2_format(gufs, predictions, inittimes)
+            predictions = predictions.dropna("time")
             predictions.to_zarr(predictions_zarr_name, append_dim="time" if c else None)
 
             # write also targets to compute metrics against it with wb2
             targets = convert_wb2_format(gufs, targets, inittimes)
+            targets = targets.dropna("time")
             targets.to_zarr(targets_zarr_name, append_dim="time" if c else None)
 
-        print("--------- Statistiscs ---------")
+        logging.info("--------- Statistiscs ---------")
         for k, v in stats.items():
-            print(f"{k:32s}: RMSE: {v[0]} BIAS: {v[1]}")
-
-    # total walltime
-    walltime.stop("Total Walltime")
+            logging.info(f"{k:32s}: RMSE: {v[0]} BIAS: {v[1]}")
