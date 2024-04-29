@@ -2,6 +2,7 @@ name: graphufs
 channels:
     - conda-forge
     - nvidia
+    - pytorch
 dependencies:
     - python=3.11
 # Basics
@@ -44,3 +45,7 @@ dependencies:
     - xesmf
 # legit progress bar
     - tqdm
+# StackedGraphCast
+    - pytorch
+    - torchvision
+    - xbatcher
