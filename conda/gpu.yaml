@@ -49,3 +49,4 @@ dependencies:
     - pytorch
     - torchvision
     - xbatcher
+    - pytest
