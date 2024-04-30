@@ -1,4 +1,3 @@
-import dataclasses
 import xarray as xr
 
 from torch.utils.data import Dataset as TorchDataset
@@ -108,12 +107,9 @@ class GraphUFSDataset(TorchDataset):
     def get_xarrays(self, idx : int):
         sample = self.get_xda(idx)
 
-        kw = {k:v for k,v in dataclasses.asdict(self.emulator.task_config).items() if k not in ("latitude", "longitude")}
-
         sample_input, sample_target, sample_forcing = extract_inputs_targets_forcings(
             sample,
-            target_lead_times=self.emulator.target_lead_time,
-            **kw,
+            **self.emulator.extract_kwargs,
         )
         sample_input = sample_input.expand_dims({"batch": [idx]})
         sample_target = sample_target.expand_dims({"batch": [idx]})

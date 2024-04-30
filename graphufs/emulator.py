@@ -122,15 +122,27 @@ class ReplayEmulator:
             radius_query_fraction_edge_length=self.radius_query_fraction_edge_length,
             mesh2grid_edge_normalization_factor=self.mesh2grid_edge_normalization_factor,
         )
-        self.task_config = TaskConfig(
-            input_variables=self.input_variables,
-            target_variables=self.target_variables,
-            forcing_variables=self.forcing_variables,
-            pressure_levels=levels,
-            input_duration=self.input_duration,
-            longitude=self.longitude,
-            latitude=self.latitude,
-        )
+        # try/except logic to support original graphcast.graphcast.TaskConfig
+        # since I couldn't get inspect.getfullargspec to work
+        try:
+            self.task_config = TaskConfig(
+                input_variables=self.input_variables,
+                target_variables=self.target_variables,
+                forcing_variables=self.forcing_variables,
+                pressure_levels=levels,
+                input_duration=self.input_duration,
+                longitude=self.longitude,
+                latitude=self.latitude,
+            )
+        except ValueError:
+            self.task_config = TaskConfig(
+                input_variables=self.input_variables,
+                target_variables=self.target_variables,
+                forcing_variables=self.forcing_variables,
+                pressure_levels=levels,
+                input_duration=self.input_duration,
+            )
+
 
         self.all_variables = tuple(set(
             self.input_variables + self.target_variables + self.forcing_variables
@@ -167,6 +179,12 @@ class ReplayEmulator:
     def n_target(self):
         """Number of steps in the target, doesn't include initial condition(s)"""
         return self.target_lead_time // self.delta_t
+
+    @property
+    def extract_kwargs(self):
+        kw = {k: v for k, v in dataclasses.asdict(self.task_config).items() if k not in ("latitude", "longitude")}
+        kw["target_lead_times"] = self.target_lead_time
+        return kw
 
 
     def open_dataset(self, **kwargs):
@@ -251,11 +269,14 @@ class ReplayEmulator:
 
         bds["time"] = (bds.datetime - bds.datetime[0])
         bds = bds.swap_dims({"datetime": "time"}).reset_coords()
-        bds = bds.set_coords(["datetime"])
         if batch_index is not None:
             bds = bds.expand_dims({
                 "batch": [batch_index],
             })
+
+        # note that this has to be after batch_index is set for variables
+        # added in graphcast.data_utils.add_derived_vars to have the right dimensionality
+        bds = bds.set_coords(["datetime"])
 
         # cftime is a data_var not a coordinate, but if it's made to be a coordinate
         # it causes crazy JAX problems when making predictions with graphufs.training.run_forward.apply
@@ -358,7 +379,7 @@ class ReplayEmulator:
             # figure out duration of IC(s), forecast, all of training
             data_duration = end - start
 
-            n_max_forecasts = (training_duration - input_duration) // delta_t
+            n_max_forecasts = (data_duration - self.input_duration) // self.delta_t
             n_max_optim_steps = math.ceil(n_max_forecasts / self.batch_size)
             n_optim_steps = n_max_optim_steps if n_optim_steps is None else n_optim_steps
             n_forecasts = n_optim_steps * self.batch_size
@@ -439,8 +460,7 @@ class ReplayEmulator:
 
                 this_input, this_target, this_forcing = extract_inputs_targets_forcings(
                     batch,
-                    target_lead_times=self.target_lead_time,
-                    **dataclasses.asdict(self.task_config),
+                    **self.extract_kwargs,
                 )
 
                 # fix this later for batch_size != 1
