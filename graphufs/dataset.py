@@ -51,7 +51,7 @@ class GraphUFSDataset(TorchDataset):
 
         X = self._stack(sample_input, sample_forcing)
         y = self._stack(sample_target)
-        return tree_map(lambda x: x, (X, y))
+        return X, y
 
     @staticmethod
     def _xstack(a, b=None):
