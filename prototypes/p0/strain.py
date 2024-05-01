@@ -54,7 +54,7 @@ if __name__ == "__main__":
         batch_size=gufs.batch_size,
         shuffle=True,
         collate_fn=collate_fn,
-        drop_last=False,
+        drop_last=True,
     )
 
     # NOTE: I could really clean up
