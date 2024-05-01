@@ -105,17 +105,14 @@ def optimize(
             this doesn't have gradient info, but we could add that
     """
 
-    assert last_input_channel_mapping is not None
     opt_state = optimizer.init(params)
     num_gpus = emulator.num_gpus
     mpi_size = emulator.mpi_size
     use_jax_distributed = emulator.use_jax_distributed
     if use_jax_distributed:
         raise NotImplementedError
-    if num_gpus > 2:
+    if num_gpus > 1:
         raise NotImplementedError
-
-
 
     @hk.transform_with_state
     def loss_fn(inputs, targets):
@@ -182,6 +179,21 @@ def optimize(
             target_batch=first_target,
         )
         block_until_ready(x)
+
+        # Unclear if it's safe to assume whether we'll have the drop_last attr or not
+        if not generator.drop_last:
+            # this is necessary to let the JIT compiler see the last batch,
+            # which may be a different size
+            # I'm not sure if this pulls everything into memory though ...
+            *_, (last_input, last_target) = iter(generator)
+            y, *_ = optimize.optim_step_jitted(
+                params=params,
+                state=state,
+                opt_state=opt_state,
+                input_batch=last_input,
+                target_batch=last_target,
+            )
+            block_until_ready(y)
         logging.info("Finished jitting optim_step")
 
     else:
@@ -197,7 +209,7 @@ def optimize(
     for k, (input_batches, target_batches) in enumerate(generator):
 
         # call optimize
-        params, loss, diagnostics, opt_state, grads = optimize.optim_step_jitted(
+        params, loss, diagnostics, _, grads = optimize.optim_step_jitted(
             params=params,
             state=state,
             opt_state=opt_state,

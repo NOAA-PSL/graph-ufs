@@ -1,6 +1,9 @@
+import numpy as np
 import xarray as xr
 
+from jax.tree_util import tree_map
 from torch.utils.data import Dataset as TorchDataset
+from torch.utils.data import default_collate
 
 from xbatcher import BatchGenerator
 
@@ -48,7 +51,7 @@ class GraphUFSDataset(TorchDataset):
 
         X = self._stack(sample_input, sample_forcing)
         y = self._stack(sample_target)
-        return X, y
+        return tree_map(lambda x: x, (X, y))
 
     @staticmethod
     def _xstack(a, b=None):
@@ -137,3 +140,6 @@ class GraphUFSDataset(TorchDataset):
         X = self._xstack(sample_input, sample_forcing)
         y = self._xstack(sample_target)
         return X, y
+
+def collate_fn(batch):
+    return tree_map(np.asarray, default_collate(batch))

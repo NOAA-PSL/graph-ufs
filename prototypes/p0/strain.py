@@ -21,9 +21,9 @@ from graphufs import (
     set_emulator_options,
     GraphUFSDataset,
     init_devices,
+    collate_fn,
 )
 from torch.utils.data import DataLoader as TorchDataLoader
-from torch.utils.data import default_collate
 import jax
 
 from simple_emulator import P0Emulator
@@ -53,7 +53,8 @@ if __name__ == "__main__":
         training_data,
         batch_size=gufs.batch_size,
         shuffle=True,
-        collate_fn=lambda batch : jax.tree_util.tree_map(np.asarray, default_collate(batch)),
+        collate_fn=collate_fn,
+        drop_last=False,
     )
 
     # NOTE: I could really clean up
@@ -62,6 +63,7 @@ if __name__ == "__main__":
 
     # compute loss function weights once
     weights = gufs.calc_loss_weights(training_data)
+    jax.device_put(weights) # this doesn't seem necessary
 
     # this is tricky, because it needs to be "rebuildable" in JAX's eyes
     # so better to just explicitly pass it around
