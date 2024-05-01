@@ -1,17 +1,20 @@
+"""
+Implementations of Torch Dataset and DataLoader
+"""
 import numpy as np
 import xarray as xr
 
 from jax.tree_util import tree_map
 from torch.utils.data import Dataset as TorchDataset
+from torch.utils.data import DataLoader as TorchDataLoader
 from torch.utils.data import default_collate
 
 from xbatcher import BatchGenerator
 
 from graphcast.data_utils import extract_inputs_targets_forcings
 from graphcast.model_utils import dataset_to_stacked
-from graphcast.xarray_jax import unwrap
 
-class GraphUFSDataset(TorchDataset):
+class Dataset(TorchDataset):
 
     @property
     def xds(self):
@@ -78,7 +81,7 @@ class GraphUFSDataset(TorchDataset):
             result (chex.Array)
         """
         xresult = self._xstack(a, b)
-        return xresult.data.squeeze()
+        return xresult.values.squeeze()
 
     def _open_dataset(self):
 
@@ -140,6 +143,12 @@ class GraphUFSDataset(TorchDataset):
         X = self._xstack(sample_input, sample_forcing)
         y = self._xstack(sample_target)
         return X, y
+
+class DataLoader(TorchDataLoader):
+    def __init__(self, *args, **kwargs):
+        if "collate_fn" not in kwargs:
+            kwargs["collate_fn"] = collate_fn
+        super().__init__(*args, **kwargs)
 
 def collate_fn(batch):
     return tree_map(np.asarray, default_collate(batch))

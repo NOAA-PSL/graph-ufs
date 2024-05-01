@@ -8,8 +8,6 @@ from shutil import rmtree
 import haiku as hk
 import jax
 from jax.tree_util import tree_map
-from torch.utils.data import DataLoader as TorchDataLoader
-from torch.utils.data import default_collate
 
 from graphcast.model_utils import dataset_to_stacked, lat_lon_to_leading_axes
 from graphcast.xarray_tree import map_structure
@@ -24,7 +22,7 @@ from graphcast.stacked_casting import StackedBfloat16Cast
 from graphcast.stacked_normalization import StackedInputsAndResiduals
 
 from p0 import P0Emulator
-from graphufs.dataset import GraphUFSDataset
+from graphufs.torch import Dataset, DataLoader
 from graphufs.utils import get_channel_index, get_last_input_mapping
 
 _idx = 0
@@ -97,7 +95,7 @@ def p0():
 
 @pytest.fixture(scope="module")
 def sample_dataset(p0):
-    yield GraphUFSDataset(p0, mode="training")
+    yield Dataset(p0, mode="training")
 
 @pytest.fixture(scope="module")
 def sample_stacked_data(sample_dataset):
@@ -105,7 +103,8 @@ def sample_stacked_data(sample_dataset):
 
 @pytest.fixture(scope="module")
 def sample_xdata(sample_dataset):
-    yield sample_dataset.get_xarrays(_idx)
+    xi, xt, xf = sample_dataset.get_xarrays(_idx)
+    yield xi.load(), xt.load(), xf.load()
 
 @pytest.fixture(scope="module")
 def parameters(p0, sample_dataset, sample_stacked_data):
@@ -143,15 +142,17 @@ def setup(p0, sample_dataset, sample_stacked_data, sample_xdata, parameters):
 def setup_batch(p0, sample_dataset, sample_xdata, parameters):
 
     # stacked_data
-    dl = TorchDataLoader(
+    dl = DataLoader(
         sample_dataset,
         batch_size=_batch_size,
-        collate_fn=lambda batch : tree_map(np.asarray, default_collate(batch)),
     )
     inputs, targets = next(iter(dl))
 
     # get a batch of xarray data
     xinputs, xtargets, xforcings = sample_dataset.get_batch_of_xarrays(range(_batch_size))
+    xinputs.load()
+    xtargets.load()
+    xforcings.load()
 
     # initialize parameters and state
     params, state, last_input_channel_mapping = parameters

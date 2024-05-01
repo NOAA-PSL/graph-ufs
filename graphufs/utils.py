@@ -4,11 +4,6 @@ import threading
 from graphcast import checkpoint, graphcast
 import xarray as xr
 
-from ufs2arco.timer import Timer
-
-from .dataset import GraphUFSDataset
-
-
 def get_chunk_data(generator, data: dict):
     """Get multiple training batches.
 
@@ -196,15 +191,15 @@ def get_channel_index(xds, preserved_dims=("batch", "lat", "lon")):
         channel = i+1
     return mapping
 
-def get_last_input_mapping(gds : GraphUFSDataset):
-    """Use a GraphUFSDataset object to pull some sample data, use that tofigure out mapping between
+def get_last_input_mapping(gds):
+    """Use a graphufs.torch.Dataset object to pull some sample data, use that tofigure out mapping between
     expanded variable space and stacked channel space.
     After we get the index mappings from get_channel_index, we need to loop through the
     targets and figure out the channel correpsonding to the last time step for each variable,
     also handling other variables like vertical level
 
     Inputs:
-        gds (GraphUFSDataset): view of the data
+        gds (graphufs.torch.Dataset): view of the data
 
     Returns:
         mapper (dict): keys = targets logical index (0 -> n_target_channels-1) and

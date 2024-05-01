@@ -11,6 +11,8 @@ from graphufs.stacked_training import (
     optimize,
     init_model,
 )
+from graphufs.torch import Dataset, DataLoader
+
 from graphufs.utils import get_last_input_mapping
 from graphufs import (
     load_checkpoint,
@@ -19,9 +21,7 @@ from graphufs import (
     compute_rmse_bias,
     add_emulator_arguments,
     set_emulator_options,
-    GraphUFSDataset,
     init_devices,
-    collate_fn,
 )
 from torch.utils.data import DataLoader as TorchDataLoader
 import jax
@@ -47,23 +47,18 @@ if __name__ == "__main__":
     init_devices(gufs)
 
     # data generators
-    training_data = GraphUFSDataset(gufs, mode="training")
+    training_data = Dataset(gufs, mode="training")
+    # this loads the data in ... suboptimal I know
     training_data.xds.load();
-    generator = TorchDataLoader(
+    generator = DataLoader(
         training_data,
         batch_size=gufs.batch_size,
         shuffle=True,
-        collate_fn=collate_fn,
         drop_last=True,
     )
 
-    # NOTE: I could really clean up
-    # - what is an emulator attribute and what is a dataset attribute
-    # - how these are provided to the model/optimize
-
     # compute loss function weights once
     weights = gufs.calc_loss_weights(training_data)
-    jax.device_put(weights) # this doesn't seem necessary
 
     # this is tricky, because it needs to be "rebuildable" in JAX's eyes
     # so better to just explicitly pass it around

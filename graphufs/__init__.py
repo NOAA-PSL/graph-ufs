@@ -18,4 +18,3 @@ from .evaluation import (
     compute_rmse_bias,
 )
 from .statistics import StatisticsComputer, add_derived_vars
-from .dataset import GraphUFSDataset, collate_fn

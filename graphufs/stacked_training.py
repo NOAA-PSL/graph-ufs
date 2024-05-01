@@ -38,8 +38,6 @@ from graphcast import rollout
 
 from tqdm import tqdm
 
-from graphufs import GraphUFSDataset
-
 try:
     from mpi4py import MPI
     import mpi4jax
