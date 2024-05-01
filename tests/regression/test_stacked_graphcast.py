@@ -108,16 +108,13 @@ def sample_xdata(sample_dataset):
     yield sample_dataset.get_xarrays(_idx)
 
 @pytest.fixture(scope="module")
-def parameters(p0, sample_stacked_data, sample_xdata):
+def parameters(p0, sample_dataset, sample_stacked_data):
 
     # get the data
     inputs, _ = sample_stacked_data
-    xinputs, xtargets, xforcings = sample_xdata
 
     # get the input mapping
-    input_idx = get_channel_index(xinputs)
-    target_idx = get_channel_index(xtargets)
-    last_input_channel_mapping = get_last_input_mapping(input_idx, target_idx)
+    last_input_channel_mapping = get_last_input_mapping(sample_dataset)
 
     init = jax.jit( stacked_graphcast.init, static_argnames=["do_bfloat16", "do_inputs_and_residuals"] )
     params, state = init(
@@ -129,22 +126,17 @@ def parameters(p0, sample_stacked_data, sample_xdata):
         rng=jax.random.PRNGKey(0),
     )
 
-    yield params, state
+    yield params, state, last_input_channel_mapping
 
 @pytest.fixture(scope="module")
-def setup(p0, sample_stacked_data, sample_xdata, parameters):
+def setup(p0, sample_dataset, sample_stacked_data, sample_xdata, parameters):
 
     # get the data
     inputs, targets = sample_stacked_data
     xinputs, xtargets, xforcings = sample_xdata
 
-    # get the input mapping
-    input_idx = get_channel_index(xinputs)
-    target_idx = get_channel_index(xtargets)
-    last_input_channel_mapping = get_last_input_mapping(input_idx, target_idx)
-
     # initialize parameters and state
-    params, state = parameters
+    params, state, last_input_channel_mapping = parameters
     yield params, state, inputs, targets, xinputs, xtargets, xforcings, last_input_channel_mapping
 
 @pytest.fixture(scope="module")
@@ -161,13 +153,8 @@ def setup_batch(p0, sample_dataset, sample_xdata, parameters):
     # get a batch of xarray data
     xinputs, xtargets, xforcings = sample_dataset.get_batch_of_xarrays(range(_batch_size))
 
-    # get the input mapping
-    input_idx = get_channel_index(xinputs)
-    target_idx = get_channel_index(xtargets)
-    last_input_channel_mapping = get_last_input_mapping(input_idx, target_idx)
-
     # initialize parameters and state
-    params, state = parameters
+    params, state, last_input_channel_mapping = parameters
     yield params, state, inputs, targets, xinputs, xtargets, xforcings, last_input_channel_mapping
 
 
@@ -261,7 +248,7 @@ class TestStackedGraphCast():
         print_stats(test, expected)
         assert_allclose(test, expected, atol=atol)
 
-    def test_loss(self, p0, setup, setup_batch, do_batch, do_bfloat16, do_inputs_and_residuals, atol):
+    def test_loss(self, p0, sample_dataset, setup, setup_batch, do_batch, do_bfloat16, do_inputs_and_residuals, atol):
 
         if do_batch:
             test_params, test_state, inputs, targets, xinputs, xtargets, xforcings, last_input_channel_mapping = setup_batch
@@ -272,7 +259,7 @@ class TestStackedGraphCast():
         expected_state = test_state.copy()
 
         # run stacked graphcast
-        weights = p0.calc_loss_weights(xtargets=xtargets, targets=targets)
+        weights = p0.calc_loss_weights(sample_dataset)
         sgc_loss = jax.jit( stacked_loss.apply, static_argnames=["do_bfloat16", "do_inputs_and_residuals"]  )
         (test_loss, test_diagnostics), _ = sgc_loss(
             emulator=p0,

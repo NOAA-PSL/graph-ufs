@@ -33,7 +33,7 @@ class GraphUFSDataset(TorchDataset):
             },
             # adding batch_dims does nothing
             input_overlap={
-                "time": emulator.n_input,
+                "datetime": emulator.n_input,
             },
             preload_batch=False,
         )
@@ -101,7 +101,6 @@ class GraphUFSDataset(TorchDataset):
     def get_xda(self, idx : int):
         sample = self.sample_generator[idx]
         sample = self._preprocess(sample)
-        sample = sample.load()
         return sample
 
     def get_xarrays(self, idx : int):

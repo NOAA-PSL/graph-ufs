@@ -6,6 +6,8 @@ import xarray as xr
 
 from ufs2arco.timer import Timer
 
+from .dataset import GraphUFSDataset
+
 
 def get_chunk_data(generator, data: dict):
     """Get multiple training batches.
@@ -194,18 +196,25 @@ def get_channel_index(xds, preserved_dims=("batch", "lat", "lon")):
         channel = i+1
     return mapping
 
-def get_last_input_mapping(inputs_index, targets_index):
-    """After we get the index mappings from get_channel_index, we need to loop through the
+def get_last_input_mapping(gds : GraphUFSDataset):
+    """Use a GraphUFSDataset object to pull some sample data, use that tofigure out mapping between
+    expanded variable space and stacked channel space.
+    After we get the index mappings from get_channel_index, we need to loop through the
     targets and figure out the channel correpsonding to the last time step for each variable,
     also handling other variables like vertical level
 
     Inputs:
-        inputs_index, targets_index (dict): computed from get_channel_index
+        gds (GraphUFSDataset): view of the data
 
     Returns:
         mapper (dict): keys = targets logical index (0 -> n_target_channels-1) and
             values are the logical indices corresponding to input channels
     """
+
+    # get a sample of the data to work with
+    xinputs, xtargets, _ = gds.get_xarrays(0)
+    inputs_index = get_channel_index(xinputs)
+    targets_index = get_channel_index(xtargets)
 
     # figure out n_time
     n_time = 0

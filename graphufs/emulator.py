@@ -17,7 +17,7 @@ from graphcast.data_utils import extract_inputs_targets_forcings
 from graphcast.model_utils import dataset_to_stacked
 from graphcast.losses import normalized_level_weights, normalized_latitude_weights
 
-from .utils import get_channel_index
+from .utils import get_channel_index, get_last_input_mapping
 
 class ReplayEmulator:
     """An emulator based on UFS Replay data. This manages all model configuration settings and normalization fields. Currently it is designed to be inherited for a specific use-case, and this could easily be generalized to read in settings via a configuration file (yaml, json, etc). Be sure to register any inherited class as a pytree for it to work with JAX.
@@ -93,6 +93,9 @@ class ReplayEmulator:
     log_only_rank0 = None            # log only messages from rank 0
     use_jax_distributed = None       # Use jax's distributed mechanism, no need for manula mpi4jax calls
     use_xla_flags = None             # Use recommended flags for XLA and NCCL https://jax.readthedocs.io/en/latest/gpu_performance_tips.html
+
+    # for stacked graphcast
+    last_input_channel_mapping = None
 
     def __init__(self, mpi_rank=None, mpi_size=None):
 
@@ -546,7 +549,10 @@ class ReplayEmulator:
         return input_norms.data, target_norms.data
 
 
-    def calc_loss_weights(self, xtargets, targets):
+    def calc_loss_weights(self, gds):
+
+        _, xtargets, _ = gds.get_xarrays(0)
+        _, targets = gds[0]
 
         if targets.ndim == 3:
             weights = np.ones_like(targets)
@@ -633,6 +639,9 @@ class ReplayEmulator:
         children = tuple()
         aux_data = {"mpi_rank": self.mpi_rank, "mpi_size": self.mpi_size}
         return (children, aux_data)
+
+    def set_last_input_mapping(self, gds):
+        self.last_input_channel_mapping = get_last_input_mapping(gds)
 
 
     @classmethod
