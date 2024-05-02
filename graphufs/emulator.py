@@ -103,7 +103,7 @@ class ReplayEmulator:
             warnings.warng("ReplayEmulator.__init__: no local_store_path set, data will always be accessed remotely. Proceed with patience.")
 
         if any(x not in self.input_variables for x in self.target_variables):
-            raise NotImplementedError(f"StackedGraphCast cannot predict target variables that are not also inputs")
+            raise NotImplementedError(f"GraphUFS cannot predict target variables that are not also inputs")
 
         self.mpi_rank = mpi_rank
         self.mpi_size = mpi_size
