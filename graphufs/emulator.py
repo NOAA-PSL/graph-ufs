@@ -119,7 +119,6 @@ class ReplayEmulator:
                 method="nearest",
             ).values
         )
-        print(self.levels)
         self.model_config = ModelConfig(
             resolution=self.resolution,
             mesh_size=self.mesh_size,
