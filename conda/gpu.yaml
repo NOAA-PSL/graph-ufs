@@ -28,7 +28,7 @@ dependencies:
     - chex
     - google-colab
     - dm-haiku
-    - jax
+    - jax>=0.4.25
     - jaxlib=*=*cuda*
     - cuda-nvcc
     - optax

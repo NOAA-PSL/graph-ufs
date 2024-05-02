@@ -7,7 +7,6 @@ from shutil import rmtree
 
 import haiku as hk
 import jax
-from jax.tree_util import tree_map
 
 from graphcast.model_utils import dataset_to_stacked, lat_lon_to_leading_axes
 from graphcast.xarray_tree import map_structure
