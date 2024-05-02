@@ -41,8 +41,9 @@ class ReplayEmulator:
     input_variables = tuple()
     target_variables = tuple()
     forcing_variables = tuple()
-    all_variables = tuple() # this is created in __init__
+    all_variables = tuple()     # this is created in __init__
     pressure_levels = tuple()
+    levels = list()             # created in __init__, has exact pfull level values
     latitude = tuple()
     longitude = tuple()
 
@@ -112,10 +113,13 @@ class ReplayEmulator:
         latitude, longitude = self._get_replay_grid(self.resolution)
         self.latitude = tuple(float(x) for x in latitude)
         self.longitude = tuple(float(x) for x in longitude)
-        levels = pfull.sel(
-            pfull=list(self.pressure_levels),
-            method="nearest",
+        self.levels = list(
+            pfull.sel(
+                pfull=list(self.pressure_levels),
+                method="nearest",
+            ).values
         )
+        print(self.levels)
         self.model_config = ModelConfig(
             resolution=self.resolution,
             mesh_size=self.mesh_size,
@@ -132,7 +136,7 @@ class ReplayEmulator:
                 input_variables=self.input_variables,
                 target_variables=self.target_variables,
                 forcing_variables=self.forcing_variables,
-                pressure_levels=levels,
+                pressure_levels=tuple(self.levels),
                 input_duration=self.input_duration,
                 longitude=self.longitude,
                 latitude=self.latitude,
@@ -142,7 +146,7 @@ class ReplayEmulator:
                 input_variables=self.input_variables,
                 target_variables=self.target_variables,
                 forcing_variables=self.forcing_variables,
-                pressure_levels=levels,
+                pressure_levels=tuple(self.levels),
                 input_duration=self.input_duration,
             )
 
@@ -233,7 +237,7 @@ class ReplayEmulator:
         """
 
         # select our vertical levels
-        xds = xds.sel(pfull=list(self.pressure_levels), method="nearest")
+        xds = xds.sel(pfull=self.levels)
 
         # only grab variables we care about
         myvars = list(x for x in self.all_variables if x in xds)
@@ -508,7 +512,7 @@ class ReplayEmulator:
                 xds = xr.open_zarr(self.norm_urls[component], **kwargs)
                 myvars = list(x for x in self.all_variables if x in xds)
                 xds = xds[myvars]
-                xds = xds.sel(pfull=list(self.pressure_levels), method="nearest")
+                xds = xds.sel(pfull=self.levels)
                 xds = xds.load()
                 xds = xds.rename({"pfull": "level"})
                 xds.to_zarr(local_path)
