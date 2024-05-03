@@ -27,7 +27,7 @@ dependencies:
     - chex
     - google-colab
     - dm-haiku
-    - jax>=0.4.25
+    - jax
     - jraph
     - pandas
     - rtree
