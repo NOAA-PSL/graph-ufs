@@ -4,6 +4,7 @@ Same as training.py, but for StackedGraphCast
 
 import os
 import logging
+import warnings
 from functools import partial
 import numpy as np
 import xarray as xr
@@ -42,7 +43,7 @@ try:
     from mpi4py import MPI
     import mpi4jax
 except:
-    logging.warning("Import failed for either mpi4py or mpi4jax.")
+    warnings.warn("Import failed for either mpi4py or mpi4jax.")
 
 
 def construct_wrapped_graphcast(emulator, last_input_channel_mapping):

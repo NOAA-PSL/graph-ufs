@@ -15,6 +15,7 @@ Regarding pytree, see the last few methods and lines of simple_emulatory.py, fol
 
 import os
 import logging
+import warnings
 from functools import partial
 import numpy as np
 import xarray as xr
@@ -55,7 +56,7 @@ try:
     from mpi4py import MPI
     import mpi4jax
 except:
-    logging.warning("Import failed for either mpi4py or mpi4jax.")
+    warnings.warn("Import failed for either mpi4py or mpi4jax.")
 
 
 def construct_wrapped_graphcast(emulator):
@@ -140,7 +141,7 @@ def optimize(
             lambda x: unwrap_data(x.mean(), require_jax=True), (loss, diagnostics)
         )
 
-    
+
     def optim_step(
         params,
         state,

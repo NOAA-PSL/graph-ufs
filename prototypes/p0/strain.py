@@ -34,7 +34,7 @@ if __name__ == "__main__":
     # logging isn't working for me on PSL, no idea why
     logging.basicConfig(
         stream=sys.stdout,
-        level=logging.DEBUG,
+        level=logging.INFO,
     )
 
     # parse arguments

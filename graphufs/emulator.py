@@ -101,7 +101,7 @@ class ReplayEmulator:
     def __init__(self, mpi_rank=None, mpi_size=None):
 
         if self.local_store_path is None:
-            warnings.warng("ReplayEmulator.__init__: no local_store_path set, data will always be accessed remotely. Proceed with patience.")
+            warnings.warn("ReplayEmulator.__init__: no local_store_path set, data will always be accessed remotely. Proceed with patience.")
 
         if any(x not in self.input_variables for x in self.target_variables):
             raise NotImplementedError(f"GraphUFS cannot predict target variables that are not also inputs")
