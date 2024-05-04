@@ -303,7 +303,9 @@ def optimize(
 
     n_steps = input_batches["optim_step"].size
     n_steps_valid = input_batches_valid["optim_step"].size
-    assert n_steps_valid <= n_steps, f"Number of validation steps ({n_steps_valid}) must be less than or equal to the number of training steps ({n_steps})"
+    assert (
+        n_steps_valid <= n_steps
+    ), f"Number of validation steps ({n_steps_valid}) must be less than or equal to the number of training steps ({n_steps})"
     n_steps_valid_inc = n_steps // n_steps_valid
 
     if emulator.mpi_rank == 0:
@@ -317,6 +319,10 @@ def optimize(
     i_batches_valid = input_batches_valid.isel(optim_step=sl).copy(deep=True)
     t_batches_valid = target_batches_valid.isel(optim_step=sl).copy(deep=True)
     f_batches_valid = forcing_batches_valid.isel(optim_step=sl).copy(deep=True)
+
+    loss_avg = 0
+    loss_valid_avg = 0
+    mean_grad_avg = 0
 
     for k in range(0, n_steps, num_gpus):
         # When the number of batches is not evenly divisible by num_gpus
@@ -390,9 +396,13 @@ def optimize(
             forcing_batches_valid=None if skip_valid else f_batches_valid,
         )
 
-        # when we don't compute validation, set to previous value 
+        # when we don't compute validation, set to previous value
         if loss_valid is None:
             loss_valid = prev_loss_valid
+
+        # average loss per chunk
+        loss_avg += loss
+        loss_valid_avg += loss_valid
 
         # update progress bar from rank 0
         if emulator.mpi_rank == 0:
@@ -407,12 +417,23 @@ def optimize(
                     tree_util.tree_map(lambda x: np.abs(x).mean(), grads)
                 )[0]
             )
+            mean_grad_avg += mean_grad
+
             progress_bar.set_description(
                 f"[{emulator.mpi_rank}] loss = {loss:.5f}, val_loss = {loss_valid:.5f}, mean(|grad|) = {mean_grad:.8f}"
             )
             progress_bar.update(num_gpus)
 
     if emulator.mpi_rank == 0:
+        # update progress bar one last time with average loss/grad values per chunk
+        N = len(loss_values)
+        loss_avg /= N
+        loss_valid_avg /= N
+        mean_grad_avg /= N
+
+        progress_bar.set_description(
+            f"[{emulator.mpi_rank}] loss = {loss_avg:.5f}, val_loss = {loss_valid_avg:.5f}, mean(|grad|) = {mean_grad_avg:.8f}"
+        )
         progress_bar.close()
 
     # save losses for each batch
