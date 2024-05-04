@@ -189,19 +189,22 @@ def optimize(
             )
 
             # validation pass
-            (loss_valid, _), _ = value_and_grad(_aux, has_aux=True)(
-                params,
-                state,
-                inputs_valid,
-                targets_valid,
-                forcings_valid,
-            )
+            loss_valid = None
+            if inputs_valid is not None:
+                (loss_valid, _), _ = value_and_grad(_aux, has_aux=True)(
+                    params,
+                    state,
+                    inputs_valid,
+                    targets_valid,
+                    forcings_valid,
+                )
 
             # aggregate across local devices
             if num_gpus > 1:
                 grads = pmean(grads, axis_name="optim_step")
                 loss = pmean(loss, axis_name="optim_step")
-                loss_valid = pmean(loss_valid, axis_name="optim_step")
+                if loss_valid is not None:
+                    loss_valid = pmean(loss_valid, axis_name="optim_step")
                 diagnostics = pmean(diagnostics, axis_name="optim_step")
                 next_state = pmean(next_state, axis_name="optim_step")
 
@@ -218,7 +221,8 @@ def optimize(
                     return tree_util.tree_map(lambda x: aggregate(x), d)
 
                 loss = aggregate_across_nodes(loss)
-                loss_valid = aggregate_across_nodes(loss_valid)
+                if loss_valid is not None:
+                    loss_valid = aggregate_across_nodes(loss_valid)
                 grads = aggregate_across_nodes(grads)
                 diagnostics = aggregate_across_nodes(diagnostics)
                 next_state = aggregate_across_nodes(next_state)
@@ -243,7 +247,8 @@ def optimize(
                 return tree_util.tree_map(lambda x: x[0], d)
 
             loss = remove_first_dim(loss)
-            loss_valid = remove_first_dim(loss_valid)
+            if loss_valid is not None:
+                loss_valid = remove_first_dim(loss_valid)
             grads = remove_first_dim(grads)
             diagnostics = remove_first_dim(diagnostics)
             next_state = remove_first_dim(next_state)
@@ -298,7 +303,8 @@ def optimize(
 
     n_steps = input_batches["optim_step"].size
     n_steps_valid = input_batches_valid["optim_step"].size
-    n_steps = min(n_steps, n_steps_valid)
+    assert n_steps_valid <= n_steps, f"Number of validation steps ({n_steps_valid}) must be less than or equal to the number of training steps ({n_steps})"
+    n_steps_valid_inc = n_steps // n_steps_valid
 
     if emulator.mpi_rank == 0:
         progress_bar = tqdm(total=n_steps, ncols=140, desc="Processing")
@@ -324,14 +330,12 @@ def optimize(
         # is carried out, and sneakly update its values. If you use xarray update/copy etc
         # the cache system somehow notices, and either becomes slow or messes up the result
         # Copying variable values individually avoids both, fast and produces same results as before
+
+        # training batches
         sl = slice(k, k + num_gpus)
         i1_batches = input_batches.isel(optim_step=sl)
         t1_batches = target_batches.isel(optim_step=sl)
         f1_batches = forcing_batches.isel(optim_step=sl)
-
-        i1_batches_valid = input_batches_valid.isel(optim_step=sl)
-        t1_batches_valid = target_batches_valid.isel(optim_step=sl)
-        f1_batches_valid = forcing_batches_valid.isel(optim_step=sl)
 
         for var_name, var in i1_batches.data_vars.items():
             i_batches[var_name] = i_batches[var_name].copy(deep=False, data=var.values)
@@ -340,18 +344,30 @@ def optimize(
         for var_name, var in f1_batches.data_vars.items():
             f_batches[var_name] = f_batches[var_name].copy(deep=False, data=var.values)
 
-        for var_name, var in i1_batches_valid.data_vars.items():
-            i_batches_valid[var_name] = i_batches_valid[var_name].copy(
-                deep=False, data=var.values
-            )
-        for var_name, var in t1_batches_valid.data_vars.items():
-            t_batches_valid[var_name] = t_batches_valid[var_name].copy(
-                deep=False, data=var.values
-            )
-        for var_name, var in f1_batches_valid.data_vars.items():
-            f_batches_valid[var_name] = f_batches_valid[var_name].copy(
-                deep=False, data=var.values
-            )
+        # validation batches
+        if (k % n_steps_valid_inc) == 0:
+            k = k // n_steps_valid_inc
+            sl = slice(k, k + num_gpus)
+            i1_batches_valid = input_batches_valid.isel(optim_step=sl)
+            t1_batches_valid = target_batches_valid.isel(optim_step=sl)
+            f1_batches_valid = forcing_batches_valid.isel(optim_step=sl)
+
+            for var_name, var in i1_batches_valid.data_vars.items():
+                i_batches_valid[var_name] = i_batches_valid[var_name].copy(
+                    deep=False, data=var.values
+                )
+            for var_name, var in t1_batches_valid.data_vars.items():
+                t_batches_valid[var_name] = t_batches_valid[var_name].copy(
+                    deep=False, data=var.values
+                )
+            for var_name, var in f1_batches_valid.data_vars.items():
+                f_batches_valid[var_name] = f_batches_valid[var_name].copy(
+                    deep=False, data=var.values
+                )
+            skip_valid = False
+        else:
+            prev_loss_valid = loss_valid
+            skip_valid = True
 
         # call optimize
         (
@@ -369,10 +385,14 @@ def optimize(
             input_batches=i_batches,
             target_batches=t_batches,
             forcing_batches=f_batches,
-            input_batches_valid=i_batches_valid,
-            target_batches_valid=t_batches_valid,
-            forcing_batches_valid=f_batches_valid,
+            input_batches_valid=None if skip_valid else i_batches_valid,
+            target_batches_valid=None if skip_valid else t_batches_valid,
+            forcing_batches_valid=None if skip_valid else f_batches_valid,
         )
+
+        # when we don't compute validation, set to previous value 
+        if loss_valid is None:
+            loss_valid = prev_loss_valid
 
         # update progress bar from rank 0
         if emulator.mpi_rank == 0:
