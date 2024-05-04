@@ -122,7 +122,8 @@ if __name__ == "__main__":
                 logging.info(f"Training on epoch {e} and chunk {c}")
 
                 # get chunk of data in parallel with NN optimization
-                generator.generate()
+                if gufs.chunks_per_epoch > 1:
+                    generator.generate()
                 data = generator.get_data()
 
                 # optimize
@@ -141,14 +142,6 @@ if __name__ == "__main__":
                     ckpt_id = (e * gufs.chunks_per_epoch + c) // gufs.checkpoint_chunks
                     ckpt_path = f"{checkpoint_dir}/model_{ckpt_id}.npz"
                     save_checkpoint(gufs, params, ckpt_path)
-
-            # reset generator at the end of an epoch
-            if e != gufs.num_epochs - 1:
-                generator = DataGenerator(
-                    emulator=gufs,
-                    n_optim_steps=gufs.steps_per_chunk,
-                    mode="training",
-                )
 
     # testing
     else:
