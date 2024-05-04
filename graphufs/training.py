@@ -290,9 +290,22 @@ def optimize(
             target_batches_valid=target_batches_valid.isel(optim_step=sl),
             forcing_batches_valid=forcing_batches_valid.isel(optim_step=sl),
         )
+        y, *_ = optimize.optim_step_jitted(
+            params=params,
+            state=state,
+            opt_state=opt_state,
+            emulator=emulator,
+            input_batches=input_batches.isel(optim_step=sl),
+            target_batches=target_batches.isel(optim_step=sl),
+            forcing_batches=forcing_batches.isel(optim_step=sl),
+            input_batches_valid=None,
+            target_batches_valid=None,
+            forcing_batches_valid=None,
+        )
 
-        # wait until value for x is ready i.e. until jitting completes
+        # wait until value for x,y are ready i.e. until jitting completes
         block_until_ready(x)
+        block_until_ready(y)
 
         logging.info("Finished jitting optim_step")
 
