@@ -346,7 +346,9 @@ class ReplayEmulator:
                 xds_on_disk.close()
                 logging.info(f"Downloading missing {mode} data for {len(missing_dates)} time stamps.")
                 # download and write missing dates to disk
-                missing_xds = all_xds.sel(time=list(missing_dates))
+           
+                missing_xds = self.open_dataset() # PS I added this helper in the last PR
+                missing_xds = self.subsample_dataset(missing_xds, new_time=list(missing_dates))
                 missing_xds.to_zarr(local_data_path, append_dim="time")
                 # now that the data on disk is complete, reopen the dataset from disk
                 all_xds.close()
