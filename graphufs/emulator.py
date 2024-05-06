@@ -351,7 +351,6 @@ class ReplayEmulator:
                 missing_xds = self.subsample_dataset(missing_xds, new_time=list(missing_dates))
                 missing_xds.to_zarr(local_data_path, append_dim="time")
                 # now that the data on disk is complete, reopen the dataset from disk
-                all_xds.close()
                 all_xds = xr.open_zarr(local_data_path)
             else:
                 all_xds = xds_on_disk
