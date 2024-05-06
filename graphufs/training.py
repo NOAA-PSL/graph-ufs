@@ -191,7 +191,7 @@ def optimize(
             # validation pass
             loss_valid = None
             if inputs_valid is not None:
-                (loss_valid, _), _ = value_and_grad(_aux, has_aux=True)(
+                loss_valid, _ = _aux(
                     params,
                     state,
                     inputs_valid,
