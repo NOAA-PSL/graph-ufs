@@ -336,6 +336,8 @@ class ReplayEmulator:
             all_xds = self.subsample_dataset(xds, new_time=all_new_time)
             if not self.no_cache_data:
                 all_xds.to_zarr(local_data_path)
+                all_xds.close()
+                all_xds = xr.open_zarr(local_data_path)
         else:
             # figure out missing dates
             xds_on_disk = xr.open_zarr(local_data_path)
