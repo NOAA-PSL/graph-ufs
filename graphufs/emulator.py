@@ -331,7 +331,7 @@ class ReplayEmulator:
 
         # download only missing dates and write them to disk
         if self.no_cache_data or not os.path.exists(local_data_path):
-            logging.info(f"Downloading missing {mode} data for {len(all_xds.time.values)} time stamps.")
+            logging.info(f"Downloading missing {mode} data for {len(all_new_time)} time stamps.")
             xds = xr.open_zarr(self.data_url, storage_options={"token": "anon"})
             all_xds = self.subsample_dataset(xds, new_time=all_new_time)
             if not self.no_cache_data:
