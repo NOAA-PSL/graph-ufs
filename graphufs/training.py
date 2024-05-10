@@ -122,7 +122,7 @@ def aggregate_across_nodes(d):
     return tree_util.tree_map(lambda x: aggregate(x), d)
 
 def optimize(
-    params, state, optimizer, emulator, training_data, validation_data=None,
+    params, state, optimizer, emulator, training_data, validation_data,
 ):
     """Optimize the model parameters by running through all optim_steps in data
 
@@ -131,7 +131,8 @@ def optimize(
         state (dict): this is empty, but for now has to be here
         optimizer (Callable, optax.optimizer): see `here <https://optax.readthedocs.io/en/latest/api/optimizers.html>`_
         emulator (ReplayEmulator): the emulator object
-        input_batches, training_batches, forcing_batches (xarray.Dataset): with data needed for training
+        training_data (dict): with data needed for training
+        validation_data (dict): with data for validation
 
     Returns:
         params (dict): optimized model parameters
@@ -280,7 +281,7 @@ def optimize(
         logging.info("Finished jitting optim_step")
 
     # jit validation loss
-    if validation_data is not None and not hasattr(optimize, "vloss_jitted"):
+    if not hasattr(optimize, "vloss_jitted"):
 
         logging.info("Started jitting validation loss")
         optimize.vloss_jitted = jit(vloss)
@@ -301,11 +302,11 @@ def optimize(
     loss_by_var = {k: list() for k in training_data["targets"].data_vars}
 
     n_steps = len(training_data["inputs"]["optim_step"])
-    n_steps_valid = 0 if validation_data is None else len(validation_data["inputs"]["optim_step"])
+    n_steps_valid = len(validation_data["inputs"]["optim_step"])
     assert (
         n_steps_valid <= n_steps
     ), f"Number of validation steps ({n_steps_valid}) must be less than or equal to the number of training steps ({n_steps})"
-    n_steps_valid_inc = 0 if validation_data is None else n_steps // n_steps_valid
+    n_steps_valid_inc = n_steps // n_steps_valid
 
     if emulator.mpi_rank == 0:
         progress_bar = tqdm(total=n_steps, ncols=140, desc="Processing")
@@ -315,10 +316,10 @@ def optimize(
     i_batches = training_data["inputs"].isel(optim_step=sl).copy(deep=True)
     t_batches = training_data["targets"].isel(optim_step=sl).copy(deep=True)
     f_batches = training_data["forcings"].isel(optim_step=sl).copy(deep=True)
-    if validation_data is not None:
-        i_batches_valid = validation_data["inputs"].isel(optim_step=sl).copy(deep=True)
-        t_batches_valid = validation_data["targets"].isel(optim_step=sl).copy(deep=True)
-        f_batches_valid = validation_data["forcings"].isel(optim_step=sl).copy(deep=True)
+
+    i_batches_valid = validation_data["inputs"].isel(optim_step=sl).copy(deep=True)
+    t_batches_valid = validation_data["targets"].isel(optim_step=sl).copy(deep=True)
+    f_batches_valid = validation_data["forcings"].isel(optim_step=sl).copy(deep=True)
 
     loss_avg = 0
     loss_valid_avg = 0
@@ -351,7 +352,7 @@ def optimize(
             f_batches[var_name] = f_batches[var_name].copy(deep=False, data=var.values)
 
         # validation batches
-        if validation_data is not None and (k % n_steps_valid_inc) == 0:
+        if (k % n_steps_valid_inc) == 0:
             kv = k // n_steps_valid_inc
             sl = slice(kv, kv + num_gpus)
 
@@ -390,7 +391,7 @@ def optimize(
         )
 
         # call validation loss
-        if validation_data is not None and (k%n_steps_valid_inc) == 0:
+        if (k % n_steps_valid_inc) == 0:
             loss_valid = optimize.vloss_jitted(
                 params=params,
                 state=state,
@@ -422,7 +423,7 @@ def optimize(
             )
             mean_grad_avg += mean_grad
             progress_bar.set_description(
-                    f"[{emulator.mpi_rank}] loss = {loss:.5f}, val_loss = {loss_valid:.5f}, mean(|grad|) = {mean_grad:.8f}"
+                f"loss = {loss:.5f}, val_loss = {loss_valid:.5f}, mean(|grad|) = {mean_grad:.8f}"
             )
             progress_bar.update(num_gpus)
 
@@ -433,7 +434,7 @@ def optimize(
         loss_valid_avg /= N
         mean_grad_avg /= N
         progress_bar.set_description(
-                f"[{emulator.mpi_rank}] loss = {loss_avg:.5f}, val_loss = {loss_valid_avg:.5f}, mean(|grad|) = {mean_grad_avg:.8f}"
+            f"loss = {loss_avg:.5f}, val_loss = {loss_valid_avg:.5f}, mean(|grad|) = {mean_grad_avg:.8f}"
         )
         progress_bar.close()
 
@@ -461,13 +462,12 @@ def optimize(
             dims=("optim_step",),
             attrs={"long_name": "loss function value"},
         )
-        if validation_data is not None:
-            loss_ds["loss_valid"] = xr.DataArray(
-                loss_valid_values,
-                coords={"optim_step": loss_ds["optim_step"]},
-                dims=("optim_step",),
-                attrs={"long_name": "validation loss function value"},
-            )
+        loss_ds["loss_valid"] = xr.DataArray(
+            loss_valid_values,
+            coords={"optim_step": loss_ds["optim_step"]},
+            dims=("optim_step",),
+            attrs={"long_name": "validation loss function value"},
+        )
         loss_ds["loss_by_var"] = xr.DataArray(
             np.vstack(list(loss_by_var.values())),
             dims=("var_index", "optim_step"),
