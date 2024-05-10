@@ -142,12 +142,8 @@ if __name__ == "__main__":
                     state=state,
                     optimizer=optimizer,
                     emulator=gufs,
-                    input_batches=data["inputs"],
-                    target_batches=data["targets"],
-                    forcing_batches=data["forcings"],
-                    input_batches_valid=data_valid["inputs"],
-                    target_batches_valid=data_valid["targets"],
-                    forcing_batches_valid=data_valid["forcings"],
+                    training_data=data,
+                    validation_data=data_valid,
                 )
 
                 # save weights
