@@ -87,7 +87,7 @@ def init_model(emulator, gds, last_input_channel_mapping):
 
 
 def optimize(
-    params, state, optimizer, emulator, trainer, weights, last_input_channel_mapping, validator=None,
+    params, state, optimizer, emulator, trainer, validator, weights, last_input_channel_mapping,
 ):
     """Optimize the model parameters by running through all optim_steps in data
 
@@ -197,7 +197,7 @@ def optimize(
         logging.info("Finished jitting optim_step")
 
 
-    if validator is not None and not hasattr(optimize, "vloss_jitted"):
+    if not hasattr(optimize, "vloss_jitted"):
         logging.info("Started jitting validation loss")
 
         optimize.vloss_jitted = jit(loss_fn.apply)
@@ -249,31 +249,31 @@ def optimize(
 
     progress_bar.close()
 
-    if validator is not None:
-        loss_valid_values = []
-        n_steps_valid = 0 if validator is None else len(validator)
-        assert (
-            n_steps_valid <= n_steps
-        ), f"Number of validation steps ({n_steps_valid}) must be less than or equal to the number of training steps ({n_steps})"
-        progress_bar = tqdm(total=n_steps_valid, ncols=140, desc="Processing")
-        for input_batches, target_batches in validator:
-            (loss_valid, _), _ = optimize.vloss_jitted(
-                params=params,
-                state=state,
-                inputs=input_batches,
-                targets=target_batches,
-                rng=PRNGKey(0),
-            )
-            loss_valid_values.append(loss_valid)
-            progress_bar.set_description(
-                f"[{emulator.mpi_rank}] validation loss = {loss_valid:.5f}"
-            )
-            progress_bar.update(num_gpus)
-        loss_valid_avg = np.mean(loss_valid)
-        progress_bar.set_description(
-            f"[{emulator.mpi_rank}] validation loss = {loss_valid_avg:.5f}"
+    # validation
+    loss_valid_values = []
+    n_steps_valid = len(validator)
+    assert (
+        n_steps_valid <= n_steps
+    ), f"Number of validation steps ({n_steps_valid}) must be less than or equal to the number of training steps ({n_steps})"
+    progress_bar = tqdm(total=n_steps_valid, ncols=140, desc="Processing")
+    for input_batches, target_batches in validator:
+        (loss_valid, _), _ = optimize.vloss_jitted(
+            params=params,
+            state=state,
+            inputs=input_batches,
+            targets=target_batches,
+            rng=PRNGKey(0),
         )
-        progress_bar.close()
+        loss_valid_values.append(loss_valid)
+        progress_bar.set_description(
+            f"validation loss = {loss_valid:.5f}"
+        )
+        progress_bar.update(num_gpus)
+    loss_valid_avg = np.mean(loss_valid)
+    progress_bar.set_description(
+        f"validation loss = {loss_valid_avg:.5f}"
+    )
+    progress_bar.close()
 
 
     # save losses for each batch
@@ -314,16 +314,15 @@ def optimize(
             "description": "averaged over training data once per epoch",
         },
     )
-    if validator is not None:
-        loss_ds["loss_valid"] = xr.DataArray(
-            [loss_valid_avg],
-            coords={"epoch": loss_ds["epoch"]},
-            dims=("epoch",),
-            attrs={
-                "long_name": "validation loss function value",
-                "description": "averaged over validation data once per epoch",
-            },
-        )
+    loss_ds["loss_valid"] = xr.DataArray(
+        [loss_valid_avg],
+        coords={"epoch": loss_ds["epoch"]},
+        dims=("epoch",),
+        attrs={
+            "long_name": "validation loss function value",
+            "description": "averaged over validation data once per epoch",
+        },
+    )
 
     # concatenate losses and store
     if os.path.exists(loss_fname):
