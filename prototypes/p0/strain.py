@@ -48,10 +48,18 @@ if __name__ == "__main__":
 
     # data generators
     training_data = Dataset(gufs, mode="training")
+    validation_data = Dataset(gufs, mode="validation")
     # this loads the data in ... suboptimal I know
     training_data.xds.load();
-    generator = DataLoader(
+    validation_data.xds.load();
+    trainer = DataLoader(
         training_data,
+        batch_size=gufs.batch_size,
+        shuffle=True,
+        drop_last=True,
+    )
+    validator = DataLoader(
+        validation_data,
         batch_size=gufs.batch_size,
         shuffle=True,
         drop_last=True,
@@ -99,7 +107,8 @@ if __name__ == "__main__":
                 state=state,
                 optimizer=optimizer,
                 emulator=gufs,
-                generator=generator,
+                trainer=trainer,
+                validator=validator,
                 weights=weights,
                 last_input_channel_mapping=last_input_channel_mapping,
             )

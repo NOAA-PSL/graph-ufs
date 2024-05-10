@@ -291,8 +291,8 @@ def optimize(
             target_batches=validation_data["targets"].isel(optim_step=sl),
             forcing_batches=validation_data["forcings"].isel(optim_step=sl),
         )
-        logging.info("Finished jitting validation loss")
         block_until_ready(x)
+        logging.info("Finished jitting validation loss")
 
 
     optim_steps = []
@@ -461,12 +461,13 @@ def optimize(
             dims=("optim_step",),
             attrs={"long_name": "loss function value"},
         )
-        loss_ds["loss_valid"] = xr.DataArray(
-            loss_valid_values,
-            coords={"optim_step": loss_ds["optim_step"]},
-            dims=("optim_step",),
-            attrs={"long_name": "validation loss function value"},
-        )
+        if validation_data is not None:
+            loss_ds["loss_valid"] = xr.DataArray(
+                loss_valid_values,
+                coords={"optim_step": loss_ds["optim_step"]},
+                dims=("optim_step",),
+                attrs={"long_name": "validation loss function value"},
+            )
         loss_ds["loss_by_var"] = xr.DataArray(
             np.vstack(list(loss_by_var.values())),
             dims=("var_index", "optim_step"),
@@ -559,6 +560,7 @@ def init_devices(emulator):
 
         def format(self, record):
             record.rank = self.rank
+            record.relativeCreated = record.relativeCreated // 1000
             return super().format(record)
 
     # create logger
@@ -568,7 +570,7 @@ def init_devices(emulator):
     logger.addFilter(RankFilter(rank))
 
     formatter = RankFormatter(
-        rank, fmt="[%(relativeCreated)d ms] [Rank %(rank)d] [%(levelname)s] %(message)s"
+        rank, fmt="[%(relativeCreated)d s] [Rank %(rank)d] [%(levelname)s] %(message)s"
     )
     for handler in logger.handlers:
         handler.setFormatter(formatter)

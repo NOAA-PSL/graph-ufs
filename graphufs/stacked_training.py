@@ -87,7 +87,7 @@ def init_model(emulator, gds, last_input_channel_mapping):
 
 
 def optimize(
-    params, state, optimizer, emulator, generator, weights, last_input_channel_mapping
+    params, state, optimizer, emulator, trainer, weights, last_input_channel_mapping, validator=None,
 ):
     """Optimize the model parameters by running through all optim_steps in data
 
@@ -96,7 +96,8 @@ def optimize(
         state (dict): this is empty, but for now has to be here
         optimizer (Callable, optax.optimizer): see `here <https://optax.readthedocs.io/en/latest/api/optimizers.html>`_
         emulator (ReplayEmulator): the emulator object
-        input_batches, training_batches (chex.Array): with data needed for training
+        trainer (Generator): with data needed for training
+        validator (Generator): with data needed for training
 
     Returns:
         params (dict): optimized model parameters
@@ -169,7 +170,7 @@ def optimize(
 
         # jitted function
         optimize.optim_step_jitted = jit(optim_step)
-        first_input, first_target = next(iter(generator))
+        first_input, first_target = next(iter(trainer))
         x, *_ = optimize.optim_step_jitted(
             params=params,
             state=state,
@@ -180,11 +181,11 @@ def optimize(
         block_until_ready(x)
 
         # Unclear if it's safe to assume whether we'll have the drop_last attr or not
-        if not generator.drop_last:
+        if not trainer.drop_last:
             # this is necessary to let the JIT compiler see the last batch,
             # which may be a different size
             # I'm not sure if this pulls everything into memory though ...
-            *_, (last_input, last_target) = iter(generator)
+            *_, (last_input, last_target) = iter(trainer)
             y, *_ = optimize.optim_step_jitted(
                 params=params,
                 state=state,
@@ -195,17 +196,32 @@ def optimize(
             block_until_ready(y)
         logging.info("Finished jitting optim_step")
 
-    else:
-        logging.info("optim_step already jitted")
+
+    if validator is not None and not hasattr(optimize, "vloss_jitted"):
+        logging.info("Started jitting validation loss")
+
+        optimize.vloss_jitted = jit(loss_fn.apply)
+        first_input, first_target = next(iter(validator))
+        (x, _), _ = optimize.vloss_jitted(
+            params=params,
+            state=state,
+            inputs=first_input,
+            targets=first_target,
+            rng=PRNGKey(0),
+        )
+        block_until_ready(x)
+        logging.info("Finished jitting validation loss")
+
 
     optim_steps = []
     loss_values = []
-    loss_by_channel = []
 
-    n_steps = len(generator)
+    loss_by_channel = []
+    n_steps = len(trainer)
+
 
     progress_bar = tqdm(total=n_steps, ncols=140, desc="Processing")
-    for k, (input_batches, target_batches) in enumerate(generator):
+    for k, (input_batches, target_batches) in enumerate(trainer):
 
         # call optimize
         params, loss, diagnostics, _, grads = optimize.optim_step_jitted(
@@ -233,16 +249,46 @@ def optimize(
 
     progress_bar.close()
 
+    if validator is not None:
+        loss_valid_values = []
+        n_steps_valid = 0 if validator is None else len(validator)
+        assert (
+            n_steps_valid <= n_steps
+        ), f"Number of validation steps ({n_steps_valid}) must be less than or equal to the number of training steps ({n_steps})"
+        progress_bar = tqdm(total=n_steps_valid, ncols=140, desc="Processing")
+        for input_batches, target_batches in validator:
+            (loss_valid, _), _ = optimize.vloss_jitted(
+                params=params,
+                state=state,
+                inputs=input_batches,
+                targets=target_batches,
+                rng=PRNGKey(0),
+            )
+            loss_valid_values.append(loss_valid)
+            progress_bar.set_description(
+                f"[{emulator.mpi_rank}] validation loss = {loss_valid:.5f}"
+            )
+            progress_bar.update(num_gpus)
+        loss_valid_avg = np.mean(loss_valid)
+        progress_bar.set_description(
+            f"[{emulator.mpi_rank}] validation loss = {loss_valid_avg:.5f}"
+        )
+        progress_bar.close()
+
+
     # save losses for each batch
     loss_ds = xr.Dataset()
     loss_fname = os.path.join(emulator.local_store_path, "loss.nc")
     previous_optim_steps = 0
+    previous_epochs = 0
     if os.path.exists(loss_fname):
         stored_loss_ds = xr.open_dataset(loss_fname)
         previous_optim_steps = len(stored_loss_ds.optim_step)
+        previous_epochs = len(stored_loss_ds["epoch"])
 
     loss_by_channel = np.vstack(loss_by_channel)
     loss_ds["optim_step"] = [x + previous_optim_steps for x in optim_steps]
+    loss_ds["epoch"] = [1 + previous_epochs]
     loss_ds.attrs["batch_size"] = emulator.batch_size
     loss_ds["channels"] = xr.DataArray(
         np.arange(loss_by_channel.shape[-1]),
@@ -259,10 +305,29 @@ def optimize(
         loss_by_channel,
         dims=("optim_step", "channels"),
     )
+    loss_ds["loss_avg"] = xr.DataArray(
+        [np.mean(loss_values)],
+        coords={"epoch": loss_ds["epoch"]},
+        dims=("epoch",),
+        attrs={
+            "long_name": "average loss function value",
+            "description": "averaged over training data once per epoch",
+        },
+    )
+    if validator is not None:
+        loss_ds["loss_valid"] = xr.DataArray(
+            [loss_valid_avg],
+            coords={"epoch": loss_ds["epoch"]},
+            dims=("epoch",),
+            attrs={
+                "long_name": "validation loss function value",
+                "description": "averaged over validation data once per epoch",
+            },
+        )
 
     # concatenate losses and store
     if os.path.exists(loss_fname):
-        stored_loss_ds = xr.concat([stored_loss_ds, loss_ds], dim="optim_step")
+        stored_loss_ds = xr.combine_by_coords([stored_loss_ds, loss_ds])
     else:
         stored_loss_ds = loss_ds
     stored_loss_ds.to_netcdf(loss_fname)
