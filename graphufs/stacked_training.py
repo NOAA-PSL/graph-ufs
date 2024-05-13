@@ -323,10 +323,12 @@ def optimize(
             "description": "averaged over validation data once per epoch",
         },
     )
+    # this is just so we know what optim steps correspond to what epoch
+    loss_ds["epoch_label"] = (1+previous_epochs)*xr.ones_like(loss_ds.optim_step)
 
     # concatenate losses and store
     if os.path.exists(loss_fname):
-        stored_loss_ds = xr.combine_by_coords([stored_loss_ds, loss_ds])
+        stored_loss_ds = xr.merge([stored_loss_ds, loss_ds])
     else:
         stored_loss_ds = loss_ds
     stored_loss_ds.to_netcdf(loss_fname)
