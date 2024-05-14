@@ -109,9 +109,11 @@ def init_model(emulator, data: dict):
     )
     return params, state
 
+
 # Remove the first dimension (device dimension), which is added due to pmap
 def remove_first_dim(d):
     return tree_util.tree_map(lambda x: x[0], d)
+
 
 def aggregate_across_nodes(d):
     def aggregate(d):
@@ -121,8 +123,14 @@ def aggregate_across_nodes(d):
 
     return tree_util.tree_map(lambda x: aggregate(x), d)
 
+
 def optimize(
-    params, state, optimizer, emulator, training_data, validation_data,
+    params,
+    state,
+    optimizer,
+    emulator,
+    training_data,
+    validation_data,
 ):
     """Optimize the model parameters by running through all optim_steps in data
 
@@ -170,15 +178,15 @@ def optimize(
                 loss = aggregate_across_nodes(loss)
             return loss
 
-
         if num_gpus > 1:
-            loss = pmap(ploss, dim="optim_step")(input_batches, target_batches, forcing_batches)
+            loss = pmap(ploss, dim="optim_step")(
+                input_batches, target_batches, forcing_batches
+            )
             loss = remove_first_dim(loss)
         else:
             loss = ploss(input_batches, target_batches, forcing_batches)
 
         return loss
-
 
     def optim_step(
         params,
@@ -287,7 +295,6 @@ def optimize(
         block_until_ready(x)
         logging.info("Finished jitting validation loss")
 
-
     optim_steps = []
     loss_values = []
     loss_valid_values = []
@@ -364,12 +371,8 @@ def optimize(
                 f_batches_valid[var_name] = f_batches_valid[var_name].copy(
                     deep=False, data=var.values
                 )
-            skip_valid = False
         else:
             prev_loss_valid = loss_valid
-            skip_valid = True
-
-
 
         # call optimize
         params, loss, diagnostics, opt_state, grads = optimize.optim_step_jitted(
