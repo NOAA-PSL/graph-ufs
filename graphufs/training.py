@@ -159,26 +159,21 @@ def optimize(
                 params=params,
                 state=state,
                 emulator=emulator,
-                inputs=input_batches,
-                targets=target_batches,
-                forcings=forcing_batches,
+                inputs=inputs,
+                targets=targets,
+                forcings=forcings,
                 rng=PRNGKey(0),
             )
-
             if num_gpus > 1:
-                loss = pmean(loss, dim="optim_step")
+                loss = pmean(loss, axis_name="optim_step")
             if (not use_jax_distributed) and (mpi_size > 1):
-                # use a helpfer function for grads and other trees
                 loss = aggregate_across_nodes(loss)
             return loss
 
 
         if num_gpus > 1:
-
-            # pmap batch processing into multiple GPUs
             loss = pmap(ploss, dim="optim_step")(input_batches, target_batches, forcing_batches)
             loss = remove_first_dim(loss)
-
         else:
             loss = ploss(input_batches, target_batches, forcing_batches)
 
@@ -225,9 +220,6 @@ def optimize(
             # manually aggregate results accross nodes. if emulator.use_jax_distributed
             # is turned on, there is no need for this code.
             if (not use_jax_distributed) and (mpi_size > 1):
-                # use a helpfer function for grads and other trees
-
-
                 loss = aggregate_across_nodes(loss)
                 grads = aggregate_across_nodes(grads)
                 diagnostics = aggregate_across_nodes(diagnostics)
@@ -306,7 +298,7 @@ def optimize(
     assert (
         n_steps_valid <= n_steps
     ), f"Number of validation steps ({n_steps_valid}) must be less than or equal to the number of training steps ({n_steps})"
-    n_steps_valid_inc = n_steps // n_steps_valid
+    n_steps_valid_inc = (n_steps // n_steps_valid) * num_gpus
 
     if emulator.mpi_rank == 0:
         progress_bar = tqdm(total=n_steps, ncols=140, desc="Processing")
