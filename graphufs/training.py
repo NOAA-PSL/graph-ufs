@@ -259,41 +259,72 @@ def optimize(
     if not hasattr(optimize, "optim_step_jitted"):
         logging.info("Started jitting optim_step")
 
-        # jit on first slice
-        sl = slice(0, num_gpus)
-
         # jitted function
         optimize.optim_step_jitted = jit(optim_step)
+        optimize.vloss_jitted = jit(vloss)
 
         # warm up step
-        x, *_ = optimize.optim_step_jitted(
-            params=params,
-            state=state,
-            emulator=emulator,
-            opt_state=opt_state,
-            input_batches=training_data["inputs"].isel(optim_step=sl),
-            target_batches=training_data["targets"].isel(optim_step=sl),
-            forcing_batches=training_data["forcings"].isel(optim_step=sl),
-        )
+        n_steps = 2 * num_gpus
 
-        # wait until value for x is ready i.e. until jitting completes
-        block_until_ready(x)
+        sl = slice(0, num_gpus)
+        i_batches = training_data["inputs"].isel(optim_step=sl).copy(deep=True)
+        t_batches = training_data["targets"].isel(optim_step=sl).copy(deep=True)
+        f_batches = training_data["forcings"].isel(optim_step=sl).copy(deep=True)
+        i_batches_valid = validation_data["inputs"].isel(optim_step=sl).copy(deep=True)
+        t_batches_valid = validation_data["targets"].isel(optim_step=sl).copy(deep=True)
+        f_batches_valid = validation_data["forcings"].isel(optim_step=sl).copy(deep=True)
+
+        x = params
+        for k in range(0, n_steps, num_gpus):
+            sl = slice(k, k + num_gpus)
+            i1_batches = training_data["inputs"].isel(optim_step=sl)
+            t1_batches = training_data["targets"].isel(optim_step=sl)
+            f1_batches = training_data["forcings"].isel(optim_step=sl)
+            for var_name, var in i1_batches.data_vars.items():
+                i_batches[var_name] = i_batches[var_name].copy(deep=False, data=var.values)
+            for var_name, var in t1_batches.data_vars.items():
+                t_batches[var_name] = t_batches[var_name].copy(deep=False, data=var.values)
+            for var_name, var in f1_batches.data_vars.items():
+                f_batches[var_name] = f_batches[var_name].copy(deep=False, data=var.values)
+
+            i1_batches_valid = validation_data["inputs"].isel(optim_step=sl)
+            t1_batches_valid = validation_data["targets"].isel(optim_step=sl)
+            f1_batches_valid = validation_data["forcings"].isel(optim_step=sl)
+            for var_name, var in i1_batches_valid.data_vars.items():
+                i_batches_valid[var_name] = i_batches_valid[var_name].copy(
+                    deep=False, data=var.values
+                )
+            for var_name, var in t1_batches_valid.data_vars.items():
+                t_batches_valid[var_name] = t_batches_valid[var_name].copy(
+                    deep=False, data=var.values
+                )
+            for var_name, var in f1_batches_valid.data_vars.items():
+                f_batches_valid[var_name] = f_batches_valid[var_name].copy(
+                    deep=False, data=var.values
+                )
+
+            x, *_ = optimize.optim_step_jitted(
+                params=x,
+                state=state,
+                opt_state=opt_state,
+                emulator=emulator,
+                input_batches=i_batches,
+                target_batches=t_batches,
+                forcing_batches=f_batches,
+            )
+            y = optimize.vloss_jitted(
+                params=x,
+                state=state,
+                input_batches=i_batches_valid,
+                target_batches=t_batches_valid,
+                forcing_batches=f_batches_valid,
+            )
+
+            # wait until value for x/y is ready i.e. until jitting completes
+            block_until_ready(x)
+            block_until_ready(y)
+
         logging.info("Finished jitting optim_step")
-
-    # jit validation loss
-    if not hasattr(optimize, "vloss_jitted"):
-
-        logging.info("Started jitting validation loss")
-        optimize.vloss_jitted = jit(vloss)
-        x = optimize.vloss_jitted(
-            params=params,
-            state=state,
-            input_batches=validation_data["inputs"].isel(optim_step=sl),
-            target_batches=validation_data["targets"].isel(optim_step=sl),
-            forcing_batches=validation_data["forcings"].isel(optim_step=sl),
-        )
-        block_until_ready(x)
-        logging.info("Finished jitting validation loss")
 
     optim_steps = []
     loss_values = []
