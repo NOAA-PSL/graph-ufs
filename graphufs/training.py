@@ -338,9 +338,6 @@ def optimize(
     ), f"Number of validation steps ({n_steps_valid}) must be less than or equal to the number of training steps ({n_steps})"
     n_steps_valid_inc = (n_steps // n_steps_valid) * num_gpus
 
-    if emulator.mpi_rank == 0:
-        progress_bar = tqdm(total=n_steps, ncols=140, desc="Processing")
-
     # make a deep copy of slice 0
     sl = slice(0, num_gpus)
     i_batches = training_data["inputs"].isel(optim_step=sl).copy(deep=True)
@@ -354,6 +351,9 @@ def optimize(
     loss_avg = 0
     loss_valid_avg = 0
     mean_grad_avg = 0
+
+    if emulator.mpi_rank == 0:
+        progress_bar = tqdm(total=n_steps, ncols=140, desc="Processing")
 
     for k in range(0, n_steps, num_gpus):
         # When the number of batches is not evenly divisible by num_gpus
