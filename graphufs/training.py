@@ -266,6 +266,7 @@ def optimize(
 
         # warm up step
         n_steps = 2 * num_gpus
+        n_steps_valid = len(validation_data["inputs"]["optim_step"])
 
         sl = slice(0, num_gpus)
         i_batches = training_data["inputs"].isel(optim_step=sl).copy(deep=True)
@@ -288,22 +289,6 @@ def optimize(
             for var_name, var in f1_batches.data_vars.items():
                 f_batches[var_name] = f_batches[var_name].copy(deep=False, data=var.values)
 
-            i1_batches_valid = validation_data["inputs"].isel(optim_step=sl)
-            t1_batches_valid = validation_data["targets"].isel(optim_step=sl)
-            f1_batches_valid = validation_data["forcings"].isel(optim_step=sl)
-            for var_name, var in i1_batches_valid.data_vars.items():
-                i_batches_valid[var_name] = i_batches_valid[var_name].copy(
-                    deep=False, data=var.values
-                )
-            for var_name, var in t1_batches_valid.data_vars.items():
-                t_batches_valid[var_name] = t_batches_valid[var_name].copy(
-                    deep=False, data=var.values
-                )
-            for var_name, var in f1_batches_valid.data_vars.items():
-                f_batches_valid[var_name] = f_batches_valid[var_name].copy(
-                    deep=False, data=var.values
-                )
-
             x, *_ = optimize.optim_step_jitted(
                 params=x,
                 state=state,
@@ -313,17 +298,35 @@ def optimize(
                 target_batches=t_batches,
                 forcing_batches=f_batches,
             )
-            y = optimize.vloss_jitted(
-                params=x,
-                state=state,
-                input_batches=i_batches_valid,
-                target_batches=t_batches_valid,
-                forcing_batches=f_batches_valid,
-            )
 
-            # wait until value for x/y is ready i.e. until jitting completes
+            if k == 0 or n_steps_valid >= n_steps:
+                i1_batches_valid = validation_data["inputs"].isel(optim_step=sl)
+                t1_batches_valid = validation_data["targets"].isel(optim_step=sl)
+                f1_batches_valid = validation_data["forcings"].isel(optim_step=sl)
+                for var_name, var in i1_batches_valid.data_vars.items():
+                    i_batches_valid[var_name] = i_batches_valid[var_name].copy(
+                        deep=False, data=var.values
+                    )
+                for var_name, var in t1_batches_valid.data_vars.items():
+                    t_batches_valid[var_name] = t_batches_valid[var_name].copy(
+                        deep=False, data=var.values
+                    )
+                for var_name, var in f1_batches_valid.data_vars.items():
+                    f_batches_valid[var_name] = f_batches_valid[var_name].copy(
+                        deep=False, data=var.values
+                    )
+
+                y = optimize.vloss_jitted(
+                    params=x,
+                    state=state,
+                    input_batches=i_batches_valid,
+                    target_batches=t_batches_valid,
+                    forcing_batches=f_batches_valid,
+                )
+
+                block_until_ready(y)
+
             block_until_ready(x)
-            block_until_ready(y)
 
         logging.info("Finished jitting optim_step")
 
@@ -338,7 +341,7 @@ def optimize(
     assert (
         n_steps_valid <= n_steps
     ), f"Number of validation steps ({n_steps_valid}) must be less than or equal to the number of training steps ({n_steps})"
-    n_steps_valid_inc = (n_steps // n_steps_valid) * num_gpus
+    n_steps_valid_inc = ceil(n_steps / n_steps_valid) * num_gpus
 
     # make a deep copy of slice 0
     sl = slice(0, num_gpus)

@@ -387,7 +387,7 @@ class ReplayEmulator:
 
         all_xds = self.get_the_data(all_new_time=all_new_time, mode=mode)
         # split dataset into chunks
-        n_chunks = self.chunks_per_epoch if mode == "training" else self.chunks_per_validation
+        n_chunks = self.chunks_per_epoch
         chunk_size = len(all_new_time) // n_chunks
         all_new_time_chunks = []
 
@@ -482,7 +482,11 @@ class ReplayEmulator:
                         # Do this only for training, because in testing mode this process will mess up the output.
                         # For testing, we will cleanup after prediction using dropna()
                         def copy_values(ds_list):
-                            mds = ds_list[-self.batch_size].copy()
+                            s = len(ds_list)
+                            if s >= self.batch_size:
+                                mds = ds_list[-self.batch_size].copy()
+                            else:
+                                mds = ds_list[random.randint(0,s-1)].copy()
                             mds["optim_step"] = [k]
                             ds_list.append(mds)
                         if mode != "testing":

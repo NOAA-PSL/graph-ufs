@@ -60,8 +60,8 @@ def get_chunk_in_parallel(
     )
     input_thread.start()
     # for first chunk, wait until input thread finishes
-    if first_chunk:
-        input_thread.join()
+    #if first_chunk:
+    input_thread.join()
     return input_thread
 
 
