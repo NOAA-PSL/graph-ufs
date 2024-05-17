@@ -4,6 +4,7 @@ Implementations of Torch Dataset and DataLoader
 from typing import Optional
 import numpy as np
 import xarray as xr
+import dask.array
 
 from jax.tree_util import tree_map
 from torch.utils.data import Dataset as TorchDataset
@@ -36,6 +37,7 @@ class Dataset(TorchDataset):
         self,
         emulator: ReplayEmulator,
         mode: str,
+        preload_batch: bool = False,
     ):
         """
         Initializes the Dataset object.
@@ -58,7 +60,7 @@ class Dataset(TorchDataset):
             input_overlap={
                 "datetime": emulator.n_input,
             },
-            preload_batch=False,
+            preload_batch=preload_batch,
         )
 
     def __len__(self) -> int:
@@ -229,6 +231,41 @@ class Dataset(TorchDataset):
         X = self._xstack(sample_input, sample_forcing)
         y = self._xstack(sample_target)
         return X, y
+
+    def _store_sample(self, idx: int, chunks: dict) -> None:
+        x,y = self.get_xsample(idx)
+        x = x.rename({"batch": "sample"})
+        y = y.rename({"batch": "sample"})
+
+        x = x.chunk(chunks)
+        y = y.chunk(chunks)
+        spatial_region = {k : slice(None, None) for k in x.dims if k != "sample"}
+        region = {"sample": slice(idx, idx+1), **spatial_region}
+        x.to_dataset(name="inputs").to_zarr(f"{self.emulator.local_store_path}/inputs.zarr", region=region)
+        y.to_dataset(name="targets").to_zarr(f"{self.emulator.local_store_path}/targets.zarr", region=region)
+
+    def _make_container(self, template: xr.Dataset, name: str, chunks: dict):
+
+        if "batch" in template.dims:
+            template = template.isel(batch=0, drop=True)
+
+        xds = xr.Dataset()
+        xds["sample"] = np.arange(len(self))
+        for key in ["lat", "lon", "channels"]:
+            xds[key] = template[key].copy()
+
+        dims = ("sample",) + template.dims
+        shape = (len(self),) + template.shape
+        xds[name] = xr.DataArray(
+            data=dask.array.zeros(
+                shape=shape,
+                chunks=tuple(chunks[k] for k in dims),
+                dtype=template.dtype,
+            ),
+            dims=dims,
+        )
+        return xds
+
 
 
 class DataLoader(TorchDataLoader):
