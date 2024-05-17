@@ -256,6 +256,13 @@ def optimize(
         params = optax.apply_updates(params, updates)
         return params, loss, diagnostics, opt_state, grads
 
+    # compute number of steps
+    n_steps = len(training_data["inputs"]["optim_step"])
+    n_steps_valid = len(validation_data["inputs"]["optim_step"])
+    if n_steps_valid > n_steps:
+        raise ValueError(f"Number of validation steps ({n_steps_valid}) must be less than or equal to the number of training steps ({n_steps})")
+    n_steps_valid_inc = ceil(n_steps / n_steps_valid) * num_gpus
+
     # jit optim_step only once
     if not hasattr(optimize, "optim_step_jitted"):
         logging.info("Started jitting optim_step")
@@ -265,8 +272,7 @@ def optimize(
         optimize.vloss_jitted = jit(vloss)
 
         # warm up step
-        n_steps = 2 * num_gpus
-        n_steps_valid = len(validation_data["inputs"]["optim_step"])
+        n_steps_jit = min(2, n_steps) * num_gpus
 
         sl = slice(0, num_gpus)
         i_batches = training_data["inputs"].isel(optim_step=sl).copy(deep=True)
@@ -277,7 +283,7 @@ def optimize(
         f_batches_valid = validation_data["forcings"].isel(optim_step=sl).copy(deep=True)
 
         x = params
-        for k in range(0, n_steps, num_gpus):
+        for k in range(0, n_steps_jit, num_gpus):
             sl = slice(k, k + num_gpus)
             i1_batches = training_data["inputs"].isel(optim_step=sl)
             t1_batches = training_data["targets"].isel(optim_step=sl)
@@ -299,7 +305,7 @@ def optimize(
                 forcing_batches=f_batches,
             )
 
-            if k == 0 or n_steps_valid >= n_steps:
+            if k == 0 or n_steps_valid >= n_steps_jit:
                 i1_batches_valid = validation_data["inputs"].isel(optim_step=sl)
                 t1_batches_valid = validation_data["targets"].isel(optim_step=sl)
                 f1_batches_valid = validation_data["forcings"].isel(optim_step=sl)
@@ -335,13 +341,6 @@ def optimize(
     loss_valid_values = []
     learning_rates = []
     loss_by_var = {k: list() for k in training_data["targets"].data_vars}
-
-    n_steps = len(training_data["inputs"]["optim_step"])
-    n_steps_valid = len(validation_data["inputs"]["optim_step"])
-    assert (
-        n_steps_valid <= n_steps
-    ), f"Number of validation steps ({n_steps_valid}) must be less than or equal to the number of training steps ({n_steps})"
-    n_steps_valid_inc = ceil(n_steps / n_steps_valid) * num_gpus
 
     # make a deep copy of slice 0
     sl = slice(0, num_gpus)

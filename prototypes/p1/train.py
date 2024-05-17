@@ -93,7 +93,7 @@ if __name__ == "__main__":
     for e in range(p1.num_epochs):
         timer1.start()
         for c in range(p1.chunks_per_epoch):
-            logging.info(f"Training on epoch {e+1} and chunk {c}")
+            logging.info(f"Training on epoch {e+1} and chunk {c+1}")
             timer2.start()
 
             # get chunk of data in parallel with NN optimization

@@ -421,6 +421,9 @@ class ReplayEmulator:
                 data_duration = end - start
 
                 n_max_forecasts = (data_duration - self.input_duration) // self.delta_t
+                if n_max_forecasts <= 0:
+                    raise ValueError(f"n_max_forecasts for {mode} is {n_max_forecasts}")
+
                 n_max_optim_steps = math.ceil(n_max_forecasts / self.batch_size)
                 n_optim_steps = n_max_optim_steps if n_optim_steps is None else n_optim_steps
                 n_forecasts = n_optim_steps * self.batch_size
@@ -485,7 +488,9 @@ class ReplayEmulator:
                             if s >= self.batch_size:
                                 mds = ds_list[-self.batch_size].copy()
                             else:
-                                mds = ds_list[random.randint(0,s-1)].copy()
+                                bs = random.randint(0,s-1)
+                                mds = ds_list[bs].copy()
+                                mds["batch"] = [b]
                             mds["optim_step"] = [k]
                             ds_list.append(mds)
                         if mode != "testing":
