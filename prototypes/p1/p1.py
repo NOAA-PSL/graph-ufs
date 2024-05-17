@@ -85,7 +85,6 @@ class P1Emulator(ReplayEmulator):
     batch_size = 32
     num_epochs = 2
     chunks_per_epoch = 48
-    chunks_per_validation = 3
     steps_per_chunk = None
     checkpoint_chunks = 1
 

@@ -67,7 +67,6 @@ class ReplayEmulator:
     batch_size = None               # number of forecasts averaged over in loss per optim_step
     num_epochs = None               # number of epochs
     chunks_per_epoch = None         # number of chunks per epoch
-    chunks_per_validation = None
     steps_per_chunk = None          # number of steps to train for in each chunk
     checkpoint_chunks = None        # save model after this many chunks are processed
 
