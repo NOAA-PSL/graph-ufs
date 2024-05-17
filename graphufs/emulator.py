@@ -468,9 +468,6 @@ class ReplayEmulator:
                 # subsample in time, grab variables and vertical levels we want
                 xds = self.subsample_dataset(all_xds, new_time=new_time)
 
-                # load into RAM
-                xds = xds.load();
-
                 inputs = []
                 targets = []
                 forcings = []
