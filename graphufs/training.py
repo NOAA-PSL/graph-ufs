@@ -359,7 +359,7 @@ def optimize(
     lr = np.nan
 
     if emulator.mpi_rank == 0:
-        progress_bar = tqdm(total=n_steps, ncols=140, desc="Processing")
+        progress_bar = tqdm(total=n_steps, ncols=160, desc="Processing")
 
     for k in range(0, n_steps, num_gpus):
         # When the number of batches is not evenly divisible by num_gpus
@@ -421,10 +421,15 @@ def optimize(
             target_batches=t_batches,
             forcing_batches=f_batches,
         )
+
+        # get learning rate
         try:
             lr = opt_state[1].hyperparams["learning_rate"]
         except:
-            pass
+            try:
+                lr = opt_state[2].hyperparams["learning_rate"]
+            except:
+                pass
         learning_rates.append(lr)
 
         # call validation loss
@@ -459,7 +464,7 @@ def optimize(
                 )[0]
             )
             mean_grad_avg += mean_grad
-            description = f"loss = {loss:.5f}, val_loss = {loss_valid:.5f}, mean(|grad|) = {mean_grad:.8f}"
+            description = f"loss = {loss:.5f}, val_loss = {loss_valid:.5f}, mean(|grad|) = {mean_grad:.8f}, lr = {lr:.5e}"
             progress_bar.set_description(description)
             progress_bar.update(num_gpus)
 
@@ -474,7 +479,8 @@ def optimize(
         loss_avg /= N
         loss_valid_avg /= N
         mean_grad_avg /= N
-        description = f"loss = {loss_avg:.5f}, val_loss = {loss_valid_avg:.5f}, mean(|grad|) = {mean_grad_avg:.8f}"
+        lr = learning_rates[-1]
+        description = f"loss = {loss_avg:.5f}, val_loss = {loss_valid_avg:.5f}, mean(|grad|) = {mean_grad_avg:.8f}, lr = {lr:0.5e}"
         progress_bar.set_description(description)
         progress_bar.close()
 
@@ -553,7 +559,7 @@ def predict(
     all_predictions = []
 
     n_steps = input_batches["optim_step"].size
-    progress_bar = tqdm(total=n_steps, ncols=140, desc="Processing")
+    progress_bar = tqdm(total=n_steps, ncols=160, desc="Processing")
 
     for k in range(0, n_steps):
 

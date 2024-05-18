@@ -85,8 +85,11 @@ if __name__ == "__main__":
 
     # have to divide steps by num gpus so that LR progresses
     # with the number of parallel optimization steps
-    n_total = p1.num_epochs * p1.chunks_per_epoch * p1.steps_per_chunk
-    n_linear = max(n_total // 299, 4 * p1.num_gpus)
+    steps_in_epoch = p1.chunks_per_epoch * p1.steps_per_chunk
+    n_total = p1.num_epochs * steps_in_epoch
+    # use maximum of 1% of total steps or one epoch as warmup
+    # Note that: graphcast uses 1/299 = 0.33% for warmup
+    n_linear = max(n_total // 100, steps_in_epoch)
     n_linear = n_linear // p1.num_gpus
     n_total = n_total // p1.num_gpus
     n_cosine = n_total - n_linear
@@ -127,7 +130,7 @@ if __name__ == "__main__":
                 validation_data=data_valid,
                 opt_state=opt_state,
             )
-            timer2.stop(f"Done with chunk {c}")
+            timer2.stop(f"Done with chunk {c+1}")
 
         # save weights every epoch
         p1.save_checkpoint(params, id=e+1)
