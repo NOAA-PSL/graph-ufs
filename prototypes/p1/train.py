@@ -13,11 +13,12 @@ from graphufs import (
 from p1 import P1Emulator
 from ufs2arco import Timer
 
+
 def graphufs_optimizer(
     n_linear,
     n_total,
     peak_value=1e-3,
-    ):
+):
 
     # define learning rate schedules
     lr_schedule = optax.warmup_cosine_decay_schedule(
@@ -56,17 +57,19 @@ if __name__ == "__main__":
     trainer = DataGenerator(
         emulator=p1,
         n_optim_steps=p1.steps_per_chunk,
+        max_queue_size=p1.max_queue_size,
         mode="testing" if args.test else "training",
     )
 
     validator = DataGenerator(
         emulator=p1,
         n_optim_steps=p1.steps_per_chunk,
+        max_queue_size=p1.max_queue_size,
         mode="validation",
     )
 
     # compute approximate RAM usage and warn the user
-    mem_usage = get_approximate_memory_usage([trainer,validator])
+    mem_usage = get_approximate_memory_usage([trainer, validator], p1.max_queue_size)
     logging.info("*****************************************************")
     logging.info(f"**     Total approximate memory usage {mem_usage:.0f} Gbs     ***")
     logging.info("** Make sure you have RAM safely above this value ***")
@@ -105,9 +108,12 @@ if __name__ == "__main__":
             timer2.start()
 
             # get chunk of data in parallel with NN optimization
-            if p1.chunks_per_epoch > 1:
+            if p1.chunks_per_epoch > 1 and not (
+                e == 0 and c == 0 and p1.max_queue_size == 1
+            ):
                 trainer.generate()
                 validator.generate()
+
             data = trainer.get_data()
             data_valid = validator.get_data()
 

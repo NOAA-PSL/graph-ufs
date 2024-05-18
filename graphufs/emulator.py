@@ -69,6 +69,7 @@ class ReplayEmulator:
     chunks_per_epoch = None         # number of chunks per epoch
     steps_per_chunk = None          # number of steps to train for in each chunk
     checkpoint_chunks = None        # save model after this many chunks are processed
+    max_queue_size = None           # number of chunks in queue of data generators
 
     # others
     num_gpus = None                 # number of GPUs to use for training

@@ -257,6 +257,7 @@ def optimize(
         return params, loss, diagnostics, opt_state, grads
 
     # compute number of steps
+    batch_size = len(training_data["inputs"]["batch"])
     n_steps = len(training_data["inputs"]["optim_step"])
     n_steps_valid = len(validation_data["inputs"]["optim_step"])
     if n_steps_valid > n_steps:
@@ -462,8 +463,13 @@ def optimize(
             progress_bar.set_description(description)
             progress_bar.update(num_gpus)
 
+    # delete training/validation data as early as possible
+    for k in ["inputs", "targets", "forcings", "inittimes"]:
+        del training_data[k]
+        del validation_data[k]
+
+    # update progress bar one last time with average loss/grad values per chunk
     if emulator.mpi_rank == 0:
-        # update progress bar one last time with average loss/grad values per chunk
         N = len(loss_values)
         loss_avg /= N
         loss_valid_avg /= N
@@ -483,7 +489,7 @@ def optimize(
             previous_optim_steps = len(stored_loss_ds.optim_step)
 
         loss_ds["optim_step"] = [x + previous_optim_steps for x in optim_steps]
-        loss_ds.attrs["batch_size"] = len(training_data["inputs"]["batch"])
+        loss_ds.attrs["batch_size"] = batch_size
         loss_ds["var_index"] = xr.DataArray(
             np.arange(len(loss_by_var)),
             coords={"var_index": np.arange(len(loss_by_var))},

@@ -37,7 +37,12 @@ def get_chunk_data(generator, data: dict):
 
 
 def get_chunk_in_parallel(
-    generator, data: dict, data_0: dict, input_thread, first_chunk: bool
+    generator,
+    data: dict,
+    data_0: dict,
+    input_thread,
+    first_chunk: bool,
+    max_queue_size: int,
 ) -> threading.Thread:
     """Get a chunk of data in parallel with optimization/prediction. This keeps
     two big chunks (data and data_0) in RAM.
@@ -48,34 +53,41 @@ def get_chunk_in_parallel(
         data_0 (dict): the data currently being fetched/processed
         input_thread: the input thread
         first_chunk: is this the first chunk?
+        max_queue_size: number of chunks to store in RAM: 2 or 1
     """
-    # make sure input thread finishes before copying data_0 to data
-    if not first_chunk:
-        input_thread.join()
+    if max_queue_size == 1 or first_chunk:
+        # run generator on main thread
+        logging.info("Loading chunk into RAM ...")
+        get_chunk_data(generator, data_0)
+        logging.info(f"Finished loading chunk into RAM ...")
+        input_thread = None
+    else:
+        # wait until the input thread finishes
+        if input_thread is not None:
+            input_thread.join()
+        # copy data_0 to data
         for k, v in data_0.items():
             data[k] = v
-    else:
-        logging.info("Loading first chunk into RAM ...")
-    # get data
-    input_thread = threading.Thread(
-        target=get_chunk_data,
-        args=(generator, data_0),
-    )
-    input_thread.start()
-    # for first chunk, wait until input thread finishes
-    if first_chunk:
-        input_thread.join()
-        logging.info(f"Finished loading first chunk into RAM ...")
+        # launch generator in separate thread
+        input_thread = threading.Thread(
+            target=get_chunk_data,
+            args=(generator, data_0),
+        )
+        input_thread.start()
+
     return input_thread
 
 
 class DataGenerator:
     """Data generator class"""
 
-    def __init__(self, emulator, mode: str, n_optim_steps: int = None):
+    def __init__(
+        self, emulator, mode: str, n_optim_steps: int = None, max_queue_size: int = 2
+    ):
         self.data = {}
         self.data_0 = {}
         self.input_thread = None
+        self.max_queue_size = max_queue_size
 
         self.gen = emulator.get_batches(
             n_optim_steps=n_optim_steps,
@@ -86,7 +98,12 @@ class DataGenerator:
 
     def generate(self):
         self.input_thread = get_chunk_in_parallel(
-            self.gen, self.data, self.data_0, self.input_thread, self.first_chunk
+            self.gen,
+            self.data,
+            self.data_0,
+            self.input_thread,
+            self.first_chunk,
+            self.max_queue_size,
         )
         self.first_chunk = False
 
@@ -284,7 +301,7 @@ def str2bool(v):
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
-def get_approximate_memory_usage(generators):
+def get_approximate_memory_usage(generators, max_queue_size):
     """Get approximate memory usage of a given run
     Each data generator usage depends on the chunk size, bigger chunks require more RAM.
     Since we keep two chunks in RAM, the requirement doubles.
@@ -292,6 +309,7 @@ def get_approximate_memory_usage(generators):
 
     Args:
         generators (list(DataGenerator)): a list of data generators
+        max_queue_size (int): maximum queue size
     Returns:
         memory usage in GBs
     """
@@ -301,5 +319,5 @@ def get_approximate_memory_usage(generators):
         for k, v in gen.data_0.items():
             chunk_ram += v.nbytes
         chunk_ram /= (1024 * 1024 * 1024)
-        total += 2 * chunk_ram
+        total += max_queue_size * chunk_ram
     return total
