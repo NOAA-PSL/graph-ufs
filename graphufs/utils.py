@@ -4,6 +4,7 @@ import logging
 import threading
 import xarray as xr
 
+
 def get_chunk_data(generator, data: dict):
     """Get multiple training batches.
 
@@ -53,6 +54,8 @@ def get_chunk_in_parallel(
         input_thread.join()
         for k, v in data_0.items():
             data[k] = v
+    else:
+        logging.info("Loading first chunk into RAM ...")
     # get data
     input_thread = threading.Thread(
         target=get_chunk_data,
@@ -62,6 +65,7 @@ def get_chunk_in_parallel(
     # for first chunk, wait until input thread finishes
     if first_chunk:
         input_thread.join()
+        logging.info(f"Finished loading first chunk into RAM ...")
     return input_thread
 
 
@@ -88,9 +92,9 @@ class DataGenerator:
 
     def get_data(self):
         if self.data:
-            return self.data;
+            return self.data
         else:
-            return self.data_0;
+            return self.data_0
 
 
 def product_dict(**kwargs):
@@ -270,6 +274,7 @@ def set_emulator_options(emulator, args) -> None:
 
 
 def str2bool(v):
+    """Convert string to boolean type"""
     if isinstance(v, bool):
         return v
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
@@ -278,3 +283,23 @@ def str2bool(v):
         return False
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
+
+def get_approximate_memory_usage(generators):
+    """Get approximate memory usage of a given run
+    Each data generator usage depends on the chunk size, bigger chunks require more RAM.
+    Since we keep two chunks in RAM, the requirement doubles.
+    We add 6 Gb to other program memory requirements.
+
+    Args:
+        generators (list(DataGenerator)): a list of data generators
+    Returns:
+        memory usage in GBs
+    """
+    total = 6
+    for gen in generators:
+        chunk_ram = 0
+        for k, v in gen.data_0.items():
+            chunk_ram += v.nbytes
+        chunk_ram /= (1024 * 1024 * 1024)
+        total += 2 * chunk_ram
+    return total

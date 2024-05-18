@@ -7,6 +7,7 @@ from graphufs import (
     DataGenerator,
     init_devices,
     init_model,
+    get_approximate_memory_usage,
 )
 
 from p1 import P1Emulator
@@ -63,6 +64,13 @@ if __name__ == "__main__":
         n_optim_steps=p1.steps_per_chunk,
         mode="validation",
     )
+
+    # compute approximate RAM usage and warn the user
+    mem_usage = get_approximate_memory_usage([trainer,validator])
+    logging.info("*****************************************************")
+    logging.info(f"**     Total approximate memory usage {mem_usage:.0f} Gbs     ***")
+    logging.info("** Make sure you have RAM safely above this value ***")
+    logging.info("*****************************************************")
 
     # load weights or initialize a random model
     logging.info(f"Initializing weights: {0}")

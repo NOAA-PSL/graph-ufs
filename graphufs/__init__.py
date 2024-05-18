@@ -10,6 +10,7 @@ from .utils import (
     DataGenerator,
     add_emulator_arguments,
     set_emulator_options,
+    get_approximate_memory_usage,
 )
 from .evaluation import (
     convert_wb2_format,

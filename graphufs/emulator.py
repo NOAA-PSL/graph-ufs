@@ -401,7 +401,7 @@ class ReplayEmulator:
         # print chunk boundaries
         logging.info(f"Chunks for {mode}: {len(all_new_time_chunks)}")
         for chunk_id, new_time in enumerate(all_new_time_chunks):
-            logging.info(f"Chunk {chunk_id}: {new_time[0]} to {new_time[-1]} : {len(new_time)} time stamps")
+            logging.info(f"Chunk {chunk_id+1}: {new_time[0]} to {new_time[-1]} : {len(new_time)} time stamps")
 
         # loop forever
         while True:
