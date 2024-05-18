@@ -82,9 +82,9 @@ if __name__ == "__main__":
 
     # have to divide steps by num gpus so that LR progresses
     # with the number of parallel optimization steps
-    n_linear = 100
-    n_linear = n_linear // p1.num_gpus
     n_total = p1.num_epochs * p1.chunks_per_epoch * p1.steps_per_chunk
+    n_linear = max(n_total // 299, 4 * p1.num_gpus)
+    n_linear = n_linear // p1.num_gpus
     n_total = n_total // p1.num_gpus
     n_cosine = n_total - n_linear
     optimizer = graphufs_optimizer(
