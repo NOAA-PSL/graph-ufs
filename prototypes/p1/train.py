@@ -58,6 +58,7 @@ if __name__ == "__main__":
         emulator=p1,
         n_optim_steps=p1.steps_per_chunk,
         max_queue_size=p1.max_queue_size,
+        num_workers=p1.num_workers,
         mode="testing" if args.test else "training",
     )
 
@@ -65,12 +66,17 @@ if __name__ == "__main__":
         emulator=p1,
         n_optim_steps=p1.steps_per_chunk,
         max_queue_size=p1.max_queue_size,
+        num_workers=p1.num_workers,
         mode="validation",
     )
 
+    # get first chunk here since it is required by init_model
+    data_train = trainer.get_data()
+    data_valid = validator.get_data()
+
     # compute approximate RAM usage and warn the user
     mem_usage = get_approximate_memory_usage(
-        [trainer, validator], p1.max_queue_size, p1.no_load_chunk
+        [data_train, data_valid], p1.max_queue_size, p1.num_workers, p1.no_load_chunk
     )
     logging.info("*****************************************************")
     logging.info(f"**     Total approximate memory usage {mem_usage:.0f} Gbs     ***")
@@ -79,8 +85,7 @@ if __name__ == "__main__":
 
     # load weights or initialize a random model
     logging.info(f"Initializing weights: {0}")
-    data = trainer.get_data()
-    params, state = init_model(p1, data)
+    params, state = init_model(p1, data_train)
     loss_name = f"{p1.local_store_path}/loss.nc"
     if os.path.exists(loss_name):
         os.remove(loss_name)
@@ -113,14 +118,9 @@ if __name__ == "__main__":
             timer2.start()
 
             # get chunk of data in parallel with NN optimization
-            if p1.chunks_per_epoch > 1 and not (
-                e == 0 and c == 0 and p1.max_queue_size == 1
-            ):
-                trainer.generate()
-                validator.generate()
-
-            data = trainer.get_data()
-            data_valid = validator.get_data()
+            if p1.chunks_per_epoch > 1 and not (e == 0 and c == 0):
+                data_train = trainer.get_data()
+                data_valid = validator.get_data()
 
             # optimize
             params, loss, opt_state = optimize(
@@ -128,7 +128,7 @@ if __name__ == "__main__":
                 state=state,
                 optimizer=optimizer,
                 emulator=p1,
-                training_data=data,
+                training_data=data_train,
                 validation_data=data_valid,
                 opt_state=opt_state,
             )
@@ -138,4 +138,7 @@ if __name__ == "__main__":
         p1.save_checkpoint(params, id=e + 1)
         timer1.stop(f"Done with epoch {e+1}")
 
+    # stop the data generators
+    trainer.stop()
+    validator.stop()
     logging.info("Done Training")

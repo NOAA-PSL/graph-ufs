@@ -2,7 +2,9 @@ import itertools
 import argparse
 import logging
 import threading
+import queue
 import xarray as xr
+import concurrent.futures
 
 
 def get_chunk_data(generator, data: dict, no_load_chunk: bool):
@@ -10,7 +12,7 @@ def get_chunk_data(generator, data: dict, no_load_chunk: bool):
 
     Args:
         generator: chunk generator object
-        data (List[3]): A list containing the [inputs, targets, forcings]
+        data (dict): A dict containing the [inputs, targets, forcings]
         no_load_chunk: don't load chunk into RAM
     """
 
@@ -38,86 +40,68 @@ def get_chunk_data(generator, data: dict, no_load_chunk: bool):
     )
 
 
-def get_chunk_in_parallel(
-    generator,
-    data: dict,
-    data_0: dict,
-    input_thread,
-    first_chunk: bool,
-    max_queue_size: int,
-    no_load_chunk: bool,
-) -> threading.Thread:
-    """Get a chunk of data in parallel with optimization/prediction. This keeps
-    two big chunks (data and data_0) in RAM.
-
-    Args:
-        generator: chunk generator object
-        data (dict): the data being used by optimization/prediction process
-        data_0 (dict): the data currently being fetched/processed
-        input_thread: the input thread
-        first_chunk: is this the first chunk?
-        max_queue_size: number of chunks to store in RAM: 2 or 1
-        no_load_chunk: don't load chunk into RAM
-    """
-    if max_queue_size == 1 or first_chunk:
-        # run generator on main thread
-        logging.info("Loading chunk into RAM ...")
-        get_chunk_data(generator, data_0, no_load_chunk)
-        logging.info(f"Finished loading chunk into RAM ...")
-        input_thread = None
-    else:
-        # wait until the input thread finishes
-        if input_thread is not None:
-            input_thread.join()
-        # copy data_0 to data
-        for k, v in data_0.items():
-            data[k] = v
-        # launch generator in separate thread
-        input_thread = threading.Thread(
-            target=get_chunk_data,
-            args=(generator, data_0, no_load_chunk),
-        )
-        input_thread.start()
-
-    return input_thread
-
-
 class DataGenerator:
     """Data generator class"""
 
     def __init__(
-        self, emulator, mode: str, n_optim_steps: int = None, max_queue_size: int = 2
+        self,
+        emulator,
+        mode: str,
+        n_optim_steps: int = None,
+        num_workers: int = 1,
+        max_queue_size: int = 1,
     ):
-        self.data = {}
-        self.data_0 = {}
-        self.input_thread = None
+        # params for data queue
+        self.num_workers = num_workers
         self.max_queue_size = max_queue_size
-        self.no_load_chunk = emulator.no_load_chunk
+        self.data_queue = queue.Queue(maxsize=max_queue_size)
+        self.stop_event = threading.Event()
 
+        # initialize batch generator
+        self.no_load_chunk = emulator.no_load_chunk
         self.gen = emulator.get_batches(
             n_optim_steps=n_optim_steps,
             mode=mode,
         )
-        self.first_chunk = True
-        self.generate()
+
+        # create an thread pool of works for generating data
+        if self.num_workers > 0:
+            self.executor = concurrent.futures.ThreadPoolExecutor(
+                max_workers=self.num_workers
+            )
+            self.futures = [
+                self.executor.submit(self.generate) for i in range(self.num_workers)
+            ]
 
     def generate(self):
-        self.input_thread = get_chunk_in_parallel(
-            self.gen,
-            self.data,
-            self.data_0,
-            self.input_thread,
-            self.first_chunk,
-            self.max_queue_size,
-            self.no_load_chunk,
-        )
-        self.first_chunk = False
+        """ Data generator function called by workers """
+        while not self.stop_event.is_set():
+            # get a chunk of data
+            chunk_data = {}
+            get_chunk_data(self.gen, chunk_data, self.no_load_chunk)
+
+            # put data to queue
+            try:
+                self.data_queue.put(chunk_data)
+            except queue.Full:
+                if self.stop_event.is_set():
+                    break
 
     def get_data(self):
-        if self.data:
-            return self.data
+        """ Get data from queue """
+        if self.num_workers > 0:
+            return self.data_queue.get()
         else:
-            return self.data_0
+            chunk_data = {}
+            get_chunk_data(self.gen, chunk_data, self.no_load_chunk)
+            return chunk_data
+
+    def stop(self):
+        """ Stop generator at the end of training"""
+        while not self.data_queue.empty():
+            self.data_queue.get()
+            self.data_queue.task_done()
+        self.stop_event.set()
 
 
 def product_dict(**kwargs):
@@ -307,25 +291,26 @@ def str2bool(v):
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
-def get_approximate_memory_usage(generators, max_queue_size, no_load_chunk):
+def get_approximate_memory_usage(data, max_queue_size, num_workers, no_load_chunk):
     """Get approximate memory usage of a given run
     Each data generator usage depends on the chunk size, bigger chunks require more RAM.
     Since we keep two chunks in RAM, the requirement doubles.
     We add 6 Gb to other program memory requirements.
 
     Args:
-        generators (list(DataGenerator)): a list of data generators
+        data (list(dict)): a list of training and validation data
         max_queue_size (int): maximum queue size
+        num_workers (int): number of worker threads
         no_load_chunk: don't load chunk into RAM
     Returns:
         memory usage in GBs
     """
     total = 6
     if not no_load_chunk:
-        for gen in generators:
+        for d in data:
             chunk_ram = 0
-            for k, v in gen.data_0.items():
-                chunk_ram += v.nbytes
-            chunk_ram /= (1024 * 1024 * 1024)
-            total += max_queue_size * chunk_ram
+            for k, v in d.items():
+               chunk_ram += v.nbytes
+            chunk_ram /= 1024 * 1024 * 1024
+            total += (max_queue_size + num_workers) * chunk_ram
     return total

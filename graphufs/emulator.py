@@ -70,6 +70,7 @@ class ReplayEmulator:
     steps_per_chunk = None          # number of steps to train for in each chunk
     checkpoint_chunks = None        # save model after this many chunks are processed
     max_queue_size = None           # number of chunks in queue of data generators
+    num_workers = None              # number of worker threads for data generators
     no_load_chunk = None            # don't load chunk into RAM, has the lowest memory usage if true
 
     # others
@@ -401,9 +402,10 @@ class ReplayEmulator:
                 all_new_time_chunks.append(all_new_time[i * chunk_size:(i + 1) * chunk_size + overlap_step])
 
         # print chunk boundaries
-        logging.info(f"Chunks for {mode}: {len(all_new_time_chunks)}")
+        message = f"Chunks for {mode}: {len(all_new_time_chunks)}"
         for chunk_id, new_time in enumerate(all_new_time_chunks):
-            logging.info(f"Chunk {chunk_id+1}: {new_time[0]} to {new_time[-1]} : {len(new_time)} time stamps")
+            message += f"\nChunk {chunk_id+1}: {new_time[0]} to {new_time[-1]} : {len(new_time)} time stamps"
+        logging.info(message)
 
         # loop forever
         while True:
