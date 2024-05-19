@@ -479,12 +479,6 @@ def optimize(
             progress_bar.set_description(description)
             progress_bar.update(num_gpus)
 
-    # delete training/validation data as early as possible
-    if emulator.chunks_per_epoch > 1:
-        for k in ["inputs", "targets", "forcings", "inittimes"]:
-            del training_data[k]
-            del validation_data[k]
-
     # update progress bar one last time with average loss/grad values per chunk
     if emulator.mpi_rank == 0:
         N = len(loss_values)
