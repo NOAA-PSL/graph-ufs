@@ -70,6 +70,7 @@ class ReplayEmulator:
     steps_per_chunk = None          # number of steps to train for in each chunk
     checkpoint_chunks = None        # save model after this many chunks are processed
     max_queue_size = None           # number of chunks in queue of data generators
+    no_load_chunk = None            # don't load chunk into RAM, has the lowest memory usage if true
 
     # others
     num_gpus = None                 # number of GPUs to use for training

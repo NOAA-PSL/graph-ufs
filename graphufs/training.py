@@ -100,12 +100,23 @@ def init_model(emulator, data: dict):
         return predictor(inputs, targets_template=targets_template, forcings=forcings)
 
     init_jitted = jit(run_forward.init)
+
+    inputs=data["inputs"].sel(optim_step=0)
+    targets=data["targets"].sel(optim_step=0)
+    forcings=data["forcings"].sel(optim_step=0)
+    # if we are not loading chunks, load slice as it
+    # seems init_jitted requires it
+    if emulator.no_load_chunk:
+        inputs = inputs.load()
+        targets = targets.load()
+        forcings = forcings.load()
+
     params, state = init_jitted(
         rng=PRNGKey(emulator.init_rng_seed),
         emulator=emulator,
-        inputs=data["inputs"].sel(optim_step=0),
-        targets_template=data["targets"].sel(optim_step=0),
-        forcings=data["forcings"].sel(optim_step=0),
+        inputs=inputs,
+        targets_template=targets,
+        forcings=forcings,
     )
     return params, state
 
@@ -469,9 +480,10 @@ def optimize(
             progress_bar.update(num_gpus)
 
     # delete training/validation data as early as possible
-    for k in ["inputs", "targets", "forcings", "inittimes"]:
-        del training_data[k]
-        del validation_data[k]
+    if emulator.chunks_per_epoch > 1:
+        for k in ["inputs", "targets", "forcings", "inittimes"]:
+            del training_data[k]
+            del validation_data[k]
 
     # update progress bar one last time with average loss/grad values per chunk
     if emulator.mpi_rank == 0:

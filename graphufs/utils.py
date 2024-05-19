@@ -5,12 +5,13 @@ import threading
 import xarray as xr
 
 
-def get_chunk_data(generator, data: dict):
+def get_chunk_data(generator, data: dict, no_load_chunk: bool):
     """Get multiple training batches.
 
     Args:
         generator: chunk generator object
         data (List[3]): A list containing the [inputs, targets, forcings]
+        no_load_chunk: don't load chunk into RAM
     """
 
     # get batches from replay on GCS
@@ -19,11 +20,12 @@ def get_chunk_data(generator, data: dict):
     except StopIteration:
         return
 
-    # load into ram
-    inputs.load()
-    targets.load()
-    forcings.load()
-    inittimes.load()
+    # load into ram unless specified otherwise
+    if not no_load_chunk:
+        inputs.load()
+        targets.load()
+        forcings.load()
+        inittimes.load()
 
     # update dictionary
     data.update(
@@ -43,6 +45,7 @@ def get_chunk_in_parallel(
     input_thread,
     first_chunk: bool,
     max_queue_size: int,
+    no_load_chunk: bool,
 ) -> threading.Thread:
     """Get a chunk of data in parallel with optimization/prediction. This keeps
     two big chunks (data and data_0) in RAM.
@@ -54,11 +57,12 @@ def get_chunk_in_parallel(
         input_thread: the input thread
         first_chunk: is this the first chunk?
         max_queue_size: number of chunks to store in RAM: 2 or 1
+        no_load_chunk: don't load chunk into RAM
     """
     if max_queue_size == 1 or first_chunk:
         # run generator on main thread
         logging.info("Loading chunk into RAM ...")
-        get_chunk_data(generator, data_0)
+        get_chunk_data(generator, data_0, no_load_chunk)
         logging.info(f"Finished loading chunk into RAM ...")
         input_thread = None
     else:
@@ -71,7 +75,7 @@ def get_chunk_in_parallel(
         # launch generator in separate thread
         input_thread = threading.Thread(
             target=get_chunk_data,
-            args=(generator, data_0),
+            args=(generator, data_0, no_load_chunk),
         )
         input_thread.start()
 
@@ -88,6 +92,7 @@ class DataGenerator:
         self.data_0 = {}
         self.input_thread = None
         self.max_queue_size = max_queue_size
+        self.no_load_chunk = emulator.no_load_chunk
 
         self.gen = emulator.get_batches(
             n_optim_steps=n_optim_steps,
@@ -104,6 +109,7 @@ class DataGenerator:
             self.input_thread,
             self.first_chunk,
             self.max_queue_size,
+            self.no_load_chunk,
         )
         self.first_chunk = False
 
@@ -301,7 +307,7 @@ def str2bool(v):
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
-def get_approximate_memory_usage(generators, max_queue_size):
+def get_approximate_memory_usage(generators, max_queue_size, no_load_chunk):
     """Get approximate memory usage of a given run
     Each data generator usage depends on the chunk size, bigger chunks require more RAM.
     Since we keep two chunks in RAM, the requirement doubles.
@@ -310,14 +316,16 @@ def get_approximate_memory_usage(generators, max_queue_size):
     Args:
         generators (list(DataGenerator)): a list of data generators
         max_queue_size (int): maximum queue size
+        no_load_chunk: don't load chunk into RAM
     Returns:
         memory usage in GBs
     """
     total = 6
-    for gen in generators:
-        chunk_ram = 0
-        for k, v in gen.data_0.items():
-            chunk_ram += v.nbytes
-        chunk_ram /= (1024 * 1024 * 1024)
-        total += max_queue_size * chunk_ram
+    if not no_load_chunk:
+        for gen in generators:
+            chunk_ram = 0
+            for k, v in gen.data_0.items():
+                chunk_ram += v.nbytes
+            chunk_ram /= (1024 * 1024 * 1024)
+            total += max_queue_size * chunk_ram
     return total

@@ -69,7 +69,9 @@ if __name__ == "__main__":
     )
 
     # compute approximate RAM usage and warn the user
-    mem_usage = get_approximate_memory_usage([trainer, validator], p1.max_queue_size)
+    mem_usage = get_approximate_memory_usage(
+        [trainer, validator], p1.max_queue_size, p1.no_load_chunk
+    )
     logging.info("*****************************************************")
     logging.info(f"**     Total approximate memory usage {mem_usage:.0f} Gbs     ***")
     logging.info("** Make sure you have RAM safely above this value ***")
@@ -133,7 +135,7 @@ if __name__ == "__main__":
             timer2.stop(f"Done with chunk {c+1}")
 
         # save weights every epoch
-        p1.save_checkpoint(params, id=e+1)
+        p1.save_checkpoint(params, id=e + 1)
         timer1.stop(f"Done with epoch {e+1}")
 
     logging.info("Done Training")

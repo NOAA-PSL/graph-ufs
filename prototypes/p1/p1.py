@@ -88,6 +88,7 @@ class P1Emulator(ReplayEmulator):
     steps_per_chunk = None
     checkpoint_chunks = 1
     max_queue_size = 2
+    no_load_chunk = False
 
     # multi GPU and xla options
     num_gpus = 1
