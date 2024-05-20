@@ -97,6 +97,9 @@ class P0Emulator(ReplayEmulator):
     chunks_per_epoch = 1
     steps_per_chunk = None
     checkpoint_chunks = 1
+    max_queue_size = 1
+    num_workers = 1
+    no_load_chunks = False
 
     # others
     num_gpus = 1
