@@ -53,6 +53,8 @@ if __name__ == "__main__":
     # for multi-gpu training
     init_devices(p1)
 
+    logging.info("Loading first chunk of training and validation")
+
     # data generators
     trainer = DataGenerator(
         emulator=p1,
@@ -73,6 +75,8 @@ if __name__ == "__main__":
     # get first chunk here since it is required by init_model
     data_train = trainer.get_data()
     data_valid = validator.get_data()
+
+    logging.info("Finished loading chunks")
 
     # compute approximate RAM usage and warn the user
     mem_usage = get_approximate_memory_usage(

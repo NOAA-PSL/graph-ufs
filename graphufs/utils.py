@@ -64,7 +64,7 @@ class DataGenerator:
             mode=mode,
         )
 
-        # create an thread pool of works for generating data
+        # create a thread pool of workers for generating data
         if self.num_workers > 0:
             self.executor = concurrent.futures.ThreadPoolExecutor(
                 max_workers=self.num_workers
@@ -79,13 +79,8 @@ class DataGenerator:
             # get a chunk of data
             chunk_data = {}
             get_chunk_data(self.gen, chunk_data, self.no_load_chunk)
-
             # put data to queue
-            try:
-                self.data_queue.put(chunk_data)
-            except queue.Full:
-                if self.stop_event.is_set():
-                    break
+            self.data_queue.put(chunk_data)
 
     def get_data(self):
         """ Get data from queue """
@@ -292,9 +287,9 @@ def str2bool(v):
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
 def get_approximate_memory_usage(data, max_queue_size, num_workers, no_load_chunk):
-    """Get approximate memory usage of a given run
-    Each data generator usage depends on the chunk size, bigger chunks require more RAM.
-    Since we keep two chunks in RAM, the requirement doubles.
+    """Gets approximate memory usage of a given configuration.
+    Each data generator's memory usage depends on the chunk size, bigger chunks requiring more RAM.
+    Since we keep two chunks in RAM by default, the requirement doubles.
     We add 6 Gb to other program memory requirements.
 
     Args:
