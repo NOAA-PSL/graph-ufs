@@ -1,6 +1,7 @@
 """
 Implementations of Torch Dataset and DataLoader
 """
+from os.path import join
 from typing import Optional
 import numpy as np
 import xarray as xr
@@ -32,6 +33,14 @@ class Dataset(TorchDataset):
             xds (xarray.Dataset): The xarray dataset.
         """
         return self.sample_generator.ds
+
+    @property
+    def local_inputs_path(self) -> str:
+        return join(self.emulator.local_store_path, self.mode, "inputs.zarr")
+
+    @property
+    def local_targets_path(self) -> str:
+        return join(self.emulator.local_store_path, self.mode, "targets.zarr")
 
     def __init__(
         self,
@@ -241,8 +250,8 @@ class Dataset(TorchDataset):
         y = y.chunk(chunks)
         spatial_region = {k : slice(None, None) for k in x.dims if k != "sample"}
         region = {"sample": slice(idx, idx+1), **spatial_region}
-        x.to_dataset(name="inputs").to_zarr(f"{self.emulator.local_store_path}/inputs.zarr", region=region)
-        y.to_dataset(name="targets").to_zarr(f"{self.emulator.local_store_path}/targets.zarr", region=region)
+        x.to_dataset(name="inputs").to_zarr(self.local_inputs_path, region=region)
+        y.to_dataset(name="targets").to_zarr(self.local_targets_path, region=region)
 
     def _make_container(self, template: xr.Dataset, name: str, chunks: dict):
 
@@ -266,6 +275,30 @@ class Dataset(TorchDataset):
         )
         return xds
 
+
+class LocalDataset(TorchDataset):
+
+    def __init__(self, emulator, mode):
+        self.emulator = emulator
+        self.mode = mode
+        self.inputs = xr.open_zarr(self.local_inputs_path)
+        self.targets = xr.open_zarr(self.local_targets_path)
+
+    def __len__(self):
+        return len(self.inputs["sample"])
+
+    def __getitem__(self, idx):
+        x = self.inputs.isel(sample=idx, drop=True).values
+        y = self.targets.isel(sample=idx, drop=True).values
+        return x, y
+
+    @property
+    def local_inputs_path(self) -> str:
+        return join(self.emulator.local_store_path, self.mode, "inputs.zarr")
+
+    @property
+    def local_targets_path(self) -> str:
+        return join(self.emulator.local_store_path, self.mode, "targets.zarr")
 
 
 class DataLoader(TorchDataLoader):

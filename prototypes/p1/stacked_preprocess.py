@@ -8,12 +8,15 @@ from p1 import P1Emulator
 
 from ufs2arco import Timer
 
-from dask.cache import Cache
-
-cache = Cache(10e9)
-cache.register()
+#from dask.cache import Cache
+#
+#cache = Cache(10e9)
+#cache.register()
 
 def pull_the_data(tds: TorchDataset):
+
+    # note this is bad
+    tds.xds.load()
 
     chunks = {
         "sample": 1,
@@ -25,8 +28,8 @@ def pull_the_data(tds: TorchDataset):
     inputs = tds._make_container(x, name="inputs", chunks=chunks)
     targets = tds._make_container(y, name="targets", chunks=chunks)
 
-    inputs.to_zarr(f"{tds.emulator.local_store_path}/{tds.mode}/inputs.zarr", compute=False, mode="w")
-    targets.to_zarr(f"{tds.emulator.local_store_path}/{tds.mode}targets.zarr", compute=False, mode="w")
+    inputs.to_zarr(tds.local_inputs_path, compute=False, mode="w")
+    targets.to_zarr(tds.local_targets_path, compute=False, mode="w")
 
     for idx in range(len(tds)):
         tds._store_sample(idx, chunks=chunks)
@@ -43,16 +46,16 @@ if __name__ == "__main__":
     timer = Timer()
 
     # parse arguments
+    # 1. This sets normalization and stacked_normalization
     p1, args = P1Emulator.from_parser()
 
-    # 1. Read remote normalization, store locally, and set to p1
-    p1.set_normalization()
-
     # 2. Pull the training and validation data and store to data/data.zarr
-    logging.info("Downloading Training Data")
-    training_data = TorchDataset(p1, mode="training")
+    for mode in ["training", "validation"]:
+        logging.info(f"Downloading {mode} data")
+        tds = TorchDataset(p1, mode=mode)
 
-    timer.start()
-    pull_the_data(training_data)
-    timer.stop()
+        timer.start()
+        pull_the_data(tds)
+        timer.stop()
+
     logging.info("Done preprocessing")

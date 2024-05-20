@@ -84,7 +84,7 @@ def init_model(emulator, gds, last_input_channel_mapping):
 
 
 def optimize(
-    params, state, optimizer, emulator, trainer, validator, weights, last_input_channel_mapping,
+    params, state, optimizer, emulator, trainer, validator, weights, last_input_channel_mapping, opt_state=None
 ):
     """Optimize the model parameters by running through all optim_steps in data
 
@@ -102,7 +102,7 @@ def optimize(
             this doesn't have gradient info, but we could add that
     """
 
-    opt_state = optimizer.init(params)
+    opt_state = optimizer.init(params) if opt_state is None else opt_state
     num_gpus = emulator.num_gpus
     mpi_size = emulator.mpi_size
     use_jax_distributed = emulator.use_jax_distributed
@@ -212,10 +212,10 @@ def optimize(
 
     optim_steps = []
     loss_values = []
-
+    learning_rates = []
+    lr = np.nan
     loss_by_channel = []
     n_steps = len(trainer)
-
 
     progress_bar = tqdm(total=n_steps, ncols=140, desc="Processing")
     for k, (input_batches, target_batches) in enumerate(trainer):
@@ -233,6 +233,11 @@ def optimize(
         optim_steps.append(k)
         loss_values.append(loss)
         loss_by_channel.append(diagnostics)
+        try:
+            lr = opt_state[1].hyperparams["learning_rate"]
+        except:
+            pass
+        learning_rates.append(lr)
 
         mean_grad = np.mean(
             tree_util.tree_flatten(
@@ -319,6 +324,10 @@ def optimize(
             "long_name": "validation loss function value",
             "description": "averaged over validation data once per epoch",
         },
+    )
+    loss_ds["learning_rate"] = xr.DataArray(
+        learning_rates,
+        dims=("optim_step",),
     )
     # this is just so we know what optim steps correspond to what epoch
     loss_ds["epoch_label"] = (1+previous_epochs)*xr.ones_like(loss_ds.optim_step)
