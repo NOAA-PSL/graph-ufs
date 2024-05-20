@@ -46,16 +46,25 @@ if __name__ == "__main__":
     generator = DataGenerator(
         emulator=gufs,
         n_optim_steps=gufs.steps_per_chunk,
+        max_queue_size=gufs.max_queue_size,
+        num_workers=gufs.num_workers,
         mode="testing" if args.test else "training",
     )
+    data_train = generator.get_data()
 
     # validation
     if not args.test:
-        generator_valid = DataGenerator(
+        validator = DataGenerator(
             emulator=gufs,
             n_optim_steps=gufs.steps_per_chunk,
+            max_queue_size=gufs.max_queue_size,
+            num_workers=gufs.num_workers,
             mode="validation",
         )
+        data_valid = validator.get_data()
+
+
+
 
     # load weights or initialize a random model
     if gufs.checkpoint_exists(args.id) and args.id >= 0:
@@ -63,8 +72,7 @@ if __name__ == "__main__":
         params, state = gufs.load_checkpoint(args.id)
     else:
         logging.info("Initializing Optimizer and Parameters")
-        data = generator.get_data()  # just to figure out shapes
-        params, state = init_model(gufs, data)
+        params, state = init_model(gufs, data_train)
         loss_name = f"{gufs.local_store_path}/loss.nc"
         if os.path.exists(loss_name):
             os.remove(loss_name)
@@ -79,14 +87,12 @@ if __name__ == "__main__":
         # training loop
         for e in range(gufs.num_epochs):
             for c in range(gufs.chunks_per_epoch):
-                logging.info(f"Training on epoch {e} and chunk {c}")
+                logging.info(f"Training on epoch {e+1} and chunk {c+1}")
 
                 # get chunk of data in parallel with NN optimization
-                if gufs.chunks_per_epoch > 1:
-                    generator.generate()
-                    generator_valid.generate()
-                data = generator.get_data()
-                data_valid = generator_valid.get_data()
+                if gufs.chunks_per_epoch > 1 and not (e==0 and c==0):
+                    data_train = generator.get_data()
+                    data_valid = validator.get_data()
 
                 # optimize
                 params, loss, opt_state = optimize(
@@ -94,7 +100,7 @@ if __name__ == "__main__":
                     state=state,
                     optimizer=optimizer,
                     emulator=gufs,
-                    training_data=data,
+                    training_data=data_train,
                     validation_data=data_valid,
                     opt_state=opt_state,
                 )
@@ -103,6 +109,9 @@ if __name__ == "__main__":
                 if c % gufs.checkpoint_chunks == 0:
                     ckpt_id = (e * gufs.chunks_per_epoch + c) // gufs.checkpoint_chunks
                     gufs.save_checkpoint(params, ckpt_id)
+
+        generator.stop()
+        validator.stop()
 
     # testing
     else:
@@ -121,7 +130,6 @@ if __name__ == "__main__":
             logging.info(f"Testing on chunk {c}")
 
             # get chunk of data in parallel with inference
-            generator.generate()
             data = generator.get_data()
 
             # run predictions
@@ -153,3 +161,5 @@ if __name__ == "__main__":
         logging.info("--------- Statistiscs ---------")
         for k, v in stats.items():
             logging.info(f"{k:32s}: RMSE: {v[0]} BIAS: {v[1]}")
+
+        generator.stop()
