@@ -469,13 +469,13 @@ def optimize(
             for key, val in diagnostics.items():
                 loss_by_var[key].append(val)
 
-            mean_grad = np.mean(
-                tree_util.tree_flatten(
-                    tree_util.tree_map(lambda x: np.abs(x).mean(), grads)
-                )[0]
-            )
-            mean_grad_avg += mean_grad
-            description = f"loss = {loss:.5f}, val_loss = {loss_valid:.5f}, mean(|grad|) = {mean_grad:.8f}, lr = {lr:.5e}"
+            #mean_grad = np.mean(
+            #    tree_util.tree_flatten(
+            #        tree_util.tree_map(lambda x: np.abs(x).mean(), grads)
+            #    )[0]
+            #)
+            #mean_grad_avg += mean_grad
+            description = f"loss = {loss:.5f}, val_loss = {loss_valid:.5f}, lr = {lr:.5e}"
             progress_bar.set_description(description)
             progress_bar.update(num_gpus)
 
@@ -484,9 +484,8 @@ def optimize(
         N = len(loss_values)
         loss_avg /= N
         loss_valid_avg /= N
-        mean_grad_avg /= N
         lr = learning_rates[-1]
-        description = f"loss = {loss_avg:.5f}, val_loss = {loss_valid_avg:.5f}, mean(|grad|) = {mean_grad_avg:.8f}, lr = {lr:0.5e}"
+        description = f"loss = {loss_avg:.5f}, val_loss = {loss_valid_avg:.5f}, lr = {lr:0.5e}"
         progress_bar.set_description(description)
         progress_bar.close()
 

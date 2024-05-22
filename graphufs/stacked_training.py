@@ -167,7 +167,8 @@ def optimize(
 
         # jitted function
         optimize.optim_step_jitted = jit(optim_step)
-        first_input, first_target = next(iter(trainer))
+        #first_input, first_target = next(iter(trainer))
+        first_input, first_target = trainer.get_data()
         x, *_ = optimize.optim_step_jitted(
             params=params,
             state=state,
@@ -218,7 +219,9 @@ def optimize(
     n_steps = len(trainer)
 
     progress_bar = tqdm(total=n_steps, ncols=140, desc="Processing")
-    for k, (input_batches, target_batches) in enumerate(trainer):
+    #for k, (input_batches, target_batches) in enumerate(trainer):
+    for k in range(n_steps):
+        input_batches, target_batches = trainer.get_data()
 
         # call optimize
         params, loss, diagnostics, _, grads = optimize.optim_step_jitted(
@@ -239,13 +242,13 @@ def optimize(
             pass
         learning_rates.append(lr)
 
-        mean_grad = np.mean(
-            tree_util.tree_flatten(
-                tree_util.tree_map(lambda x: np.abs(x).mean(), grads)
-            )[0]
-        )
+        #mean_grad = np.mean(
+        #    tree_util.tree_flatten(
+        #        tree_util.tree_map(lambda x: np.abs(x).mean(), grads)
+        #    )[0]
+        #)
         progress_bar.set_description(
-            f"[{emulator.mpi_rank}] loss = {loss:.5f}, mean(|grad|) = {mean_grad:.8f}"
+            f"loss = {loss:.5f}", #, mean(|grad|) = {mean_grad:.8f}"
         )
         progress_bar.update(num_gpus)
 
@@ -339,4 +342,4 @@ def optimize(
         stored_loss_ds = loss_ds
     stored_loss_ds.to_netcdf(loss_fname)
 
-    return params, loss_ds
+    return params, loss_ds, opt_state

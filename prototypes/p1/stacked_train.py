@@ -1,15 +1,16 @@
 import logging
 import os
+import sys
+import dask
 
-from graphufs import (
-    init_model,
-    save_checkpoint,
-)
-from graphufs.torch import Dataset, LocalDataset, DataLoader
+from graphufs import init_devices
+from graphufs.utils import get_last_input_mapping
+from graphufs.torch import Dataset, LocalDataset, DataLoader, DataGenerator
+from graphufs.stacked_training import init_model, optimize
 
 from ufs2arco import Timer
 
-from p1 import P1Emulator
+from p1nodwsrf import P1Emulator
 from train import graphufs_optimizer
 
 
@@ -17,22 +18,27 @@ if __name__ == "__main__":
 
     timer1 = Timer()
 
+
     logging.basicConfig(
         stream=sys.stdout,
         level=logging.INFO,
     )
 
     # parse arguments
+    dask.config.set(scheduler="threads", num_workers=8)
     p1, args = P1Emulator.from_parser()
+    init_devices(p1)
 
     tds = Dataset(
         p1,
         mode="training",
+        preload_batch=True,
     )
-    training_data = LocalDataset(
-        p1,
-        mode="training",
-    )
+    training_data=tds
+    #training_data = LocalDataset(
+    #    p1,
+    #    mode="training",
+    #)
     valid_data = LocalDataset(
         p1,
         mode="validation",
@@ -49,21 +55,27 @@ if __name__ == "__main__":
         shuffle=False,
         drop_last=True,
     )
+    traingen = DataGenerator(
+        trainer,
+        num_workers=p1.num_workers,
+        max_queue_size=p1.max_queue_size,
+    )
 
     # setup
     logging.info(f"Initial Setup")
     loss_weights = p1.calc_loss_weights(tds)
     last_input_channel_mapping = get_last_input_mapping(tds)
 
-    params, state = p1.load_checkpoint(0)
+    params, state = init_model(p1, tds, last_input_channel_mapping)
 
     loss_name = f"{p1.local_store_path}/loss.nc"
     if os.path.exists(loss_name):
         os.remove(loss_name)
 
     # setup optimizer
-    n_linear = 100
-    n_total = len(trainer)
+    steps_in_epoch = len(trainer)
+    n_total = p1.num_epochs * steps_in_epoch
+    n_linear = max( n_total // 100, steps_in_epoch )
     n_cosine = n_total - n_linear
     optimizer = graphufs_optimizer(
         n_linear=n_linear,
@@ -86,10 +98,11 @@ if __name__ == "__main__":
             state=state,
             optimizer=optimizer,
             emulator=p1,
-            trainer=trainer,
+            trainer=traingen,
             validator=validator,
-            opt_state=opt_state,
+            weights=loss_weights,
             last_input_channel_mapping=last_input_channel_mapping,
+            opt_state=opt_state,
         )
 
         # save weights every epoch

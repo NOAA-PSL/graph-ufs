@@ -34,7 +34,7 @@ def pull_the_data(tds: TorchDataset):
     for idx in range(len(tds)):
         tds._store_sample(idx, chunks=chunks)
         if idx % 10 == 0:
-            print(f"Done with {idx}")
+            logging.info(f"Done with {idx}")
 
 
 if __name__ == "__main__":

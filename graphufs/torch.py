@@ -6,6 +6,9 @@ from typing import Optional
 import numpy as np
 import xarray as xr
 import dask.array
+import threading
+import queue
+import concurrent
 
 from jax.tree_util import tree_map
 from torch.utils.data import Dataset as TorchDataset
@@ -288,8 +291,8 @@ class LocalDataset(TorchDataset):
         return len(self.inputs["sample"])
 
     def __getitem__(self, idx):
-        x = self.inputs.isel(sample=idx, drop=True).values
-        y = self.targets.isel(sample=idx, drop=True).values
+        x = self.inputs["inputs"].isel(sample=idx, drop=True).values
+        y = self.targets["targets"].isel(sample=idx, drop=True).values
         return x, y
 
     @property
@@ -310,3 +313,58 @@ class DataLoader(TorchDataLoader):
 
 def collate_fn(batch):
     return tree_map(np.asarray, default_collate(batch))
+
+class DataGenerator:
+    """Data generator class"""
+
+    def __init__(
+        self,
+        dataloader,
+        num_workers: int = 1,
+        max_queue_size: int = 1,
+    ):
+        # params for data queue
+        self.num_workers = num_workers
+        self.max_queue_size = max_queue_size
+        self.stop_event = threading.Event()
+        self.data_queue = queue.Queue(maxsize=max_queue_size)
+        self.dataloader = dataloader
+
+        # create a thread pool of workers for generating data
+        if self.num_workers > 0:
+            self.executor = concurrent.futures.ThreadPoolExecutor(
+                max_workers=self.num_workers
+            )
+            self.futures = [
+                self.executor.submit(self.generate) for i in range(self.num_workers)
+            ]
+
+    @property
+    def drop_last(self):
+        return self.dataloader.drop_last
+
+    def __len__(self):
+        return len(self.dataloader)
+
+    def generate(self):
+        """ Data generator function called by workers """
+        while not self.stop_event.is_set():
+            # get next batch
+            x, y = next(iter(self.dataloader))
+
+            # put data to queue
+            self.data_queue.put((x,y))
+
+    def get_data(self):
+        """ Get data from queue """
+        if self.num_workers > 0:
+            return self.data_queue.get()
+        else:
+            return next(iter(self.dataloader))
+
+    def stop(self):
+        """ Stop generator at the end of training"""
+        while not self.data_queue.empty():
+            self.data_queue.get()
+            self.data_queue.task_done()
+        self.stop_event.set()
