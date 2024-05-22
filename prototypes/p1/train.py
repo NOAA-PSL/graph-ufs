@@ -1,5 +1,6 @@
 import os
 import logging
+import time
 
 import optax
 from graphufs import (
@@ -45,7 +46,6 @@ def graphufs_optimizer(
 if __name__ == "__main__":
 
     timer1 = Timer()
-    timer2 = Timer()
 
     # parse arguments
     p1, args = P1Emulator.from_parser()
@@ -119,12 +119,18 @@ if __name__ == "__main__":
         timer1.start()
         for c in range(p1.chunks_per_epoch):
             logging.info(f"Training on epoch {e+1} and chunk {c+1}")
-            timer2.start()
+            start1 = time.time()
 
             # get chunk of data in parallel with NN optimization
+            logging.info(
+                f"Queue size: trainer {trainer.data_queue.qsize()} validator {validator.data_queue.qsize()}"
+            )
+            start = time.time()
             if p1.chunks_per_epoch > 1 and not (e == 0 and c == 0):
                 data_train = trainer.get_data()
                 data_valid = validator.get_data()
+            end = time.time()
+            logging.info(f"Loaded chunk {c+1} in: {end - start:.4f} sec")
 
             # optimize
             params, loss, opt_state = optimize(
@@ -136,7 +142,8 @@ if __name__ == "__main__":
                 validation_data=data_valid,
                 opt_state=opt_state,
             )
-            timer2.stop(f"Done with chunk {c+1}")
+            end1 = time.time()
+            logging.info(f"Done with chunk {c+1} in: {end1 - start1:.4f} sec")
 
         # save weights every epoch
         p1.save_checkpoint(params, id=e + 1)

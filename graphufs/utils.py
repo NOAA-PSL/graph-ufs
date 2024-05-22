@@ -7,6 +7,8 @@ import xarray as xr
 import concurrent.futures
 
 
+generator_lock = threading.Lock()
+
 def get_chunk_data(generator, data: dict, no_load_chunk: bool):
     """Get multiple training batches.
 
@@ -18,7 +20,8 @@ def get_chunk_data(generator, data: dict, no_load_chunk: bool):
 
     # get batches from replay on GCS
     try:
-        inputs, targets, forcings, inittimes = next(generator)
+        with generator_lock:
+            inputs, targets, forcings, inittimes = next(generator)
     except StopIteration:
         return
 
@@ -93,10 +96,10 @@ class DataGenerator:
 
     def stop(self):
         """ Stop generator at the end of training"""
+        self.stop_event.set()
         while not self.data_queue.empty():
             self.data_queue.get()
             self.data_queue.task_done()
-        self.stop_event.set()
 
 
 def product_dict(**kwargs):
