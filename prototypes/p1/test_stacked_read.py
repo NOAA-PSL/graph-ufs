@@ -13,6 +13,7 @@
 import logging
 import os
 import sys
+import time
 
 from graphufs import init_devices
 from graphufs.utils import get_last_input_mapping
@@ -21,7 +22,7 @@ from graphufs.stacked_training import init_model, optimize
 
 from ufs2arco import Timer
 
-from p1nodwsrf import P1Emulator
+from p1 import P1Emulator
 from train import graphufs_optimizer
 
 import dask
@@ -64,7 +65,7 @@ if __name__ == "__main__":
     trainer = DataLoader(
         training_data,
         batch_size=p1.batch_size,
-        shuffle=True,
+        shuffle=False,
         drop_last=True,
     )
     traingen = DataGenerator(
@@ -105,7 +106,14 @@ if __name__ == "__main__":
     #    elapsed = timer1.stop(f"Time with {num_workers} workers = ")
     #    print(f" ... avg time/try = {elapsed / num_tries:.1f}")
 
+    print("...initial setup")
+    time.sleep(100)
+
+    print(f" about to start, qsize = {traingen.data_queue.qsize()}")
     for k in range(len(traingen)):
+        timer1.start()
         x,y = traingen.get_data()
-        logging.info(f"{k} / {len(traingen)}, qsize = {traingen.data_queue.qsize()}")
+        time.sleep(1.0)
+        timer1.stop(f"{k} / {len(traingen)}, qsize = {traingen.data_queue.qsize()}")
+
 

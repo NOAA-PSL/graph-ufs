@@ -329,6 +329,7 @@ class DataGenerator:
         self.stop_event = threading.Event()
         self.data_queue = queue.Queue(maxsize=max_queue_size)
         self.dataloader = dataloader
+        self.lock = threading.Lock()
 
         # create a thread pool of workers for generating data
         if self.num_workers > 0:
@@ -349,11 +350,15 @@ class DataGenerator:
     def generate(self):
         """ Data generator function called by workers """
         while not self.stop_event.is_set():
-            # get next batch
-            x, y = next(iter(self.dataloader))
 
-            # put data to queue
-            self.data_queue.put((x,y))
+            try:
+                # put next batch in queue
+                with self.lock:
+                    x, y = next(iter(self.dataloader))
+                self.data_queue.put((x,y))
+            except StopIteration:
+                self.data_queue.task_done()
+                self.stop_event.set()
 
     def get_data(self):
         """ Get data from queue """
@@ -364,7 +369,8 @@ class DataGenerator:
 
     def stop(self):
         """ Stop generator at the end of training"""
+        self.stop_event.set()
         while not self.data_queue.empty():
             self.data_queue.get()
             self.data_queue.task_done()
-        self.stop_event.set()
+
