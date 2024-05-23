@@ -333,6 +333,7 @@ class DataGenerator:
         self.data_queue = queue.Queue(maxsize=max_queue_size)
         self.dataloader = dataloader
         self.iterloader = iter(dataloader)
+        self.lock = threading.Lock()
 
         # create a thread pool of workers for generating data
         if self.num_workers > 0:
@@ -355,7 +356,8 @@ class DataGenerator:
         while not self.stop_event.is_set():
             try:
                 # put next batch in queue
-                x, y = next(self.iterloader)
+                with self.lock:
+                    x, y = next(self.iterloader)
                 self.data_queue.put((x,y))
             except StopIteration:
                 self.data_queue.task_done()
