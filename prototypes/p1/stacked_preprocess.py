@@ -1,40 +1,114 @@
 import logging
 import os
 import sys
+import subprocess
+from copy import deepcopy
+import numpy as np
 
+from functools import partial
 from graphufs import DataGenerator, init_model, init_devices
 from graphufs.torch import Dataset as TorchDataset
-from p1 import P1Emulator
+from p1stacked import P1Emulator
 
 from ufs2arco import Timer
+from multiprocessing import Pool
 
-#from dask.cache import Cache
-#
-#cache = Cache(10e9)
-#cache.register()
+_n_cpus = 48
+_partition = "cpuD48v3"
 
-def pull_the_data(tds: TorchDataset):
+class SimpleFormatter(logging.Formatter):
+    def format(self, record):
+        record.relativeCreated = record.relativeCreated // 1000
+        return super().format(record)
 
-    # note this is bad
-    tds.xds.load()
+def submit_slurm_job(job_id, n_jobs, mode):
 
-    chunks = {
-        "sample": 1,
-        "lat": -1,
-        "lon": -1,
-        "channels": 13,
-    }
+    the_code = \
+        f"from stacked_preprocess import store_batch_of_samples\n"+\
+        f"store_batch_of_samples({job_id}, {n_jobs}, '{mode}')\n"
+
+    slurm_dir = f"slurm/stacked-preprocess/{mode}"
+    txt = "#!/bin/bash\n\n" +\
+        f"#SBATCH -J sp{mode[0]}{job_id:03d}\n"+\
+        f"#SBATCH -o {slurm_dir}/{job_id:03d}.%j.out\n"+\
+        f"#SBATCH -e {slurm_dir}/{job_id:03d}.%j.err\n"+\
+        f"#SBATCH --nodes=1\n"+\
+        f"#SBATCH --ntasks=1\n"+\
+        f"#SBATCH --cpus-per-task={_n_cpus}\n"+\
+        f"#SBATCH --partition={_partition}\n"+\
+        f"#SBATCH -t 120:00:00\n\n"+\
+        f"source /contrib2/Tim.Smith/miniconda3/etc/profile.d/conda.sh\n"+\
+        f"conda activate graphufs-cpu\n"+\
+        f'python -c "{the_code}"'
+
+    script_dir = "job-scripts"
+    fname = f"{script_dir}/submit_sp_{mode}_{job_id:03d}.sh"
+
+    for this_dir in [slurm_dir, script_dir]:
+        if not os.path.isdir(this_dir):
+            os.makedirs(this_dir)
+
+    with open(fname, "w") as f:
+        f.write(txt)
+
+    subprocess.run(f"sbatch {fname}", shell=True)
+
+def store_batch_of_samples(jid, n_jobs, mode):
+
+    logging.basicConfig(
+        stream=sys.stdout,
+        level=logging.INFO,
+    )
+    logger = logging.getLogger()
+    formatter = SimpleFormatter(fmt="[%(relativeCreated)d s] [%(levelname)s] %(message)s")
+    for handler in logger.handlers:
+        handler.setFormatter(formatter)
+
+    p1 = P1Emulator()
+    tds = TorchDataset(
+        p1,
+        mode=mode,
+        preload_batch=True,
+        chunks={
+            "sample": 1,
+            "lat": -1,
+            "lon": -1,
+            "channels": 13,
+        },
+    )
+
+    index_chunks = np.linspace(0, len(tds), n_jobs+1)
+    start = int(index_chunks[jid])
+    end = int(index_chunks[jid+1])
+    logging.info(f"Job = {jid} / {n_jobs}")
+    logging.info(f"Processing indices: {start} - {end}")
+
+
+    datachunk_indices = np.linspace(0, len(tds.xds.time), n_jobs+1)
+    cst = int(datachunk_indices[jid]-1)
+    ced = int(datachunk_indices[jid+1]+1)
+    logging.info(f"Loading data time indices {cst} - {ced}")
+    tds.xds.isel(time=slice(cst, ced)).load()
+    logging.info("Starting my batch...")
+    for idx in range(start, end):
+        tds._store_sample(idx)
+        if idx % 10 == 0:
+            logging.info(f"Done with sample {idx}")
+
+    logging.info("Done with my batch")
+
+
+def make_container(tds: TorchDataset):
+
+
     x, y = tds.get_xsample(0)
     inputs = tds._make_container(x, name="inputs", chunks=chunks)
     targets = tds._make_container(y, name="targets", chunks=chunks)
 
     inputs.to_zarr(tds.local_inputs_path, compute=False, mode="w")
+    logging.info(f"Created container at {tds.local_inputs_path}")
     targets.to_zarr(tds.local_targets_path, compute=False, mode="w")
-
-    for idx in range(len(tds)):
-        tds._store_sample(idx, chunks=chunks)
-        if idx % 10 == 0:
-            logging.info(f"Done with {idx}")
+    logging.info(f"Created container at {tds.local_targets_path}")
 
 
 if __name__ == "__main__":
@@ -43,19 +117,22 @@ if __name__ == "__main__":
         stream=sys.stdout,
         level=logging.INFO,
     )
+    logger = logging.getLogger()
+    formatter = SimpleFormatter(fmt="[%(relativeCreated)d s] [%(levelname)s] %(message)s")
+    for handler in logger.handlers:
+        handler.setFormatter(formatter)
+
     timer = Timer()
 
     # parse arguments
     # 1. This sets normalization and stacked_normalization
     p1, args = P1Emulator.from_parser()
 
+    #make_container(tds)
+
     # 2. Pull the training and validation data and store to data/data.zarr
-    for mode in ["training", "validation"]:
-        logging.info(f"Downloading {mode} data")
-        tds = TorchDataset(p1, mode=mode)
+    n_jobs = 12
+    for jid in range(n_jobs):
+        submit_slurm_job(jid, n_jobs, mode="training")
 
-        timer.start()
-        pull_the_data(tds)
-        timer.stop()
-
-    logging.info("Done preprocessing")
+    submit_slurm_job(0, 1, mode="validation")

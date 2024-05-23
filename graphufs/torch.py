@@ -9,6 +9,7 @@ import dask.array
 import threading
 import queue
 import concurrent
+import logging
 
 from jax.tree_util import tree_map
 from torch.utils.data import Dataset as TorchDataset
@@ -50,6 +51,7 @@ class Dataset(TorchDataset):
         emulator: ReplayEmulator,
         mode: str,
         preload_batch: bool = False,
+        chunks: Optional[dict | None] = None,
     ):
         """
         Initializes the Dataset object.
@@ -60,6 +62,7 @@ class Dataset(TorchDataset):
         """
         self.emulator = emulator
         self.mode = mode
+        self.preload_batch = preload_batch
         xds = self._open_dataset()
         self.sample_generator = BatchGenerator(
             ds=xds,
@@ -244,19 +247,19 @@ class Dataset(TorchDataset):
         y = self._xstack(sample_target)
         return X, y
 
-    def _store_sample(self, idx: int, chunks: dict) -> None:
+    def _store_sample(self, idx: int) -> None:
         x,y = self.get_xsample(idx)
         x = x.rename({"batch": "sample"})
         y = y.rename({"batch": "sample"})
 
-        x = x.chunk(chunks)
-        y = y.chunk(chunks)
+        x = x.chunk(self.chunks)
+        y = y.chunk(self.chunks)
         spatial_region = {k : slice(None, None) for k in x.dims if k != "sample"}
         region = {"sample": slice(idx, idx+1), **spatial_region}
         x.to_dataset(name="inputs").to_zarr(self.local_inputs_path, region=region)
         y.to_dataset(name="targets").to_zarr(self.local_targets_path, region=region)
 
-    def _make_container(self, template: xr.Dataset, name: str, chunks: dict):
+    def _make_container(self, template: xr.Dataset, name: str):
 
         if "batch" in template.dims:
             template = template.isel(batch=0, drop=True)
@@ -271,7 +274,7 @@ class Dataset(TorchDataset):
         xds[name] = xr.DataArray(
             data=dask.array.zeros(
                 shape=shape,
-                chunks=tuple(chunks[k] for k in dims),
+                chunks=tuple(self.chunks[k] for k in dims),
                 dtype=template.dtype,
             ),
             dims=dims,
@@ -329,7 +332,7 @@ class DataGenerator:
         self.stop_event = threading.Event()
         self.data_queue = queue.Queue(maxsize=max_queue_size)
         self.dataloader = dataloader
-        self.lock = threading.Lock()
+        self.iterloader = iter(dataloader)
 
         # create a thread pool of workers for generating data
         if self.num_workers > 0:
@@ -350,11 +353,9 @@ class DataGenerator:
     def generate(self):
         """ Data generator function called by workers """
         while not self.stop_event.is_set():
-
             try:
                 # put next batch in queue
-                with self.lock:
-                    x, y = next(iter(self.dataloader))
+                x, y = next(self.iterloader)
                 self.data_queue.put((x,y))
             except StopIteration:
                 self.data_queue.task_done()
@@ -365,7 +366,7 @@ class DataGenerator:
         if self.num_workers > 0:
             return self.data_queue.get()
         else:
-            return next(iter(self.dataloader))
+            return next(self.iterloader)
 
     def stop(self):
         """ Stop generator at the end of training"""
@@ -374,3 +375,5 @@ class DataGenerator:
             self.data_queue.get()
             self.data_queue.task_done()
 
+    def reset(self):
+        self.iterloader = iter(self.dataloader)
