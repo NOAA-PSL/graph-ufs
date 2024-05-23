@@ -407,6 +407,10 @@ class ReplayEmulator:
             message += f"\nChunk {chunk_id+1}: {new_time[0]} to {new_time[-1]} : {len(new_time)} time stamps"
         logging.info(message)
 
+        # warnings before we get started
+        if pd.Timedelta(self.target_lead_time) > self.delta_t:
+            warnings.warn("ReplayEmulator.get_training_batches: need to rework this to pull targets for all steps at delta_t intervals between initial conditions and target_lead times, at least in part because we need the forcings at each delta_t time step, and the data extraction code only pulls this at each specified target_lead_time")
+
         # loop forever
         while True:
 
@@ -462,12 +466,6 @@ class ReplayEmulator:
                     )
                 else:
                     forecast_initial_times = all_initial_times[:n_forecasts]
-
-                # warnings before we get started
-                if pd.Timedelta(self.target_lead_time) > self.delta_t:
-                    warnings.warn("ReplayEmulator.get_training_batches: need to rework this to pull targets for all steps at delta_t intervals between initial conditions and target_lead times, at least in part because we need the forcings at each delta_t time step, and the data extraction code only pulls this at each specified target_lead_time")
-
-                # load the dataset in to avoid lots of calls... need to figure out how to do this best
 
                 # subsample in time, grab variables and vertical levels we want
                 xds = self.subsample_dataset(all_xds, new_time=new_time)
