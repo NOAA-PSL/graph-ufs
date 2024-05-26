@@ -450,8 +450,9 @@ class ReplayEmulator:
                     "time": "datetime",
                     })
                 xds = xds.drop(["cftime", "ftime"])
+                xds.load()
 
-
+                # iterate through batches
                 inputs = []
                 targets = []
                 forcings = []
@@ -507,6 +508,7 @@ class ReplayEmulator:
                     forcings.append(this_forcing.expand_dims({"optim_step": [k]}))
                     inittimes.append(this_inittimes.expand_dims({"optim_step": [k]}))
 
+                del xds
                 inputs = xr.combine_by_coords(inputs)
                 targets = xr.combine_by_coords(targets)
                 forcings = xr.combine_by_coords(forcings)
