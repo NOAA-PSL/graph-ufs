@@ -479,7 +479,6 @@ class ReplayEmulator:
                             copy_values(inputs)
                             copy_values(targets)
                             copy_values(forcings)
-                            copy_values(inittimes)
                         continue
 
                     timestamps_in_this_forecast = pd.date_range(
@@ -498,21 +497,25 @@ class ReplayEmulator:
                         **self.extract_kwargs,
                     )
 
-                    # fix this later for batch_size != 1
-                    this_inittimes = batch.datetime.isel(time=0)
-                    this_inittimes = this_inittimes.to_dataset(name="inittimes")
-
                     # note that the optim_step dim has to be added after the extract_inputs_targets_forcings call
                     inputs.append(this_input.expand_dims({"optim_step": [k]}))
                     targets.append(this_target.expand_dims({"optim_step": [k]}))
                     forcings.append(this_forcing.expand_dims({"optim_step": [k]}))
-                    inittimes.append(this_inittimes.expand_dims({"optim_step": [k]}))
+
+                    if mode == "testing":
+                        # fix this later for batch_size != 1
+                        this_inittimes = batch.datetime.isel(time=0)
+                        this_inittimes = this_inittimes.to_dataset(name="inittimes")
+                        inittimes.append(this_inittimes.expand_dims({"optim_step": [k]}))
 
                 del xds
                 inputs = xr.combine_by_coords(inputs)
                 targets = xr.combine_by_coords(targets)
                 forcings = xr.combine_by_coords(forcings)
-                inittimes = xr.combine_by_coords(inittimes)
+                if mode == "testing":
+                    inittimes = xr.combine_by_coords(inittimes)
+                else:
+                    inittimes = None
                 yield inputs, targets, forcings, inittimes
 
 

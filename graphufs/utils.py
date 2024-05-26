@@ -30,7 +30,8 @@ def get_chunk_data(generator, gen_lock, data: dict, no_load_chunk: bool):
         inputs.load()
         targets.load()
         forcings.load()
-        inittimes.load()
+        if inittimes is not None:
+            inittimes.load()
 
     # update dictionary
     data.update(
@@ -307,7 +308,8 @@ def get_approximate_memory_usage(data, max_queue_size, num_workers, no_load_chun
         for d in data:
             chunk_ram = 0
             for k, v in d.items():
-               chunk_ram += v.nbytes
+                if v is not None:
+                    chunk_ram += v.nbytes
             chunk_ram /= 1024 * 1024 * 1024
             total += (max_queue_size + num_workers) * chunk_ram
     return total
