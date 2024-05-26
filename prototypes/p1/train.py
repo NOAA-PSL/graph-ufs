@@ -133,7 +133,7 @@ if __name__ == "__main__":
             logging.info(f"Loaded chunk {c+1} in: {end - start:.4f} sec")
 
             # optimize
-            params, loss, opt_state = optimize(
+            params, opt_state = optimize(
                 params=params,
                 state=state,
                 optimizer=optimizer,

@@ -95,7 +95,7 @@ if __name__ == "__main__":
                     data_valid = validator.get_data()
 
                 # optimize
-                params, loss, opt_state = optimize(
+                params, opt_state = optimize(
                     params=params,
                     state=state,
                     optimizer=optimizer,

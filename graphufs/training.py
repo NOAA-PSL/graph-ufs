@@ -156,8 +156,6 @@ def optimize(
 
     Returns:
         params (dict): optimized model parameters
-        loss_ds (xarray.Dataset): with the total loss function and loss per variable for each optim_step
-            this doesn't have gradient info, but we could add that
     """
 
     opt_state = optimizer.init(params) if opt_state is None else opt_state
@@ -348,6 +346,8 @@ def optimize(
 
         logging.info("Finished jitting optim_step")
 
+    logging.info("Starting iterations")
+
     optim_steps = []
     loss_values = []
     loss_valid_values = []
@@ -491,8 +491,6 @@ def optimize(
         progress_bar.close()
 
     # save losses for each batch
-    loss_ds = xr.Dataset()
-
     if emulator.mpi_rank == 0:
         loss_fname = os.path.join(emulator.local_store_path, "loss.nc")
         previous_optim_steps = 0
@@ -500,6 +498,7 @@ def optimize(
             stored_loss_ds = xr.open_dataset(loss_fname)
             previous_optim_steps = len(stored_loss_ds.optim_step)
 
+        loss_ds = xr.Dataset()
         loss_ds["optim_step"] = [x + previous_optim_steps for x in optim_steps]
         loss_ds.attrs["batch_size"] = batch_size
         loss_ds["var_index"] = xr.DataArray(
@@ -536,8 +535,9 @@ def optimize(
         else:
             stored_loss_ds = loss_ds
         stored_loss_ds.to_netcdf(loss_fname)
+        logging.info("Updated loss file.")
 
-    return params, loss_ds, opt_state
+    return params, opt_state
 
 
 def predict(
