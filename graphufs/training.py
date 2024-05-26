@@ -292,6 +292,13 @@ def optimize(
         t_batches_valid = validation_data["targets"].isel(optim_step=sl).copy(deep=True)
         f_batches_valid = validation_data["forcings"].isel(optim_step=sl).copy(deep=True)
 
+        optimize.i_batches = i_batches
+        optimize.t_batches = t_batches
+        optimize.f_batches = f_batches
+        optimize.i_batches_valid = i_batches_valid
+        optimize.t_batches_valid = t_batches_valid
+        optimize.f_batches_valid = f_batches_valid
+
         x = params
         for k in range(0, n_steps_jit, num_gpus):
             sl = slice(k, k + num_gpus)
@@ -354,15 +361,13 @@ def optimize(
     learning_rates = []
     loss_by_var = {k: list() for k in training_data["targets"].data_vars}
 
-    # make a deep copy of slice 0
-    sl = slice(0, num_gpus)
-    i_batches = training_data["inputs"].isel(optim_step=sl).copy(deep=True)
-    t_batches = training_data["targets"].isel(optim_step=sl).copy(deep=True)
-    f_batches = training_data["forcings"].isel(optim_step=sl).copy(deep=True)
-
-    i_batches_valid = validation_data["inputs"].isel(optim_step=sl).copy(deep=True)
-    t_batches_valid = validation_data["targets"].isel(optim_step=sl).copy(deep=True)
-    f_batches_valid = validation_data["forcings"].isel(optim_step=sl).copy(deep=True)
+    # use the pre-allocated space
+    i_batches = optimize.i_batches
+    t_batches = optimize.t_batches
+    f_batches = optimize.f_batches
+    i_batches_valid = optimize.i_batches_valid
+    t_batches_valid = optimize.t_batches_valid
+    f_batches_valid = optimize.f_batches_valid
 
     loss_avg = 0
     loss_valid_avg = 0
