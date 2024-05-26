@@ -271,49 +271,23 @@ class ReplayEmulator:
         return xds
 
 
-    def preprocess(self, xds, batch_index=None, drop_cftime=True):
+    def preprocess(self, xds, batch_index=None):
         """Prepare a single batch for GraphCast
 
         Args:
             xds (xarray.Dataset): with replay data
             batch_index (int, optional): the index of this batch
-            drop_cftime (bool, optional): if True, drop the ``cftime`` and ``ftime`` coordinates that exist in the Replay dataset to avoid future JAX problems (might be helpful to keep them for some debugging cases)
-
         Returns:
             bds (xarray.Dataset): this batch of data
         """
-
-        # make sure we've subsampled/subset
-        bds = self.subsample_dataset(xds)
-
-        bds = bds.rename({
-            "pfull": "level",
-            "grid_xt": "lon",
-            "grid_yt": "lat",
-            "time": "datetime",
-        })
-
-        # unclear if this is necessary for computation
-        bds = bds.sortby("lat", ascending=True)
-
+        bds = xds
         bds["time"] = (bds.datetime - bds.datetime[0])
         bds = bds.swap_dims({"datetime": "time"}).reset_coords()
         if batch_index is not None:
             bds = bds.expand_dims({
                 "batch": [batch_index],
             })
-
-        # note that this has to be after batch_index is set for variables
-        # added in graphcast.data_utils.add_derived_vars to have the right dimensionality
         bds = bds.set_coords(["datetime"])
-
-        # cftime is a data_var not a coordinate, but if it's made to be a coordinate
-        # it causes crazy JAX problems when making predictions with graphufs.training.run_forward.apply
-        # because it thinks something is wrong when the input/output cftime object values are different
-        # (even though... of course they will be for prediction)
-        # safest to drop here to avoid confusion, along with ftime since it is also not used
-        if drop_cftime:
-            bds = bds.drop(["cftime", "ftime"])
         return bds
 
     def get_the_data(
@@ -469,6 +443,14 @@ class ReplayEmulator:
 
                 # subsample in time, grab variables and vertical levels we want
                 xds = self.subsample_dataset(all_xds, new_time=new_time)
+                xds = xds.rename({
+                    "pfull": "level",
+                    "grid_xt": "lon",
+                    "grid_yt": "lat",
+                    "time": "datetime",
+                    })
+                xds = xds.drop(["cftime", "ftime"])
+
 
                 inputs = []
                 targets = []
@@ -506,7 +488,7 @@ class ReplayEmulator:
                         inclusive="both",
                     )
                     batch = self.preprocess(
-                        xds.sel(time=timestamps_in_this_forecast),
+                        xds.sel(datetime=timestamps_in_this_forecast),
                         batch_index=b,
                     )
 
@@ -525,10 +507,10 @@ class ReplayEmulator:
                     forcings.append(this_forcing.expand_dims({"optim_step": [k]}))
                     inittimes.append(this_inittimes.expand_dims({"optim_step": [k]}))
 
-                inputs = self.combine_chunk(inputs)
-                targets = self.combine_chunk(targets)
-                forcings = self.combine_chunk(forcings)
-                inittimes = self.combine_chunk(inittimes)
+                inputs = xr.combine_by_coords(inputs)
+                targets = xr.combine_by_coords(targets)
+                forcings = xr.combine_by_coords(forcings)
+                inittimes = xr.combine_by_coords(inittimes)
                 yield inputs, targets, forcings, inittimes
 
 
@@ -698,21 +680,6 @@ class ReplayEmulator:
         lats = lats[::-1]
         return lats, lons
 
-
-    def combine_chunk(self, ds_list):
-        """Used by the training batch creation code to combine many datasets for optimization"""
-        newds = xr.combine_by_coords(ds_list)
-        chunksize = {
-            "optim_step": 1,
-            "batch": -1,
-            "time": -1,
-            "level": -1,
-            "lat": -1,
-            "lon": -1,
-        }
-        chunksize = {k:v for k,v in chunksize.items() if k in newds.dims}
-        newds = newds.chunk(chunksize)
-        return newds
 
     @classmethod
     def from_parser(cls):
