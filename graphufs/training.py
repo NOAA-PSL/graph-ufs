@@ -491,7 +491,7 @@ def optimize(
         progress_bar.close()
 
     # save losses for each batch
-    if emulator.mpi_rank == 0:
+    if emulator.mpi_rank == 0 and emulator.store_loss:
         loss_fname = os.path.join(emulator.local_store_path, "loss.nc")
         previous_optim_steps = 0
         if os.path.exists(loss_fname):

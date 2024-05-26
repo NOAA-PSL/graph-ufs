@@ -100,6 +100,7 @@ class P0Emulator(ReplayEmulator):
     max_queue_size = 1
     num_workers = 1
     no_load_chunks = False
+    store_loss = True
 
     # others
     num_gpus = 1

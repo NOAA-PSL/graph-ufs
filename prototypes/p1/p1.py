@@ -90,6 +90,7 @@ class P1Emulator(ReplayEmulator):
     max_queue_size = 1
     num_workers = 1
     no_load_chunk = False
+    store_loss = True
 
     # multi GPU and xla options
     num_gpus = 1

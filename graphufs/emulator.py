@@ -72,6 +72,7 @@ class ReplayEmulator:
     max_queue_size = None           # number of chunks in queue of data generators
     num_workers = None              # number of worker threads for data generators
     no_load_chunk = None            # don't load chunk into RAM, has the lowest memory usage if true
+    store_loss = None               # store loss in a netcdf file
 
     # others
     num_gpus = None                 # number of GPUs to use for training
