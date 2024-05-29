@@ -8,6 +8,7 @@ import warnings
 from functools import partial
 import numpy as np
 import xarray as xr
+import jax
 from jax import (
     jit,
     value_and_grad,
@@ -22,6 +23,9 @@ from jax import (
 )
 from graphcast.xarray_jax import pmap
 from jax.lax import pmean
+from jax.sharding import NamedSharding, Mesh, PartitionSpec as P
+from jax.sharding import PositionalSharding
+from jax.experimental import mesh_utils
 from jax.random import PRNGKey
 import jax.numpy as jnp
 import optax
@@ -106,9 +110,12 @@ def optimize(
     num_gpus = emulator.num_gpus
     mpi_size = emulator.mpi_size
     use_jax_distributed = emulator.use_jax_distributed
+
+    sharding = PositionalSharding(jax.devices())
+    sharding = sharding.reshape((num_gpus, 1, 1, 1))
+    all_gpus = sharding.replicate()
+
     if use_jax_distributed:
-        raise NotImplementedError
-    if num_gpus > 1:
         raise NotImplementedError
 
     @hk.transform_with_state
@@ -160,15 +167,24 @@ def optimize(
         params = optax.apply_updates(params, updates)
         return params, loss, diagnostics, opt_state, grads
 
+    params = jax.device_put(params, all_gpus)
+    state = jax.device_put(state, all_gpus)
+    opt_state = jax.device_put(opt_state, all_gpus)
+    weights = jax.device_put(weights, all_gpus)
+    last_input_channel_mapping = jax.device_put(last_input_channel_mapping, all_gpus)
+
 
     # jit optim_step only once
     if not hasattr(optimize, "optim_step_jitted"):
         logging.info("Started jitting optim_step")
 
         # jitted function
-        optimize.optim_step_jitted = jit(optim_step)
         #first_input, first_target = next(iter(trainer))
         first_input, first_target = trainer.get_data()
+        first_input = jax.device_put(first_input, sharding)
+        first_target = jax.device_put(first_target, sharding)
+
+        optimize.optim_step_jitted = jit(optim_step)
         x, *_ = optimize.optim_step_jitted(
             params=params,
             state=state,
@@ -198,8 +214,14 @@ def optimize(
     if not hasattr(optimize, "vloss_jitted"):
         logging.info("Started jitting validation loss")
 
+
+        #first_input, first_target = next(iter(validator))
+        first_input, first_target = validator.get_data()
+
+        first_input = jax.device_put(first_input, sharding)
+        first_target = jax.device_put(first_target, sharding)
+
         optimize.vloss_jitted = jit(loss_fn.apply)
-        first_input, first_target = next(iter(validator))
         (x, _), _ = optimize.vloss_jitted(
             params=params,
             state=state,
@@ -218,18 +240,27 @@ def optimize(
     loss_by_channel = []
     n_steps = len(trainer)
 
+    params = jax.device_put(params, all_gpus)
+    state = jax.device_put(state, all_gpus)
+    opt_state = jax.device_put(opt_state, all_gpus)
+    weights = jax.device_put(weights, all_gpus)
+    last_input_channel_mapping = jax.device_put(last_input_channel_mapping, all_gpus)
+
     progress_bar = tqdm(total=n_steps, ncols=140, desc="Processing")
     #for k, (input_batches, target_batches) in enumerate(trainer):
     for k in range(n_steps):
-        input_batches, target_batches = trainer.get_data()
+        input_batch, target_batch = trainer.get_data()
+
+        input_batch = jax.device_put(input_batch, sharding)
+        target_batch = jax.device_put(target_batch, sharding)
 
         # call optimize
         params, loss, diagnostics, _, grads = optimize.optim_step_jitted(
             params=params,
             state=state,
             opt_state=opt_state,
-            input_batch=input_batches,
-            target_batch=target_batches,
+            input_batch=input_batch,
+            target_batch=target_batch,
         )
 
         # update progress bar from rank 0
@@ -242,17 +273,13 @@ def optimize(
             pass
         learning_rates.append(lr)
 
-        #mean_grad = np.mean(
-        #    tree_util.tree_flatten(
-        #        tree_util.tree_map(lambda x: np.abs(x).mean(), grads)
-        #    )[0]
-        #)
         progress_bar.set_description(
-            f"loss = {loss:.5f}", #, mean(|grad|) = {mean_grad:.8f}"
+            f"loss = {loss:.5f}, qsize = {trainer.data_queue.qsize()}",
         )
-        progress_bar.update(num_gpus)
+        progress_bar.update()
 
     progress_bar.close()
+    trainer.reset()
 
     # validation
     loss_valid_values = []
@@ -261,24 +288,32 @@ def optimize(
         n_steps_valid <= n_steps
     ), f"Number of validation steps ({n_steps_valid}) must be less than or equal to the number of training steps ({n_steps})"
     progress_bar = tqdm(total=n_steps_valid, ncols=140, desc="Processing")
-    for input_batches, target_batches in validator:
+    #for input_batches, target_batches in validator:
+    for kv in range(n_steps_valid):
+
+        input_batch, target_batch = validator.get_data()
+
+        input_batch = jax.device_put(input_batch, sharding)
+        target_batch = jax.device_put(target_batch, sharding)
+
         (loss_valid, _), _ = optimize.vloss_jitted(
             params=params,
             state=state,
-            inputs=input_batches,
-            targets=target_batches,
+            inputs=input_batch,
+            targets=target_batch,
             rng=PRNGKey(0),
         )
         loss_valid_values.append(loss_valid)
         progress_bar.set_description(
-            f"validation loss = {loss_valid:.5f}"
+            f"validation loss = {loss_valid:.5f}, qsize = {validator.data_queue.qsize()}"
         )
-        progress_bar.update(num_gpus)
+        progress_bar.update()
     loss_valid_avg = np.mean(loss_valid)
     progress_bar.set_description(
         f"validation loss = {loss_valid_avg:.5f}"
     )
     progress_bar.close()
+    validator.reset()
 
 
     # save losses for each batch

@@ -1,3 +1,8 @@
+"""Notes
+inputs size / sample = 55 MB
+targets size / sample = 24 MB
+"""
+
 import logging
 import os
 import sys
@@ -10,7 +15,7 @@ from graphufs.stacked_training import init_model, optimize
 
 from ufs2arco import Timer
 
-from p1nodwsrf import P1Emulator
+from p1stacked import P1Emulator
 from train import graphufs_optimizer
 
 
@@ -34,11 +39,10 @@ if __name__ == "__main__":
         mode="training",
         preload_batch=True,
     )
-    training_data=tds
-    #training_data = LocalDataset(
-    #    p1,
-    #    mode="training",
-    #)
+    training_data = LocalDataset(
+        p1,
+        mode="training",
+    )
     valid_data = LocalDataset(
         p1,
         mode="validation",
@@ -57,6 +61,11 @@ if __name__ == "__main__":
     )
     traingen = DataGenerator(
         trainer,
+        num_workers=p1.num_workers,
+        max_queue_size=p1.max_queue_size,
+    )
+    valgen = DataGenerator(
+        validator,
         num_workers=p1.num_workers,
         max_queue_size=p1.max_queue_size,
     )
@@ -87,6 +96,8 @@ if __name__ == "__main__":
     logging.info(f"Starting Training with:")
     logging.info(f"\t {n_linear} linearly increasing LR steps")
     logging.info(f"\t {n_cosine} cosine decay LR steps")
+    logging.info(f"\t {n_total} total training steps")
+    logging.info(f"\t {len(valgen)} validation steps")
     opt_state = None
     for e in range(p1.num_epochs):
         timer1.start()
@@ -99,7 +110,7 @@ if __name__ == "__main__":
             optimizer=optimizer,
             emulator=p1,
             trainer=traingen,
-            validator=validator,
+            validator=valgen,
             weights=loss_weights,
             last_input_channel_mapping=last_input_channel_mapping,
             opt_state=opt_state,
