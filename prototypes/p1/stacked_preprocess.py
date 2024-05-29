@@ -14,12 +14,38 @@ from ufs2arco import Timer
 from multiprocessing import Pool
 
 _n_cpus = 48
-_partition = "cpuD48v3"
+_partition = "cpuD48v3-spot"
 
 class SimpleFormatter(logging.Formatter):
     def format(self, record):
         record.relativeCreated = record.relativeCreated // 1000
         return super().format(record)
+
+def setup(mode):
+
+    logging.basicConfig(
+        stream=sys.stdout,
+        level=logging.INFO,
+    )
+    logger = logging.getLogger()
+    formatter = SimpleFormatter(fmt="[%(relativeCreated)d s] [%(levelname)s] %(message)s")
+    for handler in logger.handlers:
+        handler.setFormatter(formatter)
+
+    p1 = P1Emulator()
+    tds = TorchDataset(
+        p1,
+        mode=mode,
+        preload_batch=True,
+        chunks={
+            "sample": 1,
+            "lat": -1,
+            "lon": -1,
+            "channels": 13,
+        },
+    )
+    return p1, tds
+
 
 def submit_slurm_job(job_id, n_jobs, mode):
 
@@ -55,27 +81,7 @@ def submit_slurm_job(job_id, n_jobs, mode):
 
 def store_batch_of_samples(jid, n_jobs, mode):
 
-    logging.basicConfig(
-        stream=sys.stdout,
-        level=logging.INFO,
-    )
-    logger = logging.getLogger()
-    formatter = SimpleFormatter(fmt="[%(relativeCreated)d s] [%(levelname)s] %(message)s")
-    for handler in logger.handlers:
-        handler.setFormatter(formatter)
-
-    p1 = P1Emulator()
-    tds = TorchDataset(
-        p1,
-        mode=mode,
-        preload_batch=True,
-        chunks={
-            "sample": 1,
-            "lat": -1,
-            "lon": -1,
-            "channels": 13,
-        },
-    )
+    p1, tds = setup(mode)
 
     index_chunks = np.linspace(0, len(tds), n_jobs+1)
     start = int(index_chunks[jid])
@@ -84,11 +90,12 @@ def store_batch_of_samples(jid, n_jobs, mode):
     logging.info(f"Processing indices: {start} - {end}")
 
 
-    datachunk_indices = np.linspace(0, len(tds.xds.time), n_jobs+1)
+    datachunk_indices = np.linspace(0, len(tds.xds.datetime), n_jobs+1)
     cst = int(datachunk_indices[jid]-1)
+    cst = max(cst, 0)
     ced = int(datachunk_indices[jid+1]+1)
     logging.info(f"Loading data time indices {cst} - {ced}")
-    tds.xds.isel(time=slice(cst, ced)).load()
+    tds.xds.isel(datetime=slice(cst, ced)).load()
     logging.info("Starting my batch...")
     for idx in range(start, end):
         tds._store_sample(idx)
@@ -98,12 +105,13 @@ def store_batch_of_samples(jid, n_jobs, mode):
     logging.info("Done with my batch")
 
 
-def make_container(tds: TorchDataset):
+def make_container(mode):
 
+    p1, tds = setup(mode)
 
     x, y = tds.get_xsample(0)
-    inputs = tds._make_container(x, name="inputs", chunks=chunks)
-    targets = tds._make_container(y, name="targets", chunks=chunks)
+    inputs = tds._make_container(x, name="inputs")
+    targets = tds._make_container(y, name="targets")
 
     inputs.to_zarr(tds.local_inputs_path, compute=False, mode="w")
     logging.info(f"Created container at {tds.local_inputs_path}")
@@ -124,15 +132,13 @@ if __name__ == "__main__":
 
     timer = Timer()
 
-    # parse arguments
-    # 1. This sets normalization and stacked_normalization
-    p1, args = P1Emulator.from_parser()
+    # create a container zarr store for all the data
+    #for mode in ["training", "validation"]:
+    #    make_container(mode)
 
-    #make_container(tds)
-
-    # 2. Pull the training and validation data and store to data/data.zarr
+    # Pull the training and validation data and store to data/data.zarr
     n_jobs = 12
-    for jid in range(n_jobs):
+    for jid in range(2, n_jobs):
         submit_slurm_job(jid, n_jobs, mode="training")
 
-    submit_slurm_job(0, 1, mode="validation")
+    #submit_slurm_job(0, 1, mode="validation")
