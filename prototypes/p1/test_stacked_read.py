@@ -1,28 +1,20 @@
 """Notes:
-    Time to read a single batch of 4 samples took (note, see basically same testing samples not batch):
-        1  worker thread  = 35 sec
-        2  worker threads = 18 sec
-        4  worker threads = 13 sec
-        8  worker threads = 10 sec
-        16 worker threads = 10 sec
 
-    Time to read with 10 GB cache and 8 thread workers = 16.4 sec/batch
-    vs
-    Time to read without cache and 8 thread workers = 10 sec/batch
 """
 import logging
 import os
 import sys
 import time
+import numpy as np
 
 from graphufs import init_devices
 from graphufs.utils import get_last_input_mapping
-from graphufs.torch import Dataset, LocalDataset, DataLoader, DataGenerator
+from graphufs.torch import Dataset, LocalDataset, DataLoader, DataGenerator, DaskDataLoader
 from graphufs.stacked_training import init_model, optimize
 
 from ufs2arco import Timer
 
-from p1 import P1Emulator
+from p1stacked import P1Emulator
 from train import graphufs_optimizer
 
 import dask
@@ -38,9 +30,39 @@ class Formatter(logging.Formatter):
         record.relativeCreated = record.relativeCreated // 1000
         return super().format(record)
 
-if __name__ == "__main__":
+def local_read_test(p1, num_tries=10):
+    """Find optimal number of dask worker threads to read a single batch of data"""
 
-    dask.config.set(scheduler="threads", num_workers=8)
+    training_data = LocalDataset(
+        p1,
+        mode="training",
+    )
+    trainer = DaskDataLoader(
+        training_data,
+        batch_size=p1.batch_size,
+        shuffle=True,
+        drop_last=True,
+    )
+
+
+    # --- What's the optimal number of dask worker threads to read a batch of data?
+    iterloader = iter(trainer)
+    avg_time = dict()
+    for num_workers in [1, 2, 4, 8, 16, 24, 32]:
+        with dask.config.set(scheduler="threads", num_workers=num_workers):
+            timer1.start()
+            for _ in range(num_tries):
+                next(iterloader)
+            elapsed = timer1.stop(f"Time with {num_workers} workers = ")
+            avg_time[num_workers] = elapsed / num_tries
+
+    print(f" --- Time to read batch_size = {p1.batch_size} --- ")
+    print(f"\tnum_workers\t avg seconds / batch")
+    for key, val in avg_time.items():
+        print(f"\t{key}\t\t{val}")
+
+
+if __name__ == "__main__":
 
     timer1 = Timer()
 
@@ -56,64 +78,4 @@ if __name__ == "__main__":
     # parse arguments
     p1, args = P1Emulator.from_parser()
 
-    tds = Dataset(
-        p1,
-        mode="training",
-        preload_batch=True,
-    )
-    training_data=tds
-    trainer = DataLoader(
-        training_data,
-        batch_size=p1.batch_size,
-        shuffle=False,
-        drop_last=True,
-    )
-    traingen = DataGenerator(
-        trainer,
-        num_workers=p1.num_workers,
-        max_queue_size=p1.max_queue_size,
-    )
-
-    ## Does a dask Cache help?
-    #num_tries = 10
-    #timer1.start()
-    #for _ in range(num_tries):
-    #    next(iter(trainer))
-    #elapsed = timer1.stop("Time = ")
-    #print(f" ... avg time/try = {elapsed / num_tries:.1f}")
-
-
-
-    ## What's the optimal number of dask worker threads to read a batch of data?
-    #num_tries = 3
-    #for num_workers in [1, 2, 4, 8, 16]:
-    #    dask.config.set(scheduler="threads", num_workers=num_workers)
-    #    timer1.start()
-    #    for _ in range(num_tries):
-    #        next(iter(trainer))
-    #    elapsed = timer1.stop(f"Time with {num_workers} workers = ")
-    #    print(f" ... avg time/try = {elapsed / num_tries:.1f}")
-
-    # What's the optimal number of dask worker threads to read a sample of data?
-    #num_tries = 3
-    #k = 0
-    #for num_workers in [1, 2, 4, 8, 16]:
-    #    dask.config.set(scheduler="threads", num_workers=num_workers)
-    #    timer1.start()
-    #    for _ in range(num_tries):
-    #        tds[k]
-    #        k+=1
-    #    elapsed = timer1.stop(f"Time with {num_workers} workers = ")
-    #    print(f" ... avg time/try = {elapsed / num_tries:.1f}")
-
-    print("...initial setup")
-    time.sleep(100)
-
-    print(f" about to start, qsize = {traingen.data_queue.qsize()}")
-    for k in range(len(traingen)):
-        timer1.start()
-        x,y = traingen.get_data()
-        time.sleep(1.0)
-        timer1.stop(f"{k} / {len(traingen)}, qsize = {traingen.data_queue.qsize()}")
-
-
+    local_read_test(p1)
