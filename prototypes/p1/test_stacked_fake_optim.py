@@ -6,7 +6,7 @@ import numpy as np
 
 from graphufs import init_devices
 from graphufs.utils import get_last_input_mapping
-from graphufs.torch import Dataset, LocalDataset, DataLoader, DataGenerator, DaskDataLoader
+from graphufs.torch import Dataset, LocalDataset, DataLoader, BatchLoader
 from graphufs.stacked_training import init_model, optimize
 
 from ufs2arco import Timer
@@ -30,7 +30,7 @@ def test_local_generator(p1, max_iters=30):
         p1,
         mode="training",
     )
-    trainer = DaskDataLoader(
+    trainer = BatchLoader(
         training_data,
         batch_size=p1.batch_size,
         shuffle=True,

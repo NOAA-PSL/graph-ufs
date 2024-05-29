@@ -107,12 +107,12 @@ def optimize(
     """
 
     opt_state = optimizer.init(params) if opt_state is None else opt_state
-    num_gpus = emulator.num_gpus
     mpi_size = emulator.mpi_size
     use_jax_distributed = emulator.use_jax_distributed
 
-    sharding = PositionalSharding(jax.devices())
-    sharding = sharding.reshape((num_gpus, 1, 1, 1))
+    devices = jax.devices()
+    sharding = PositionalSharding(devices)
+    sharding = sharding.reshape((len(devices), 1, 1, 1))
     all_gpus = sharding.replicate()
 
     if use_jax_distributed:
@@ -179,7 +179,6 @@ def optimize(
         logging.info("Started jitting optim_step")
 
         # jitted function
-        #first_input, first_target = next(iter(trainer))
         first_input, first_target = trainer.get_data()
         first_input = jax.device_put(first_input, sharding)
         first_target = jax.device_put(first_target, sharding)
@@ -192,30 +191,20 @@ def optimize(
             input_batch=first_input,
             target_batch=first_target,
         )
+        # refill the queue because we pulled this first item
+        trainer.restart()
         block_until_ready(x)
+
 
         # Unclear if it's safe to assume whether we'll have the drop_last attr or not
         if not trainer.drop_last:
-            # this is necessary to let the JIT compiler see the last batch,
-            # which may be a different size
-            # I'm not sure if this pulls everything into memory though ...
-            *_, (last_input, last_target) = iter(trainer)
-            y, *_ = optimize.optim_step_jitted(
-                params=params,
-                state=state,
-                opt_state=opt_state,
-                input_batch=last_input,
-                target_batch=last_target,
-            )
-            block_until_ready(y)
+            raise NotImplementedError
         logging.info("Finished jitting optim_step")
 
 
     if not hasattr(optimize, "vloss_jitted"):
         logging.info("Started jitting validation loss")
 
-
-        #first_input, first_target = next(iter(validator))
         first_input, first_target = validator.get_data()
 
         first_input = jax.device_put(first_input, sharding)
@@ -229,10 +218,13 @@ def optimize(
             targets=first_target,
             rng=PRNGKey(0),
         )
+        # refill validation queue since the first one was popped
+        validator.restart()
         block_until_ready(x)
         logging.info("Finished jitting validation loss")
 
 
+    # training
     optim_steps = []
     loss_values = []
     learning_rates = []
@@ -247,9 +239,7 @@ def optimize(
     last_input_channel_mapping = jax.device_put(last_input_channel_mapping, all_gpus)
 
     progress_bar = tqdm(total=n_steps, ncols=140, desc="Processing")
-    #for k, (input_batches, target_batches) in enumerate(trainer):
-    for k in range(n_steps):
-        input_batch, target_batch = trainer.get_data()
+    for k, (input_batch, target_batch) in enumerate(trainer):
 
         input_batch = jax.device_put(input_batch, sharding)
         target_batch = jax.device_put(target_batch, sharding)
@@ -279,7 +269,7 @@ def optimize(
         progress_bar.update()
 
     progress_bar.close()
-    trainer.reset()
+    trainer.restart()
 
     # validation
     loss_valid_values = []
@@ -288,10 +278,7 @@ def optimize(
         n_steps_valid <= n_steps
     ), f"Number of validation steps ({n_steps_valid}) must be less than or equal to the number of training steps ({n_steps})"
     progress_bar = tqdm(total=n_steps_valid, ncols=140, desc="Processing")
-    #for input_batches, target_batches in validator:
-    for kv in range(n_steps_valid):
-
-        input_batch, target_batch = validator.get_data()
+    for input_batch, target_batch in validator:
 
         input_batch = jax.device_put(input_batch, sharding)
         target_batch = jax.device_put(target_batch, sharding)
@@ -313,8 +300,7 @@ def optimize(
         f"validation loss = {loss_valid_avg:.5f}"
     )
     progress_bar.close()
-    validator.reset()
-
+    validator.restart()
 
     # save losses for each batch
     loss_ds = xr.Dataset()

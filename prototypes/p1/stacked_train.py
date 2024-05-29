@@ -10,7 +10,7 @@ import dask
 
 from graphufs import init_devices
 from graphufs.utils import get_last_input_mapping
-from graphufs.torch import Dataset, LocalDataset, DataLoader, DataGenerator
+from graphufs.torch import Dataset, LocalDataset, BatchLoader
 from graphufs.stacked_training import init_model, optimize
 
 from ufs2arco import Timer
@@ -23,16 +23,15 @@ if __name__ == "__main__":
 
     timer1 = Timer()
 
-
     logging.basicConfig(
         stream=sys.stdout,
         level=logging.INFO,
     )
 
     # parse arguments
-    dask.config.set(scheduler="threads", num_workers=8)
     p1, args = P1Emulator.from_parser()
     init_devices(p1)
+    dask.config.set(scheduler="threads", num_workers=16)
 
     tds = Dataset(
         p1,
@@ -47,25 +46,19 @@ if __name__ == "__main__":
         p1,
         mode="validation",
     )
-    trainer = DataLoader(
+    trainer = BatchLoader(
         training_data,
         batch_size=p1.batch_size,
         shuffle=True,
         drop_last=True,
+        num_workers=p1.num_workers,
+        max_queue_size=p1.max_queue_size,
     )
-    validator = DataLoader(
+    validator = BatchLoader(
         valid_data,
         batch_size=p1.batch_size,
         shuffle=False,
         drop_last=True,
-    )
-    traingen = DataGenerator(
-        trainer,
-        num_workers=p1.num_workers,
-        max_queue_size=p1.max_queue_size,
-    )
-    valgen = DataGenerator(
-        validator,
         num_workers=p1.num_workers,
         max_queue_size=p1.max_queue_size,
     )
@@ -97,7 +90,7 @@ if __name__ == "__main__":
     logging.info(f"\t {n_linear} linearly increasing LR steps")
     logging.info(f"\t {n_cosine} cosine decay LR steps")
     logging.info(f"\t {n_total} total training steps")
-    logging.info(f"\t {len(valgen)} validation steps")
+    logging.info(f"\t {len(validator)} validation steps")
     opt_state = None
     for e in range(p1.num_epochs):
         timer1.start()
@@ -109,8 +102,8 @@ if __name__ == "__main__":
             state=state,
             optimizer=optimizer,
             emulator=p1,
-            trainer=traingen,
-            validator=valgen,
+            trainer=trainer,
+            validator=validator,
             weights=loss_weights,
             last_input_channel_mapping=last_input_channel_mapping,
             opt_state=opt_state,

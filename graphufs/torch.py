@@ -318,7 +318,7 @@ class LocalDataset(TorchDataset):
         return join(self.emulator.local_store_path, self.mode, "targets.zarr")
 
 
-class DaskDataLoader():
+class BatchLoader():
     """
 
     Usage
@@ -367,8 +367,9 @@ class DaskDataLoader():
         self.rstate = np.random.RandomState(rng_seed)
 
         self.num_workers = num_workers
-        self.max_queue_size = max_queue_size
         assert max_queue_size > 0
+        max_queue_size = min(max_queue_size, len(self))
+        self.max_queue_size = max_queue_size
         self.data_queue = queue.Queue(maxsize=max_queue_size)
 
         self.restart()
