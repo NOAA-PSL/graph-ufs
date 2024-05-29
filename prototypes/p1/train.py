@@ -1,6 +1,7 @@
 import os
 import logging
 import time
+import dask
 
 import optax
 from graphufs import (
@@ -53,9 +54,11 @@ if __name__ == "__main__":
     # for multi-gpu training
     init_devices(p1)
 
-    logging.info("Loading first chunk of training and validation")
+    # configuring dask
+    dask.config.set(scheduler="threads", num_workers=p1.dask_threads)
 
     # data generators
+    logging.info("Loading first chunk of training and validation")
     trainer = DataGenerator(
         emulator=p1,
         n_optim_steps=p1.steps_per_chunk,

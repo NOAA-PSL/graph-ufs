@@ -79,6 +79,7 @@ class ReplayEmulator:
     log_only_rank0 = None           # log only messages from rank 0
     use_jax_distributed = None      # Use jax's distributed mechanism, no need for manula mpi4jax calls
     use_xla_flags = None            # Use recommended flags for XLA and NCCL https://jax.readthedocs.io/en/latest/gpu_performance_tips.html
+    dask_threads = None             # number of threads to use for dask
 
     # model config options
     resolution = None               # nominal spatial resolution
