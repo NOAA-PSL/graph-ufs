@@ -10,6 +10,7 @@ import numpy as np
 from graphufs import init_devices
 from graphufs.utils import get_last_input_mapping
 from graphufs.torch import Dataset, LocalDataset, BatchLoader
+from graphufs.tensorstore import TensorstoreLocalDataset, TensorstoreBatchLoader
 from graphufs.stacked_training import init_model, optimize
 
 from ufs2arco import Timer
@@ -29,6 +30,12 @@ class Formatter(logging.Formatter):
     def format(self, record):
         record.relativeCreated = record.relativeCreated // 1000
         return super().format(record)
+
+def print_time(batch_size, avg_time):
+    print(f" --- Time to read batch_size = {p1.batch_size} --- ")
+    print(f"\tnum_workers\t avg seconds / batch")
+    for key, val in avg_time.items():
+        print(f"\t{key}\t\t{val}")
 
 def local_read_test(p1, num_tries=10):
     """Find optimal number of dask worker threads to read a single batch of data"""
@@ -56,10 +63,38 @@ def local_read_test(p1, num_tries=10):
             elapsed = timer1.stop(f"Time with {num_workers} workers = ")
             avg_time[num_workers] = elapsed / num_tries
 
-    print(f" --- Time to read batch_size = {p1.batch_size} --- ")
-    print(f"\tnum_workers\t avg seconds / batch")
-    for key, val in avg_time.items():
-        print(f"\t{key}\t\t{val}")
+    print_time(p1.batch_size, avg_time)
+
+
+def local_tensorstore_test(p1, num_tries=10):
+    """See notes.md, trying to add num_threads as GDM recommended quadruples the read time
+    and I don't see any other way to improve the situation.
+
+    dask is not used, so nothing to change there.
+    """
+
+    training_data = TensorstoreLocalDataset(
+        p1,
+        mode="training",
+    )
+    trainer = TensorstoreBatchLoader(
+        training_data,
+        batch_size=p1.batch_size,
+        shuffle=True,
+        drop_last=True,
+        num_workers=0,
+    )
+
+    iterloader = iter(trainer)
+    avg_time = dict()
+
+    timer1.start()
+    for _ in range(num_tries):
+        next(iterloader)
+    elapsed = timer1.stop(f"Time for tensorstore = ")
+    avg_time[0] = elapsed / num_tries
+
+    print_time(p1.batch_size, avg_time)
 
 
 if __name__ == "__main__":
@@ -79,3 +114,4 @@ if __name__ == "__main__":
     p1, args = P1Emulator.from_parser()
 
     local_read_test(p1)
+    local_tensorstore_test(p1)
