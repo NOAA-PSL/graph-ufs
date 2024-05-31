@@ -1,24 +1,18 @@
-"""Notes:
-
-"""
 import logging
-import os
 import sys
-import time
 import numpy as np
 
-from graphufs import init_devices
-from graphufs.utils import get_last_input_mapping
-from graphufs.torch import Dataset, LocalDataset, BatchLoader
-from graphufs.tensorstore import TensorstoreLocalDataset, TensorstoreBatchLoader
-from graphufs.stacked_training import init_model, optimize
+import dask
+
+from graphufs.datasets import PackedDataset
+from graphufs.batchloader import BatchLoader
+from graphufs.tensorstore import PackedDataset as TSPackedDataset, BatchLoader as TSBatchLoader
 
 from ufs2arco import Timer
 
 from p1stacked import P1Emulator
-from train import graphufs_optimizer
 
-import dask
+# this didn't help anything at all
 #from dask.cache import Cache
 #cache = Cache(1e10)
 #cache.register()
@@ -40,7 +34,7 @@ def print_time(batch_size, avg_time):
 def local_read_test(p1, num_tries=10):
     """Find optimal number of dask worker threads to read a single batch of data"""
 
-    training_data = LocalDataset(
+    training_data = PackedDataset(
         p1,
         mode="training",
     )
@@ -73,11 +67,11 @@ def local_tensorstore_test(p1, num_tries=10):
     dask is not used, so nothing to change there.
     """
 
-    training_data = TensorstoreLocalDataset(
+    training_data = TSPackedDataset(
         p1,
         mode="training",
     )
-    trainer = TensorstoreBatchLoader(
+    trainer = TSBatchLoader(
         training_data,
         batch_size=p1.batch_size,
         shuffle=True,

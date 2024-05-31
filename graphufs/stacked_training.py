@@ -70,7 +70,7 @@ def construct_wrapped_graphcast(emulator, last_input_channel_mapping):
     return predictor
 
 
-def init_model(emulator, gds, last_input_channel_mapping):
+def init_model(emulator, inputs, last_input_channel_mapping):
     """Initialize model with random weights.
     """
 
@@ -79,7 +79,6 @@ def init_model(emulator, gds, last_input_channel_mapping):
         predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping)
         return predictor(inputs)
 
-    inputs, _ = gds[0]
     params, state = run_forward.init(
         rng=PRNGKey(emulator.init_rng_seed),
         inputs=inputs,

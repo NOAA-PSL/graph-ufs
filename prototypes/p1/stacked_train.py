@@ -2,7 +2,6 @@
 inputs size / sample = 55 MB
 targets size / sample = 24 MB
 """
-
 import logging
 import os
 import sys
@@ -10,7 +9,8 @@ import dask
 
 from graphufs import init_devices
 from graphufs.utils import get_last_input_mapping
-from graphufs.torch import Dataset, LocalDataset, BatchLoader
+from graphufs.datasets import Dataset, PackedDataset
+from graphufs.batchloader import BatchLoader
 from graphufs.stacked_training import init_model, optimize
 
 from ufs2arco import Timer
@@ -38,11 +38,11 @@ if __name__ == "__main__":
         mode="training",
         preload_batch=True,
     )
-    training_data = LocalDataset(
+    training_data = PackedDataset(
         p1,
         mode="training",
     )
-    valid_data = LocalDataset(
+    valid_data = PackedDataset(
         p1,
         mode="validation",
     )
@@ -68,7 +68,8 @@ if __name__ == "__main__":
     loss_weights = p1.calc_loss_weights(tds)
     last_input_channel_mapping = get_last_input_mapping(tds)
 
-    params, state = init_model(p1, tds, last_input_channel_mapping)
+    inputs, _ = trainer.get_data()
+    params, state = init_model(p1, inputs, last_input_channel_mapping)
 
     loss_name = f"{p1.local_store_path}/loss.nc"
     if os.path.exists(loss_name):

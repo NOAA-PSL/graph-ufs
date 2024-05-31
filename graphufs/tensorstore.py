@@ -4,10 +4,11 @@ Same as the LocalDataset and BatchLoader, but using xarray_tensorstore
 import numpy as np
 import xarray_tensorstore
 
-from .torch import LocalDataset, BatchLoader
+from .datasets import PackedDataset as BaseDataset
+from .batchloader import BatchLoader as BaseBatchLoader
 
-class TensorstoreLocalDataset(LocalDataset):
-    """Same as the other LocalDatset, but use xarray_tensorstore instead of xarray/dask/zarr
+class PackedDataset(BaseDataset):
+    """Same as the other PackedDatset, but use xarray_tensorstore instead of xarray/dask/zarr
     """
 
     def __init__(self, emulator, mode):
@@ -29,7 +30,7 @@ class TensorstoreLocalDataset(LocalDataset):
         return x, y
 
 
-class TensorstoreBatchLoader(BatchLoader):
+class BatchLoader(BaseBatchLoader):
 
     def _next_data(self):
 

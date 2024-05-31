@@ -1,94 +1,22 @@
 """
-Implementations of Torch Dataset and DataLoader
+Implementations of Torch Dataset and DataLoader that can work with JAX,
+although only in a single process (no prefetch) setting.
 """
-from os.path import join
-from typing import Optional
-from math import ceil
 import numpy as np
-import xarray as xr
-import dask.array
-import threading
-import queue
-import concurrent
-import logging
 
 from jax.tree_util import tree_map
 from torch.utils.data import Dataset as TorchDataset
 from torch.utils.data import DataLoader as TorchDataLoader
 from torch.utils.data import default_collate
 
-from xbatcher import BatchGenerator
+from .datasets import Dataset as BaseDataset
+from .datasets import PackedDataset as BasePackedDataset
 
-from graphcast.data_utils import extract_inputs_targets_forcings
-from graphcast.model_utils import dataset_to_stacked
-
-from .emulator import ReplayEmulator
-
-class Dataset(TorchDataset):
+class Dataset(BaseDataset, TorchDataset):
     """
-    PyTorch dataset for Replay Data that should work with GraphCast
+    Same as datasets.Dataset, but inherits torch.utils.data.Dataset and returns NumPy arrays
+    with __getitem__
     """
-
-    @property
-    def xds(self) -> xr.Dataset:
-        """
-        Returns the xarray dataset.
-
-        Returns:
-            xds (xarray.Dataset): The xarray dataset.
-        """
-        return self.sample_generator.ds
-
-    @property
-    def local_inputs_path(self) -> str:
-        return join(self.emulator.local_store_path, self.mode, "inputs.zarr")
-
-    @property
-    def local_targets_path(self) -> str:
-        return join(self.emulator.local_store_path, self.mode, "targets.zarr")
-
-    def __init__(
-        self,
-        emulator: ReplayEmulator,
-        mode: str,
-        preload_batch: bool = False,
-        chunks: Optional[dict | None] = None,
-    ):
-        """
-        Initializes the Dataset object.
-
-        Args:
-            emulator (ReplayEmulator): The emulator object.
-            mode (str): "training", "validation", or "testing"
-        """
-        self.emulator = emulator
-        self.mode = mode
-        self.preload_batch = preload_batch
-        self.chunks = chunks
-        xds = self._open_dataset()
-        self.sample_generator = BatchGenerator(
-            ds=xds,
-            input_dims={
-                "datetime": emulator.n_forecast,
-                "lon": len(xds["lon"]),
-                "lat": len(xds["lat"]),
-                "level": len(xds["level"]),
-            },
-            input_overlap={
-                "datetime": emulator.n_input,
-            },
-            preload_batch=preload_batch,
-        )
-
-    def __len__(self) -> int:
-        """
-        Returns the number of sample forecasts in the dataset
-
-        Returns:
-            length (int): The length of the dataset.
-        """
-        return len(self.sample_generator)
-
     def __getitem__(self, idx) -> tuple[np.ndarray]:
         """
         Returns a sample from the dataset.
@@ -97,192 +25,29 @@ class Dataset(TorchDataset):
             idx (int): Index of the sample.
 
         Returns:
-            X, y (np.ndarray): with inputs and targets
+            x, y (np.ndarray): with inputs and targets
         """
-        #logging.info(f" ... sample {idx} ...")
         sample_input, sample_target, sample_forcing = self.get_xarrays(idx)
 
-        X = self._stack(sample_input, sample_forcing)
+        x = self._stack(sample_input, sample_forcing)
         y = self._stack(sample_target)
-        return X, y
+        return x.values.squeeze(), y.values.squeeze()
 
-    @staticmethod
-    def _xstack(a: xr.DataArray, b: Optional[xr.DataArray] = None) -> xr.DataArray:
+
+class PackedDataset(BasePackedDataset, TorchDataset):
+    def __getitem__(self, idx) -> tuple[np.ndarray]:
         """
-        Stack xarrays to form input tensors.
-
-        Args:
-            a (xarray.DataArray): First xarray.
-            b (xarray.DataArray, optional): Second xarray.
-
-        Returns:
-            result (xarray.DataArray): Stacked xarray.
-        """
-        result = dataset_to_stacked(a)
-        if b is not None:
-            result = xr.concat(
-                [result, dataset_to_stacked(b)],
-                dim="channels",
-            )
-        result = result.transpose("batch", "lat", "lon", "channels")
-        return result
-
-    def _stack(self, a: xr.DataArray, b: Optional[xr.DataArray] = None) -> np.ndarray:
-        """
-        Stack xarrays to form input tensors.
-
-        Args:
-            a (xarray.DataArray): First xarray.
-            b (xarray.DataArray): Second xarray.
-
-        Returns:
-            result (np.ndarray): Stacked tensor.
-        """
-        xresult = self._xstack(a, b)
-        return xresult.values.squeeze()
-
-    def _open_dataset(self) -> xr.Dataset:
-        """
-        Open, subsample, and rename variables in the dataset.
-
-        Returns:
-            xds (xarray.Dataset): Preprocessed xarray dataset.
-        """
-        xds = self.emulator.open_dataset()
-        time = self.emulator.get_time(mode=self.mode)
-        xds = self.emulator.subsample_dataset(xds, new_time=time)
-        xds = xds.rename({
-            "time": "datetime",
-            "pfull": "level",
-            "grid_yt": "lat",
-            "grid_xt": "lon",
-        })
-        xds = xds.drop_vars(["cftime", "ftime"])
-        return xds
-
-    def _preprocess(self, xds: xr.Dataset) -> xr.Dataset:
-        """
-        Preprocess the xarray dataset as necessary for GraphCast.
-
-        Args:
-            xds (xarray.Dataset): Input xarray dataset.
-
-        Returns:
-            xds (xarray.Dataset): Preprocessed xarray dataset.
-        """
-        xds["time"] = xds["datetime"] - xds["datetime"][0]
-        xds = xds.swap_dims({"datetime": "time"}).reset_coords()
-        xds = xds.set_coords(["datetime"])
-        return xds
-
-    def get_xds(self, idx: int) -> xr.Dataset:
-        """
-        Get a single dataset used to create inputs, targets, forcings for this sample index
+        Returns a sample from the dataset.
 
         Args:
             idx (int): Index of the sample.
 
         Returns:
-            xds (xarray.Dataset): Preprocessed xarray dataset.
+            x, y (np.ndarray): with inputs and targets
         """
-        sample = self.sample_generator[idx]
-        sample = self._preprocess(sample)
-        return sample
-
-    def get_xarrays(self, idx: int) -> tuple:
-        """
-        Get input, target, and forcing xarrays.
-
-        Args:
-            idx (int): Index of the sample.
-
-        Returns:
-            xinput, xtarget, xforcing (xarray.DataArray): as from graphcast.data_utils.extract_inputs_targets_forcings
-        """
-        sample = self.get_xds(idx)
-
-        xinput, xtarget, xforcing = extract_inputs_targets_forcings(
-            sample,
-            **self.emulator.extract_kwargs,
-        )
-        xinput = xinput.expand_dims({"batch": [idx]})
-        xtarget = xtarget.expand_dims({"batch": [idx]})
-        xforcing = xforcing.expand_dims({"batch": [idx]})
-        return xinput, xtarget, xforcing
-
-    def get_batch_of_xarrays(self, indices: list[int]) -> tuple:
-        """
-        Get batches of input, target, and forcing xarrays, convenience to mimic using the DataLoader.
-
-        Args:
-            indices (list[int]): List of sample indices.
-
-        Returns:
-            Tuple of input, target, and forcing xarrays.
-        """
-        xinputs = []
-        xtargets = []
-        xforcings = []
-        for idx in indices:
-            xi, xt, xf = self.get_xarrays(idx)
-            xinputs.append(xi)
-            xtargets.append(xt)
-            xforcings.append(xf)
-
-        xinputs = xr.concat(xinputs, dim="batch")
-        xtargets = xr.concat(xtargets, dim="batch")
-        xforcings = xr.concat(xforcings, dim="batch")
-        return xinputs, xtargets, xforcings
-
-    def get_xsample(self, idx: int) -> tuple[xr.DataArray]:
-        """
-        Same as __getitem__, except returns xarray.DataArrays
-
-        Args:
-            idx (int): Index of the sample.
-
-        Returns:
-            X, y (xarray.DataArray): inputs (forcings stacked) and targets
-        """
-        sample_input, sample_target, sample_forcing = self.get_xarrays(idx)
-
-        X = self._xstack(sample_input, sample_forcing)
-        y = self._xstack(sample_target)
-        return X, y
-
-    def _store_sample(self, idx: int) -> None:
-        x,y = self.get_xsample(idx)
-        x = x.rename({"batch": "sample"})
-        y = y.rename({"batch": "sample"})
-
-        x = x.chunk(self.chunks)
-        y = y.chunk(self.chunks)
-        spatial_region = {k : slice(None, None) for k in x.dims if k != "sample"}
-        region = {"sample": slice(idx, idx+1), **spatial_region}
-        x.to_dataset(name="inputs").to_zarr(self.local_inputs_path, region=region)
-        y.to_dataset(name="targets").to_zarr(self.local_targets_path, region=region)
-
-    def _make_container(self, template: xr.Dataset, name: str):
-
-        if "batch" in template.dims:
-            template = template.isel(batch=0, drop=True)
-
-        xds = xr.Dataset()
-        xds["sample"] = np.arange(len(self))
-        for key in ["lat", "lon", "channels"]:
-            xds[key] = template[key].copy()
-
-        dims = ("sample",) + template.dims
-        shape = (len(self),) + template.shape
-        xds[name] = xr.DataArray(
-            data=dask.array.zeros(
-                shape=shape,
-                chunks=tuple(self.chunks[k] for k in dims),
-                dtype=template.dtype,
-            ),
-            dims=dims,
-        )
-        return xds
+        x = self.inputs["inputs"].isel(sample=idx, drop=True).values
+        y = self.targets["targets"].isel(sample=idx, drop=True).values
+        return x, y
 
 
 class DataLoader(TorchDataLoader):
@@ -292,242 +57,5 @@ class DataLoader(TorchDataLoader):
         super().__init__(*args, **kwargs)
 
 
-class LocalDataset(TorchDataset):
-
-    def __init__(self, emulator, mode):
-        self.emulator = emulator
-        self.mode = mode
-        self.inputs = xr.open_zarr(self.local_inputs_path)
-        self.targets = xr.open_zarr(self.local_targets_path)
-
-    def __len__(self):
-        return len(self.inputs["sample"])
-
-    def __getitem__(self, idx):
-        #logging.info(f" ... sample {idx} ...")
-        x = self.inputs["inputs"].isel(sample=idx, drop=True)
-        y = self.targets["targets"].isel(sample=idx, drop=True)
-        return x, y
-
-    @property
-    def local_inputs_path(self) -> str:
-        return join(self.emulator.local_store_path, self.mode, "inputs.zarr")
-
-    @property
-    def local_targets_path(self) -> str:
-        return join(self.emulator.local_store_path, self.mode, "targets.zarr")
-
-
-class BatchLoader():
-    """
-
-    Usage
-        # --- Method 1
-        trainer = DaskDataLoader(...) # queue gets filled immediately
-        for k, (x,y) in enumerate(trainer): # restarts counter, but not the thread queue, and does not re-shuffle
-            loss = train(x,y)
-
-        # recommended to restart threads to fill queue, e.g. while doing validation
-        # if shuffle=True it happens here
-        trainer.restart()
-
-        # --- Method 2
-        trainer = DaskDataLoader(...) # queue gets filled immediately
-        for k in range(len(trainer)):
-            x,y = trainer.get_data() # pull item from queue
-            loss = train(x,y)
-
-        # again recommended to restart here
-        trainer.restart()
-
-
-
-    """
-    stop_event = None
-    lock = threading.Lock()
-
-    def __init__(
-        self,
-        dataset,
-        batch_size,
-        shuffle,
-        drop_last=True,
-        num_workers=0,
-        max_queue_size=1,
-        rng_seed=None,
-    ):
-
-        self.dataset = dataset
-        self.batch_size = batch_size
-        self.shuffle = shuffle
-        self.drop_last = drop_last
-
-        self.counter = 0
-        self.sample_indices = np.arange(len(self.dataset))
-        self.rstate = np.random.RandomState(rng_seed)
-
-        self.num_workers = num_workers
-        assert max_queue_size > 0
-        max_queue_size = min(max_queue_size, len(self))
-        self.max_queue_size = max_queue_size
-        self.data_queue = queue.Queue(maxsize=max_queue_size)
-
-        self.restart()
-
-    def __len__(self) -> int:
-        n_samples = len(self.dataset)
-        if self.drop_last:
-            n_batches = n_samples // self.batch_size
-        else:
-            n_batches = ceil(n_samples / self.batch_size)
-        return n_batches
-
-    def __iter__(self):
-        self.counter = 0
-        # if the threads have not been restarted, do it now
-        if self.stop_event.is_set():
-            self.restart()
-        return self
-
-    def __next__(self):
-        """Note that self.counter is the counter for looping with e.g. enumerate
-        (i.e., how much has been removed from the queue)
-        whereas self.data_counter is keeping track of how many data items have been put in the queue
-        """
-        if self.counter < len(self):
-            x, y = self.get_data()
-            self.counter += 1
-            return x, y
-        else:
-            raise StopIteration
-
-    def _next_data(self):
-
-        if self.data_counter < len(self):
-            st = self.data_counter * self.batch_size
-            ed = st + self.batch_size
-            batch_indices = self.sample_indices[st:ed]
-            x, y = self.dataset[batch_indices]
-            self.data_counter += 1
-            return x.values, y.values
-        else:
-            raise StopIteration
-
-    def generate(self):
-        while not self.stop_event.is_set():
-            try:
-                with self.lock:
-                    data = self._next_data()
-                self.data_queue.put(data)
-            except StopIteration:
-                self.stop()
-
-    def get_data(self):
-        """Pull a batch of data from the queue"""
-        if self.num_workers > 0:
-            return self.data_queue.get()
-        else:
-            return self._next_data()
-
-    def restart(self):
-
-        # reset the counter for how many items have been put in the queue
-        self.data_counter = 0
-
-        # first create a new stop_event and shuffle the indices
-        self.stop_event = threading.Event()
-        if self.shuffle:
-            self.rstate.shuffle(self.sample_indices)
-
-        # start filling the queue
-        if self.num_workers > 0:
-            self.executor = concurrent.futures.ThreadPoolExecutor(
-                max_workers=self.num_workers,
-            )
-            self.futures = [
-                self.executor.submit(self.generate) for _ in range(self.num_workers)
-            ]
-
-    def stop(self):
-        self.stop_event.set()
-        self.data_queue.task_done()
-
-    def shutdown(self):
-        self.stop()
-        if self.num_workers > 0:
-            self.executor.shutdown()
-
-
 def collate_fn(batch):
     return tree_map(np.asarray, default_collate(batch))
-
-class DataGenerator:
-    """Data generator class"""
-
-    def __init__(
-        self,
-        dataloader,
-        num_workers: int = 1,
-        max_queue_size: int = 1,
-    ):
-        # params for data queue
-        self.num_workers = num_workers
-        self.max_queue_size = max_queue_size
-        self.stop_event = threading.Event()
-        self.data_queue = queue.Queue(maxsize=max_queue_size)
-        self.dataloader = dataloader
-        self.iterloader = iter(dataloader)
-        self.lock = threading.Lock()
-
-        self.reset()
-
-    @property
-    def drop_last(self):
-        return self.dataloader.drop_last
-
-    def __len__(self):
-        return len(self.dataloader)
-
-    def generate(self):
-        """ Data generator function called by workers """
-        while not self.stop_event.is_set():
-            try:
-                # put next batch in queue
-                with self.lock:
-                    x, y = next(self.iterloader)
-                self.data_queue.put((x,y))
-            except StopIteration:
-                self.stop_event.set()
-                self.data_queue.task_done()
-
-    def get_data(self):
-        """ Get data from queue """
-        if self.num_workers > 0:
-            return self.data_queue.get()
-        else:
-            return next(self.iterloader)
-
-    def stop(self):
-        """ Stop generator at the end of training"""
-        self.stop_event.set()
-        while not self.data_queue.empty():
-            self.data_queue.get()
-            self.data_queue.task_done()
-
-    def reset(self):
-        self.iterloader = iter(self.dataloader)
-        self.stop_event = threading.Event()
-
-        # create a thread pool of workers for generating data
-        if self.num_workers > 0:
-            self.executor = concurrent.futures.ThreadPoolExecutor(
-                max_workers=self.num_workers,
-            )
-            self.futures = [
-                self.executor.submit(self.generate) for _ in range(self.num_workers)
-            ]
-
-    def shutdown(self):
-        self.stop()
-        if self.num_workers > 0:
-            self.executor.shutdown()

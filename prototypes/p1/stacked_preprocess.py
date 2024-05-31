@@ -7,7 +7,7 @@ import numpy as np
 
 from functools import partial
 from graphufs import DataGenerator, init_model, init_devices
-from graphufs.torch import Dataset as TorchDataset
+from graphufs.datasets import Dataset
 from p1stacked import P1Emulator
 
 from ufs2arco import Timer
@@ -33,7 +33,7 @@ def setup(mode):
         handler.setFormatter(formatter)
 
     p1 = P1Emulator()
-    tds = TorchDataset(
+    tds = Dataset(
         p1,
         mode=mode,
         preload_batch=True,
@@ -98,7 +98,7 @@ def store_batch_of_samples(jid, n_jobs, mode):
     tds.xds.isel(datetime=slice(cst, ced)).load()
     logging.info("Starting my batch...")
     for idx in range(start, end):
-        tds._store_sample(idx)
+        tds.store_sample(idx)
         if idx % 10 == 0:
             logging.info(f"Done with sample {idx}")
 
@@ -109,14 +109,7 @@ def make_container(mode):
 
     p1, tds = setup(mode)
 
-    x, y = tds.get_xsample(0)
-    inputs = tds._make_container(x, name="inputs")
-    targets = tds._make_container(y, name="targets")
-
-    inputs.to_zarr(tds.local_inputs_path, compute=False, mode="w")
-    logging.info(f"Created container at {tds.local_inputs_path}")
-    targets.to_zarr(tds.local_targets_path, compute=False, mode="w")
-    logging.info(f"Created container at {tds.local_targets_path}")
+    tds.store_containers()
 
 
 if __name__ == "__main__":

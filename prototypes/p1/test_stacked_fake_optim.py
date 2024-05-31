@@ -1,20 +1,16 @@
 import logging
-import os
 import sys
 import time
 import numpy as np
+import dask
 
-from graphufs import init_devices
-from graphufs.utils import get_last_input_mapping
-from graphufs.torch import Dataset, LocalDataset, DataLoader, BatchLoader
-from graphufs.stacked_training import init_model, optimize
+from graphufs.datasets import PackedDataset
+from graphufs.batchloader import BatchLoader
+from graphufs.torch import Dataset as TorchDataset, DataLoader as TorchDataLoader
 
 from ufs2arco import Timer
 
 from p1stacked import P1Emulator
-from train import graphufs_optimizer
-
-import dask
 
 class Formatter(logging.Formatter):
     def __init__(self, fmt):
@@ -26,7 +22,7 @@ class Formatter(logging.Formatter):
 
 def test_local_generator(p1, max_iters=30):
 
-    training_data = LocalDataset(
+    training_data = PackedDataset(
         p1,
         mode="training",
     )
@@ -66,15 +62,17 @@ def test_local_generator(p1, max_iters=30):
 
 def test_local_torchloader(p1, prefetch_factor, num_workers, max_iters=30):
 
-    training_data = LocalDataset(
+    training_data = TorchDataset(
         p1,
         mode="training",
     )
-    trainer = DataLoader(
+    trainer = TorchDataLoader(
         training_data,
         batch_size=p1.batch_size,
         shuffle=False,
         drop_last=True,
+        prefetch_factor=prefetch_factor,
+        num_workers=num_workers
     )
 
     logging.info(f"Initial Setup")

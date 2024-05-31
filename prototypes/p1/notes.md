@@ -81,11 +81,10 @@ vs
 Time to read without cache and 8 thread workers = 10 sec/batch
 
 
-
 ## Thread Data Queue Timing
 
 On gpu4 using `batch_size`=16 and 16 dask worker threads with the
-DaskDataLoader.
+BatchLoader.
 
 Basically all that matters is the `max_queue_size`, which
 gets drained eventually and we're reduced to the I/O speed.
@@ -95,17 +94,18 @@ I saw no real difference with lock on or off, may as well keep it.
 - `num_workers` = 0
     * 3.6 sec / iteration
 - `num_workers` = 1
-    * `max_queue_size` = 1: 2.5 sec / iteration, queue is cleared at iter 0
-    * `max_queue_size` = 2: 2.4 sec / iteration, queue cleared after iter 3
-    * `max_queue_size` = 3: 2.3 sec / iteration, queue cleared after iter 4
-    * `max_queue_size` = 4: 2.2 sec / iteration, queue cleared after iter 6
-    * `max_queue_size` = 8: 1.9 sec / iteration, queue cleared after iter 13
+    * `max_queue_size` = 1: 1.2 sec / iteration, queue is cleared at iter 6
+    * `max_queue_size` = 2: 1.2 sec / iteration, queue cleared after iter 11
+    * `max_queue_size` = 3:  sec / iteration, queue cleared after iter
+    * `max_queue_size` = 4:  sec / iteration, queue cleared after iter
+    * `max_queue_size` = 8:  sec / iteration, queue cleared after iter
 - `num_workers` = 2
-    * `max_queue_size` = 2: 2.4 sec / iteration, queue cleared after iter 3
-    * `max_queue_size` = 4: 2.2 sec / iteration, queue cleared after iter 7
+    * `max_queue_size` = 1: 1.2 sec / iteration, queue cleared after iter 11
+    * `max_queue_size` = 2: 1.2 sec / iteration, queue cleared after iter 17
+    * `max_queue_size` = 4:  sec / iteration, queue cleared after iter
 - `num_workers` = 4
-    * `max_queue_size` = 4: 2.3 sec / iteration, queue cleared after iter 7
-    * `max_queue_size` = 8: 2.0 sec / iteration, queue cleared after iter 11
+    * `max_queue_size` = 4:  sec / iteration, queue cleared after iter
+    * `max_queue_size` = 8:  sec / iteration, queue cleared after iter
 
 ## Training notes
 
