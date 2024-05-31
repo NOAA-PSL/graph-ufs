@@ -2,16 +2,12 @@ import logging
 import os
 import sys
 import subprocess
-from copy import deepcopy
 import numpy as np
 
-from functools import partial
-from graphufs import DataGenerator, init_model, init_devices
 from graphufs.datasets import Dataset
-from p1stacked import P1Emulator
+from p1 import P1Emulator
 
 from ufs2arco import Timer
-from multiprocessing import Pool
 
 _n_cpus = 48
 _partition = "cpuD48v3-spot"
@@ -110,6 +106,7 @@ def make_container(mode):
     p1, tds = setup(mode)
 
     tds.store_containers()
+    logging.info(f"Stored {mode} container")
 
 
 if __name__ == "__main__":
@@ -126,12 +123,14 @@ if __name__ == "__main__":
     timer = Timer()
 
     # create a container zarr store for all the data
-    #for mode in ["training", "validation"]:
-    #    make_container(mode)
+    for mode in ["training", "validation"]:
+        make_container(mode)
 
     # Pull the training and validation data and store to data/data.zarr
-    n_jobs = 12
-    for jid in range(2, n_jobs):
+    n_jobs = 26*2 # 2 jobs per year
+    for jid in range(n_jobs):
         submit_slurm_job(jid, n_jobs, mode="training")
 
-    #submit_slurm_job(0, 1, mode="validation")
+    n_jobs_valid = 2*2 # 2 jobs per year
+    for jid in range(n_jobs_valid):
+        submit_slurm_job(jid, n_jobs_valid, mode="validation")

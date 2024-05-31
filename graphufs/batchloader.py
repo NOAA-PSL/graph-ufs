@@ -50,7 +50,7 @@ class BatchLoader():
         self.drop_last = drop_last
 
         self.counter = 0
-        self.sample_indices = np.arange(len(self.dataset))
+        self.sample_indices = list(int(idx) for idx in np.arange(len(self.dataset)))
         self.rstate = np.random.RandomState(rng_seed)
 
         self.num_workers = num_workers
@@ -72,7 +72,7 @@ class BatchLoader():
     def __iter__(self):
         self.counter = 0
         # if the threads have not been restarted, do it now
-        if self.stop_event.is_set():
+        if self.stop_event.is_set() or self.num_workers == 0:
             self.restart()
         return self
 
@@ -125,6 +125,7 @@ class BatchLoader():
         self.stop_event = threading.Event()
         if self.shuffle:
             self.rstate.shuffle(self.sample_indices)
+            self.sample_indices = list(int(idx) for idx in self.sample_indices)
 
         # start filling the queue
         if self.num_workers > 0:

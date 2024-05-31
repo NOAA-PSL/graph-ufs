@@ -11,7 +11,8 @@ from graphufs.stacked_training import (
     optimize,
     init_model,
 )
-from graphufs.torch import Dataset, DataLoader
+from graphufs.datasets import Dataset
+from graphufs.batchloader import BatchLoader
 
 from graphufs.utils import get_last_input_mapping
 from graphufs import (
@@ -19,7 +20,6 @@ from graphufs import (
     compute_rmse_bias,
     init_devices,
 )
-from torch.utils.data import DataLoader as TorchDataLoader
 import jax
 
 from simple_emulator import P0Emulator
@@ -44,13 +44,13 @@ if __name__ == "__main__":
     # this loads the data in ... suboptimal I know
     training_data.xds.load();
     validation_data.xds.load();
-    trainer = DataLoader(
+    trainer = BatchLoader(
         training_data,
         batch_size=gufs.batch_size,
         shuffle=True,
         drop_last=True,
     )
-    validator = DataLoader(
+    validator = BatchLoader(
         validation_data,
         batch_size=gufs.batch_size,
         shuffle=True,
@@ -70,12 +70,14 @@ if __name__ == "__main__":
         params, state = gufs.load_checkpoint(args.id)
     else:
         logging.info("Initializing Optimizer and Parameters")
-        params, state = init_model(gufs, training_data, last_input_channel_mapping)
+        inputs, _ = trainer.get_data()
+        params, state = init_model(gufs, inputs, last_input_channel_mapping)
         loss_name = f"{gufs.local_store_path}/loss.nc"
         if os.path.exists(loss_name):
             os.remove(loss_name)
 
     # training
+    opt_state = None
     if not args.test:
         logging.info("Starting Training")
 
@@ -86,7 +88,7 @@ if __name__ == "__main__":
             logging.info(f"Training on epoch {e}")
 
             # optimize
-            params, loss = optimize(
+            params, loss, opt_state = optimize(
                 params=params,
                 state=state,
                 optimizer=optimizer,
@@ -95,6 +97,7 @@ if __name__ == "__main__":
                 validator=validator,
                 weights=weights,
                 last_input_channel_mapping=last_input_channel_mapping,
+                opt_state=opt_state,
             )
 
             # save weights

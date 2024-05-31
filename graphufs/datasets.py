@@ -72,7 +72,10 @@ class Dataset():
         Returns:
             X, y (np.ndarray): with inputs and targets
         """
-        sample_input, sample_target, sample_forcing = self.get_xarrays(idx)
+        if isinstance(idx, int):
+            sample_input, sample_target, sample_forcing = self.get_xarrays(idx)
+        else:
+            sample_input, sample_target, sample_forcing = self.get_batch_of_xarrays(idx)
 
         x = self._stack(sample_input, sample_forcing)
         y = self._stack(sample_target)
@@ -252,7 +255,7 @@ class Dataset():
         # get templates
         x, y = self[0]
         for name, template, path in zip(
-            ["inputs, targets"],
+            ["inputs", "targets"],
             [x, y],
             [self.local_inputs_path, self.local_targets_path],
         ):
