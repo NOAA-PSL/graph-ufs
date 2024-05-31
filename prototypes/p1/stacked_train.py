@@ -113,4 +113,6 @@ if __name__ == "__main__":
         p1.save_checkpoint(params, id=e+1)
         timer1.stop(f"Done with epoch {e+1}")
 
+    trainer.shutdown()
+    validator.shutdown()
     logging.info("Done Training")
