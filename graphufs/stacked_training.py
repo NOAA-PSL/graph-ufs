@@ -111,7 +111,7 @@ def optimize(
 
     devices = jax.devices()
     sharding = PositionalSharding(devices)
-    sharding = sharding.reshape((len(devices), 1, 1, 1))
+    sharding = sharding.reshape((emulator.num_gpus, 1, 1, 1))
     all_gpus = sharding.replicate()
 
     if use_jax_distributed:
