@@ -218,8 +218,8 @@ class Dataset():
 
     def store_sample(self, idx: int) -> None:
         x,y = self[idx]
-        x = x.rename({"batch": "sample"})
-        y = y.rename({"batch": "sample"})
+        x = x.expand_dims("batch").rename({"batch": "sample"})
+        y = y.expand_dims("batch").rename({"batch": "sample"})
 
         x = x.chunk(self.chunks)
         y = y.chunk(self.chunks)
