@@ -30,11 +30,11 @@ def get_chunk_data(generator, gen_lock, data: dict, no_load_chunk: bool, shuffle
 
     # load into ram unless specified otherwise
     if not no_load_chunk:
-        inputs.load()
-        targets.load()
-        forcings.load()
+        inputs = inputs.compute()
+        targets = targets.compute()
+        forcings = forcings.compute()
         if inittimes is not None:
-            inittimes.load()
+            inittimes = inittimes.compute()
 
     # shuffle here
     if shuffle:
