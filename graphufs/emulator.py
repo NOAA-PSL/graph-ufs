@@ -419,9 +419,6 @@ class ReplayEmulator:
                     if mode == "testing":
                         inittimes = xds_chunks["inittimes"][chunk_id]
                     yield inputs, targets, forcings, inittimes
-
-                    if self.steps_per_chunk is None and mode != "validation":
-                        self.steps_per_chunk = len(inputs["optim_step"])
                     continue
                 elif os.path.exists(f"{base_name}inputs.zarr"):
                     logging.debug(f"Opening chunk {chunk_id}.")
@@ -431,9 +428,6 @@ class ReplayEmulator:
                     if mode == "testing":
                         inittimes = xds_chunks["inittimes"][chunk_id] = xr.open_zarr(f"{base_name}inittimes.zarr")
                     yield inputs, targets, forcings, inittimes
-
-                    if self.steps_per_chunk is None and mode != "validation":
-                        self.steps_per_chunk = len(inputs["optim_step"])
                     continue
                 else:
                     logging.debug(f"Opening chunk {chunk_id} from scratch.")
@@ -459,9 +453,6 @@ class ReplayEmulator:
                 if n_optim_steps > n_max_optim_steps:
                     n_optim_steps = n_max_optim_steps
                     warnings.warn(f"There's less data than the number of batches requested, reducing n_optim_steps to {n_optim_steps}")
-
-                if self.steps_per_chunk is None and mode != "validation":
-                    self.steps_per_chunk = n_optim_steps
 
                 # create a new time vector with desired delta_t
                 # this has to end such that we can pull an entire forecast from the training data
