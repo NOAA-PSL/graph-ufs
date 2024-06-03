@@ -4,10 +4,11 @@ import logging
 import threading
 import queue
 import xarray as xr
+import numpy as np
 import concurrent.futures
 
 
-def get_chunk_data(generator, gen_lock, data: dict, no_load_chunk: bool):
+def get_chunk_data(generator, gen_lock, data: dict, no_load_chunk: bool, shuffle: bool):
     """Get multiple training batches.
 
     Args:
@@ -15,7 +16,9 @@ def get_chunk_data(generator, gen_lock, data: dict, no_load_chunk: bool):
         gen_lock: generator lock - because generators are not thread-safe
         data (dict): A dict containing the [inputs, targets, forcings]
         no_load_chunk: don't load chunk into RAM
+        shuffle: shuffle dataset
     """
+
 
     # get batches from replay on GCS
     try:
@@ -32,6 +35,20 @@ def get_chunk_data(generator, gen_lock, data: dict, no_load_chunk: bool):
         forcings.load()
         if inittimes is not None:
             inittimes.load()
+
+    # shuffle here
+    if shuffle:
+        # shuffle optim_step coord
+        optim_step = inputs.coords["optim_step"].values
+        np.random.shuffle(optim_step)
+        # shuffle each of inputs/targets/forcings/inittimes
+        def shuffle_ds(ds):
+            return ds.assign_coords(optim_step=optim_step)
+        inputs = shuffle_ds(inputs)
+        targets = shuffle_ds(targets)
+        forcings = shuffle_ds(forcings)
+        if inittimes is not None:
+            inittimes = shuffle_ds(inittimes)
 
     # update dictionary
     data.update(
@@ -64,6 +81,7 @@ class DataGenerator:
 
         # initialize batch generator
         self.no_load_chunk = emulator.no_load_chunk
+        self.shuffle = (mode != "testing")
         self.gen = emulator.get_batches(
             n_optim_steps=n_optim_steps,
             mode=mode,
@@ -82,7 +100,7 @@ class DataGenerator:
         """ Data generator function called by workers """
         while not self.stop_event.is_set():
             chunk_data = {}
-            get_chunk_data(self.gen, self.gen_lock, chunk_data, self.no_load_chunk)
+            get_chunk_data(self.gen, self.gen_lock, chunk_data, self.no_load_chunk, self.shuffle)
             self.data_queue.put(chunk_data)
 
     def get_data(self):
@@ -91,7 +109,7 @@ class DataGenerator:
             return self.data_queue.get()
         else:
             chunk_data = {}
-            get_chunk_data(self.gen, self.gen_lock, chunk_data, self.no_load_chunk)
+            get_chunk_data(self.gen, self.gen_lock, chunk_data, self.no_load_chunk, self.shuffle)
             return chunk_data
 
     def stop(self):
