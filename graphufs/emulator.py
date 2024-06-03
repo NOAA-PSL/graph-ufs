@@ -396,6 +396,17 @@ class ReplayEmulator:
             "inittimes": [None] * n_chunks,
         }
 
+        # open chunk files if it already exist
+        for chunk_id in range(n_chunks):
+            base_name = f"{self.local_store_path}/extracted/{mode}-chunk-{chunk_id:04d}-of-{n_chunks:04d}-bs-{self.batch_size}-"
+            if os.path.exists(f"{base_name}inputs.zarr"):
+                logging.debug(f"Opening chunk {chunk_id}.")
+                xds_chunks["inputs"][chunk_id] = xr.open_zarr(f"{base_name}inputs.zarr")
+                xds_chunks["targets"][chunk_id] = xr.open_zarr(f"{base_name}targets.zarr")
+                xds_chunks["forcings"][chunk_id] = xr.open_zarr(f"{base_name}forcings.zarr")
+                if mode == "testing":
+                    xds_chunks["inittimes"][chunk_id] = xr.open_zarr(f"{base_name}inittimes.zarr")
+
         # loop forever
         while True:
 
@@ -418,15 +429,6 @@ class ReplayEmulator:
                     forcings = xds_chunks["forcings"][chunk_id]
                     if mode == "testing":
                         inittimes = xds_chunks["inittimes"][chunk_id]
-                    yield inputs, targets, forcings, inittimes
-                    continue
-                elif os.path.exists(f"{base_name}inputs.zarr"):
-                    logging.debug(f"Opening chunk {chunk_id}.")
-                    inputs = xds_chunks["inputs"][chunk_id] = xr.open_zarr(f"{base_name}inputs.zarr")
-                    targets = xds_chunks["targets"][chunk_id] = xr.open_zarr(f"{base_name}targets.zarr")
-                    forcings = xds_chunks["forcings"][chunk_id] = xr.open_zarr(f"{base_name}forcings.zarr")
-                    if mode == "testing":
-                        inittimes = xds_chunks["inittimes"][chunk_id] = xr.open_zarr(f"{base_name}inittimes.zarr")
                     yield inputs, targets, forcings, inittimes
                     continue
                 else:
