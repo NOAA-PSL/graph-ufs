@@ -21,7 +21,8 @@ from graphcast.stacked_casting import StackedBfloat16Cast
 from graphcast.stacked_normalization import StackedInputsAndResiduals
 
 from p0 import P0Emulator
-from graphufs.torch import Dataset, DataLoader
+from graphufs.datasets import Dataset
+from graphufs.batchloader import BatchLoader
 from graphufs.utils import get_channel_index, get_last_input_mapping
 
 _idx = 0
@@ -94,11 +95,12 @@ def p0():
 
 @pytest.fixture(scope="module")
 def sample_dataset(p0):
-    yield Dataset(p0, mode="training")
+    yield Dataset(p0, mode="training", preload_batch=True)
 
 @pytest.fixture(scope="module")
 def sample_stacked_data(sample_dataset):
-    yield sample_dataset[_idx]
+    x,y = sample_dataset[_idx]
+    yield x.values, y.values
 
 @pytest.fixture(scope="module")
 def sample_xdata(sample_dataset):
@@ -141,9 +143,12 @@ def setup(p0, sample_dataset, sample_stacked_data, sample_xdata, parameters):
 def setup_batch(p0, sample_dataset, sample_xdata, parameters):
 
     # stacked_data
-    dl = DataLoader(
+    dl = BatchLoader(
         sample_dataset,
         batch_size=_batch_size,
+        shuffle=False,
+        drop_last=True,
+        num_workers=0,
     )
     inputs, targets = next(iter(dl))
 
@@ -292,14 +297,9 @@ class TestStackedGraphCast():
         # in order to match graphcast loss, since they average over variable first before summing
         target_idx = get_channel_index(xtargets)
         test_var_diagnostics = {k: 0. for k in p0.target_variables}
-        test_var_count = {k: 0 for k in p0.target_variables}
         for ichannel, val in enumerate(test_diagnostics):
             varname = target_idx[ichannel]["varname"]
             test_var_diagnostics[varname] += val
-            test_var_count[varname] += 1
-
-        for varname in p0.target_variables:
-            test_var_diagnostics[varname] /= test_var_count[varname]
 
         # for some reason GraphCast "diagnostics" is not weighted
         for varname in p0.target_variables:
@@ -312,9 +312,8 @@ class TestStackedGraphCast():
         if do_bfloat16:
             rtol = 1e-3 if do_inputs_and_residuals else 1e-2
 
-        # check mean here with code just for order of magnitude since summation will be different
-        assert_allclose(test_loss, np.mean(test_diagnostics), rtol=rtol)
+        # check diags with code just for order of magnitude since summation will be different
+        assert_allclose(test_loss, np.sum(test_diagnostics), rtol=rtol)
 
         # compare to GraphCast
-        compare_loss = np.sum(list(test_var_diagnostics.values()))
-        assert_allclose(compare_loss, expected_loss, rtol=rtol)
+        assert_allclose(test_loss, expected_loss, rtol=rtol)

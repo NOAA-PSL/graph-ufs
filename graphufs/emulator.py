@@ -645,11 +645,22 @@ class ReplayEmulator:
             weights *= lat_weights
 
         # 2. compute per variable weighting
+        #   a. incorporate user-specified variable weights
         target_idx = get_channel_index(xtargets)
+        var_count = {k: 0 for k in self.target_variables}
         for ichannel in range(targets.shape[-1]):
             varname = target_idx[ichannel]["varname"]
+            var_count[varname] += 1
             if varname in self.loss_weights_per_variable:
                 weights[..., ichannel] *= self.loss_weights_per_variable[varname]
+
+        # 2. compute per variable weighting
+        #   b. take average within variable, so if we have 3 levels of 1 var, divide by 3*n_latitude*n_longitude
+        for ichannel in range(targets.shape[-1]):
+            varname = target_idx[ichannel]["varname"]
+            local_weight = len(xtargets["lon"]) * len(xtargets["lat"]) * var_count[varname]
+            weights[..., ichannel] /= local_weight
+
 
         # 3. compute per level weighting
         if self.weight_loss_per_level:
