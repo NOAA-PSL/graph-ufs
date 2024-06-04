@@ -97,7 +97,7 @@ class P1Emulator(ReplayEmulator):
     log_only_rank0 = False
     use_jax_distributed = False
     use_xla_flags = False
-    dask_threads = 4
+    dask_threads = None
 
     # model config options
     resolution = 1.0

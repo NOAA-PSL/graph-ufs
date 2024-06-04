@@ -55,7 +55,8 @@ if __name__ == "__main__":
     init_devices(p1)
 
     # configuring dask
-    dask.config.set(scheduler="threads", num_workers=p1.dask_threads)
+    if p1.dask_threads is not None:
+        dask.config.set(scheduler="threads", num_workers=p1.dask_threads)
 
     # data generators
     logging.info("Loading first chunk of training and validation")
