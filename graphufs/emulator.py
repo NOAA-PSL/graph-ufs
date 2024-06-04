@@ -73,6 +73,7 @@ class ReplayEmulator:
     num_workers = None              # number of worker threads for data generators
     no_load_chunk = None            # don't load chunk into RAM, has the lowest memory usage if true
     store_loss = None               # store loss in a netcdf file
+    use_preprocessed = None         # use pre-processed dataset
 
     # others
     num_gpus = None                 # number of GPUs to use for training
@@ -388,24 +389,26 @@ class ReplayEmulator:
         if pd.Timedelta(self.target_lead_time) > self.delta_t:
             warnings.warn("ReplayEmulator.get_training_batches: need to rework this to pull targets for all steps at delta_t intervals between initial conditions and target_lead times, at least in part because we need the forcings at each delta_t time step, and the data extraction code only pulls this at each specified target_lead_time")
 
-        # zarr files array
-        xds_chunks = {
-            "inputs": [None] * n_chunks,
-            "targets": [None] * n_chunks,
-            "forcings": [None] * n_chunks,
-            "inittimes": [None] * n_chunks,
-        }
+        # pre-processed dataset
+        if self.use_preprocessed:
+            # zarr files array
+            xds_chunks = {
+                "inputs": [None] * n_chunks,
+                "targets": [None] * n_chunks,
+                "forcings": [None] * n_chunks,
+                "inittimes": [None] * n_chunks,
+            }
 
-        # open chunk files if it already exist
-        for chunk_id in range(n_chunks):
-            base_name = f"{self.local_store_path}/extracted/{mode}-chunk-{chunk_id:04d}-of-{n_chunks:04d}-bs-{self.batch_size}-"
-            if os.path.exists(f"{base_name}inputs.zarr"):
-                logging.debug(f"Opening chunk {chunk_id}.")
-                xds_chunks["inputs"][chunk_id] = xr.open_zarr(f"{base_name}inputs.zarr")
-                xds_chunks["targets"][chunk_id] = xr.open_zarr(f"{base_name}targets.zarr")
-                xds_chunks["forcings"][chunk_id] = xr.open_zarr(f"{base_name}forcings.zarr")
-                if mode == "testing":
-                    xds_chunks["inittimes"][chunk_id] = xr.open_zarr(f"{base_name}inittimes.zarr")
+            # open chunk files if it already exist
+            for chunk_id in range(n_chunks):
+                base_name = f"{self.local_store_path}/extracted/{mode}-chunk-{chunk_id:04d}-of-{n_chunks:04d}-bs-{self.batch_size}-"
+                if os.path.exists(f"{base_name}inputs.zarr"):
+                    logging.debug(f"Opening chunk {chunk_id}.")
+                    xds_chunks["inputs"][chunk_id] = xr.open_zarr(f"{base_name}inputs.zarr")
+                    xds_chunks["targets"][chunk_id] = xr.open_zarr(f"{base_name}targets.zarr")
+                    xds_chunks["forcings"][chunk_id] = xr.open_zarr(f"{base_name}forcings.zarr")
+                    if mode == "testing":
+                        xds_chunks["inittimes"][chunk_id] = xr.open_zarr(f"{base_name}inittimes.zarr")
 
         n_optim_steps_arg = n_optim_steps
 
@@ -422,19 +425,20 @@ class ReplayEmulator:
             for chunk_id, new_time in zipped:
 
                 # check cache
-                base_name = f"{self.local_store_path}/extracted/{mode}-chunk-{chunk_id:04d}-of-{n_chunks:04d}-bs-{self.batch_size}-"
-                inittimes = None
-                if xds_chunks["inputs"][chunk_id] is not None:
-                    logging.debug(f"Reusing chunk {chunk_id}.")
-                    inputs = xds_chunks["inputs"][chunk_id]
-                    targets = xds_chunks["targets"][chunk_id]
-                    forcings = xds_chunks["forcings"][chunk_id]
-                    if mode == "testing":
-                        inittimes = xds_chunks["inittimes"][chunk_id]
-                    yield inputs, targets, forcings, inittimes
-                    continue
-                else:
-                    logging.debug(f"Opening chunk {chunk_id} from scratch.")
+                if self.use_preprocessed:
+                    base_name = f"{self.local_store_path}/extracted/{mode}-chunk-{chunk_id:04d}-of-{n_chunks:04d}-bs-{self.batch_size}-"
+                    inittimes = None
+                    if xds_chunks["inputs"][chunk_id] is not None:
+                        logging.debug(f"Reusing chunk {chunk_id}.")
+                        inputs = xds_chunks["inputs"][chunk_id]
+                        targets = xds_chunks["targets"][chunk_id]
+                        forcings = xds_chunks["forcings"][chunk_id]
+                        if mode == "testing":
+                            inittimes = xds_chunks["inittimes"][chunk_id]
+                        yield inputs, targets, forcings, inittimes
+                        continue
+                    else:
+                        logging.debug(f"Opening chunk {chunk_id} from scratch.")
 
                 # chunk start and end times
                 start = new_time[0]
@@ -547,17 +551,19 @@ class ReplayEmulator:
 
                 def combine_save(xds, name):
                     xds = xr.combine_by_coords(xds)
-                    file_name = f"{base_name}{name}.zarr"
-                    xds.to_zarr(file_name)
-                    xds.close()
-                    xds = xr.open_zarr(file_name)
+                    if self.use_preprocessed:
+                        file_name = f"{base_name}{name}.zarr"
+                        xds.to_zarr(file_name)
+                        xds.close()
+                        xds = xr.open_zarr(file_name)
+                        xds_chunks[name][chunk_id] = xds
                     return xds
 
-                inputs = xds_chunks["inputs"][chunk_id] = combine_save(inputs, "inputs")
-                targets = xds_chunks["targets"][chunk_id] = combine_save(targets, "targets")
-                forcings = xds_chunks["forcings"][chunk_id] = combine_save(forcings, "forcings")
+                inputs = combine_save(inputs, "inputs")
+                targets = combine_save(targets, "targets")
+                forcings = combine_save(forcings, "forcings")
                 if mode == "testing":
-                    inittimes = xds_chunks["inittimes"][chunk_id] = combine_save(inittimes, "inittimes")
+                    inittimes = combine_save(inittimes, "inittimes")
                 else:
                     inittimes = None
 

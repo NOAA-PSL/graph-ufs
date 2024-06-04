@@ -81,7 +81,7 @@ class DataGenerator:
 
         # initialize batch generator
         self.no_load_chunk = emulator.no_load_chunk
-        self.shuffle = (mode != "testing")
+        self.shuffle = (mode != "testing") and emulator.use_preprocessed
         self.gen = emulator.get_batches(
             n_optim_steps=n_optim_steps,
             mode=mode,
