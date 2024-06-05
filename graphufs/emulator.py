@@ -74,6 +74,7 @@ class ReplayEmulator:
     load_chunk = None               # load chunk into RAM, has the lowest memory usage if false
     store_loss = None               # store loss in a netcdf file
     use_preprocessed = None         # use pre-processed dataset
+    write_per_chunk = None          # write pre-processed dataset per chunk (faster) instead of one big file
 
     # others
     num_gpus = None                 # number of GPUs to use for training
@@ -359,7 +360,8 @@ class ReplayEmulator:
         n_chunks = self.chunks_per_epoch
         has_preprocessed = False
         if self.use_preprocessed:
-            # zarr files array
+
+            # chunks zarr datasets
             xds_chunks = {
                 "inputs": [None] * n_chunks,
                 "targets": [None] * n_chunks,
@@ -367,23 +369,58 @@ class ReplayEmulator:
                 "inittimes": [None] * n_chunks,
             }
 
-            # open chunk files if it already exist
-            message = f"Chunks for {mode}: {n_chunks}"
-            has_preprocessed = True
-            for chunk_id in range(n_chunks):
-                base_name = f"{self.local_store_path}/extracted/{mode}-chunk-{chunk_id:04d}-of-{n_chunks:04d}-rank-{self.mpi_rank:03d}-of-{self.mpi_size:03d}-bs-{self.batch_size}-"
-                if os.path.exists(f"{base_name}inputs.zarr"):
-                    logging.debug(f"Opening chunk {chunk_id}.")
-                    xds_chunks["inputs"][chunk_id] = xr.open_zarr(f"{base_name}inputs.zarr")
-                    xds_chunks["targets"][chunk_id] = xr.open_zarr(f"{base_name}targets.zarr")
-                    xds_chunks["forcings"][chunk_id] = xr.open_zarr(f"{base_name}forcings.zarr")
-                    if mode == "testing":
-                        xds_chunks["inittimes"][chunk_id] = xr.open_zarr(f"{base_name}inittimes.zarr")
-                    n_steps = len(xds_chunks["inputs"][chunk_id]["optim_step"])
-                    message += f"\nChunk {chunk_id+1}: {n_steps} steps"
-                else:
+            # open chunk files if they exist
+            if self.write_per_chunk:
+                try:
+                    message = f"Chunks for {mode}: {n_chunks}"
+                    for chunk_id in range(n_chunks):
+                        base_name = f"{self.local_store_path}/extracted/{mode}-chunk-{chunk_id:04d}-of-{n_chunks:04d}-rank-{self.mpi_rank:03d}-of-{self.mpi_size:03d}-bs-{self.batch_size}-"
+                        logging.debug(f"Opening chunk {chunk_id}.")
+                        xds_chunks["inputs"][chunk_id] = xr.open_zarr(f"{base_name}inputs.zarr")
+                        xds_chunks["targets"][chunk_id] = xr.open_zarr(f"{base_name}targets.zarr")
+                        xds_chunks["forcings"][chunk_id] = xr.open_zarr(f"{base_name}forcings.zarr")
+                        if mode == "testing":
+                            xds_chunks["inittimes"][chunk_id] = xr.open_zarr(f"{base_name}inittimes.zarr")
+                        n_steps = len(xds_chunks["inputs"][chunk_id]["optim_step"])
+                        message += f"\nChunk {chunk_id+1}: {n_steps} steps"
+                    logging.info(message)
+                    has_preprocessed = True
+                except:
                     has_preprocessed = False
-            logging.info(message)
+            # open the merged file, and split it into desired number of chunks (currently slower)
+            else:
+                base_name = f"{self.local_store_path}/extracted/{mode}-rank-{self.mpi_rank:03d}-of-{self.mpi_size:03d}-bs-{self.batch_size}-"
+                try:
+                    # open the merged file
+                    inputs = xr.open_zarr(f"{base_name}inputs.zarr")
+                    targets = xr.open_zarr(f"{base_name}targets.zarr")
+                    forcings = xr.open_zarr(f"{base_name}forcings.zarr")
+                    inittimes = None
+                    if mode == "testing":
+                        inittimes = xr.open_zarr(f"{base_name}inittimes.zarr")
+
+                    # compute chunk size
+                    n_optim_steps = len(inputs["optim_step"])
+                    chunk_size = math.ceil((n_optim_steps * self.num_gpus) / (n_chunks * self.num_gpus))
+
+                    # zarr files array
+                    message = f"Chunks for {mode}: {n_chunks} where each chunk contains {chunk_size} batches"
+                    for chunk_id in range(n_chunks):
+                        if chunk_id == n_chunks - 1:
+                            sl = slice(chunk_id * chunk_size, n_optim_steps)
+                        else:
+                            sl = slice(chunk_id * chunk_size, (chunk_id + 1) * chunk_size)
+                        message += f"\nChunk {chunk_id+1} : {sl.stop - sl.start} steps"
+                        xds_chunks["inputs"][chunk_id] = inputs.isel(optim_step=sl)
+                        xds_chunks["targets"][chunk_id] = targets.isel(optim_step=sl)
+                        xds_chunks["forcings"][chunk_id] = forcings.isel(optim_step=sl)
+                        if mode == "testing":
+                            xds_chunks["inittimes"][chunk_id] = inittimes.isel(optim_step=sl)
+                    logging.info(message)
+                    has_preprocessed = True
+                except:
+                    has_preprocessed = False
+
 
         # raw dataset
         if not has_preprocessed:
@@ -432,6 +469,7 @@ class ReplayEmulator:
                 random.shuffle(chunk_ids)
 
             # iterate over all chunks
+            optim_step = 0
             for chunk_id in chunk_ids:
 
                 # check for pre-processed inputs
@@ -549,24 +587,36 @@ class ReplayEmulator:
                     )
 
                     # note that the optim_step dim has to be added after the extract_inputs_targets_forcings call
-                    inputs.append(this_input.expand_dims({"optim_step": [k]}))
-                    targets.append(this_target.expand_dims({"optim_step": [k]}))
-                    forcings.append(this_forcing.expand_dims({"optim_step": [k]}))
+                    inputs.append(this_input.expand_dims({"optim_step": [optim_step + k]}))
+                    targets.append(this_target.expand_dims({"optim_step": [optim_step + k]}))
+                    forcings.append(this_forcing.expand_dims({"optim_step": [optim_step + k]}))
 
                     if mode == "testing":
                         # fix this later for batch_size != 1
                         this_inittimes = batch.datetime.isel(time=0)
                         this_inittimes = this_inittimes.to_dataset(name="inittimes")
-                        inittimes.append(this_inittimes.expand_dims({"optim_step": [k]}))
+                        inittimes.append(this_inittimes.expand_dims({"optim_step": [optim_step + k]}))
 
-                base_name = f"{self.local_store_path}/extracted/{mode}-chunk-{chunk_id:04d}-of-{n_chunks:04d}-rank-{self.mpi_rank:03d}-of-{self.mpi_size:03d}-bs-{self.batch_size}-"
+                optim_step += n_optim_steps
+
+                # write chunks to disk
+                if self.write_per_chunk:
+                    base_name = f"{self.local_store_path}/extracted/{mode}-chunk-{chunk_id:04d}-of-{n_chunks:04d}-rank-{self.mpi_rank:03d}-of-{self.mpi_size:03d}-bs-{self.batch_size}-"
+                else:
+                    base_name = f"{self.local_store_path}/extracted/{mode}-rank-{self.mpi_rank:03d}-of-{self.mpi_size:03d}-bs-{self.batch_size}-"
                 def combine_save(xds, name):
                     xds = xr.combine_by_coords(xds)
                     if self.use_preprocessed:
                         file_name = f"{base_name}{name}.zarr"
-                        xds.to_zarr(file_name)
-                        xds.close()
-                        xds = xr.open_zarr(file_name)
+                        if self.write_per_chunk:
+                            xds.to_zarr(file_name)
+                            xds.close()
+                            xds = xr.open_zarr(file_name)
+                        else:
+                            if os.path.exists(file_name):
+                                xds.to_zarr(file_name, append_dim="optim_step")
+                            else:
+                                xds.to_zarr(file_name)
                         xds_chunks[name][chunk_id] = xds
                     return xds
 

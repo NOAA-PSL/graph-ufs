@@ -92,6 +92,7 @@ class P1Emulator(ReplayEmulator):
     load_chunk = True
     store_loss = True
     use_preprocessed = True
+    write_per_chunk = True
 
     # multi GPU and xla options
     num_gpus = 1
