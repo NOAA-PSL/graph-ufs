@@ -101,7 +101,7 @@ if __name__ == "__main__":
     # have to divide steps by num gpus so that LR progresses
     # with the number of parallel optimization steps
     steps_in_epoch = p1.chunks_per_epoch * len(data_train["inputs"]["optim_step"])
-    n_total = p1.num_epochs * steps_in_epoch
+    n_total = (p1.num_epochs + 1) * steps_in_epoch
     # use maximum of 1% of total steps or one epoch as warmup
     # Note that: graphcast uses 1/299 = 0.33% for warmup
     n_linear = max(n_total // 100, steps_in_epoch)
