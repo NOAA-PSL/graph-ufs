@@ -19,22 +19,27 @@ def get_chunk_data(generator, gen_lock, data: dict, load_chunk: bool, shuffle: b
         shuffle: shuffle dataset
     """
 
-
     # get batches from replay on GCS
     try:
         with gen_lock:
-            inputs, targets, forcings, inittimes = next(generator)
+            inputs_, targets_, forcings_, inittimes_ = next(generator)
     except Exception as e:
         logging.info(e)
         return
 
     # load into ram unless specified otherwise
     if load_chunk:
-        inputs = inputs.compute()
-        targets = targets.compute()
-        forcings = forcings.compute()
-        if inittimes is not None:
-            inittimes = inittimes.compute()
+        inputs = inputs_.compute()
+        targets = targets_.compute()
+        forcings = forcings_.compute()
+        if inittimes_ is not None:
+            inittimes = inittimes_.compute()
+        else:
+            inittimes = None
+    else:
+        inputs, targets, forcings, inittimes = (
+            inputs_, targets_, forcings_, inittimes_
+        )
 
     # shuffle here
     if shuffle:
@@ -44,6 +49,7 @@ def get_chunk_data(generator, gen_lock, data: dict, load_chunk: bool, shuffle: b
         # shuffle each of inputs/targets/forcings/inittimes
         def shuffle_ds(ds):
             return ds.assign_coords(optim_step=optim_step)
+
         inputs = shuffle_ds(inputs)
         targets = shuffle_ds(targets)
         forcings = shuffle_ds(forcings)
