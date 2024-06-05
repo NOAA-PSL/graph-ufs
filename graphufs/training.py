@@ -106,7 +106,7 @@ def init_model(emulator, data: dict):
     forcings=data["forcings"].isel(optim_step=0)
     # if we are not loading chunks, load slice as it
     # seems init_jitted requires it
-    if emulator.no_load_chunk:
+    if not emulator.load_chunk:
         inputs = inputs.load()
         targets = targets.load()
         forcings = forcings.load()

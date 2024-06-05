@@ -42,7 +42,7 @@ class ReplayEmulator:
     stacked_norm = dict()
     wb2_obs_url = ""
     local_store_path = None     # directory where zarr file, model weights etc are stored
-    no_cache_data = None        # don't cache or use zarr dataset downloaded from GCS on disk
+    cache_data = None           # cache or use zarr dataset downloaded from GCS on disk
 
     # these could be moved to a yaml file later
     # task config options
@@ -71,7 +71,7 @@ class ReplayEmulator:
     checkpoint_chunks = None        # save model after this many chunks are processed
     max_queue_size = None           # number of chunks in queue of data generators
     num_workers = None              # number of worker threads for data generators
-    no_load_chunk = None            # don't load chunk into RAM, has the lowest memory usage if true
+    load_chunk = None               # load chunk into RAM, has the lowest memory usage if false
     store_loss = None               # store loss in a netcdf file
     use_preprocessed = None         # use pre-processed dataset
 
@@ -302,11 +302,11 @@ class ReplayEmulator:
 
         all_new_time = all_new_time if all_new_time is not None else self.get_time(mode=mode)
         # download only missing dates and write them to disk
-        if self.no_cache_data or not os.path.exists(self.local_data_path):
+        if not self.cache_data or not os.path.exists(self.local_data_path):
             logging.info(f"Downloading missing {mode} data for {len(all_new_time)} time stamps.")
             xds = xr.open_zarr(self.data_url, storage_options={"token": "anon"})
             all_xds = self.subsample_dataset(xds, new_time=all_new_time)
-            if not self.no_cache_data:
+            if self.cache_data:
                 all_xds.to_zarr(self.local_data_path)
                 all_xds.close()
                 all_xds = xr.open_zarr(self.local_data_path)

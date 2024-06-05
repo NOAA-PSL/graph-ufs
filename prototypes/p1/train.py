@@ -84,7 +84,7 @@ if __name__ == "__main__":
 
     # compute approximate RAM usage and warn the user
     mem_usage = get_approximate_memory_usage(
-        [data_train, data_valid], p1.max_queue_size, p1.num_workers, p1.no_load_chunk
+        [data_train, data_valid], p1.max_queue_size, p1.num_workers, p1.load_chunk
     )
     logging.info("*****************************************************")
     logging.info(f"**     Total approximate memory usage {mem_usage:.0f} Gbs     ***")

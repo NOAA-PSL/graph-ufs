@@ -12,7 +12,7 @@ class P1Emulator(ReplayEmulator):
     }
     wb2_obs_url = "gs://weatherbench2/datasets/era5/1959-2022-6h-64x32_equiangular_conservative.zarr"
     local_store_path = "/lustre/stacked-p1-data-1year"
-    no_cache_data = False        # don't cache or use zarr dataset downloaded from GCS on disk
+    cache_data = True
 
     # task config options
     input_variables = (
@@ -89,7 +89,7 @@ class P1Emulator(ReplayEmulator):
     checkpoint_chunks = 1
     max_queue_size = 1
     num_workers = 1
-    no_load_chunk = False
+    load_chunk = True
 
     # multi GPU and xla options
     num_gpus = 1
