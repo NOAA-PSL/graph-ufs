@@ -371,7 +371,7 @@ class ReplayEmulator:
             message = f"Chunks for {mode}: {n_chunks}"
             has_preprocessed = True
             for chunk_id in range(n_chunks):
-                base_name = f"{self.local_store_path}/extracted/{mode}-chunk-{chunk_id:04d}-of-{n_chunks:04d}-bs-{self.batch_size}-"
+                base_name = f"{self.local_store_path}/extracted/{mode}-chunk-{chunk_id:04d}-of-{n_chunks:04d}-rank-{self.mpi_rank:03d}-of-{self.mpi_size:03d}-bs-{self.batch_size}-"
                 if os.path.exists(f"{base_name}inputs.zarr"):
                     logging.debug(f"Opening chunk {chunk_id}.")
                     xds_chunks["inputs"][chunk_id] = xr.open_zarr(f"{base_name}inputs.zarr")
@@ -438,7 +438,7 @@ class ReplayEmulator:
                 if self.use_preprocessed:
                     inittimes = None
                     if xds_chunks["inputs"][chunk_id] is not None:
-                        logging.debug(f"Reusing chunk {chunk_id}.")
+                        logging.debug(f"\nReusing {mode} chunk {chunk_id}.")
                         inputs = xds_chunks["inputs"][chunk_id]
                         targets = xds_chunks["targets"][chunk_id]
                         forcings = xds_chunks["forcings"][chunk_id]
@@ -447,7 +447,7 @@ class ReplayEmulator:
                         yield inputs, targets, forcings, inittimes
                         continue
                     else:
-                        logging.debug(f"Opening chunk {chunk_id} from scratch.")
+                        logging.debug(f"\nOpening {mode} chunk {chunk_id} from scratch.")
 
                 # chunk start and end times
                 new_time = all_new_time_chunks[chunk_id]
@@ -559,7 +559,7 @@ class ReplayEmulator:
                         this_inittimes = this_inittimes.to_dataset(name="inittimes")
                         inittimes.append(this_inittimes.expand_dims({"optim_step": [k]}))
 
-                base_name = f"{self.local_store_path}/extracted/{mode}-chunk-{chunk_id:04d}-of-{n_chunks:04d}-bs-{self.batch_size}-"
+                base_name = f"{self.local_store_path}/extracted/{mode}-chunk-{chunk_id:04d}-of-{n_chunks:04d}-rank-{self.mpi_rank:03d}-of-{self.mpi_size:03d}-bs-{self.batch_size}-"
                 def combine_save(xds, name):
                     xds = xr.combine_by_coords(xds)
                     if self.use_preprocessed:
