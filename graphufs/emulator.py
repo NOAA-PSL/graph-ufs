@@ -353,6 +353,20 @@ class ReplayEmulator:
 
         return slices
 
+    @staticmethod
+    def rechunk(xds):
+        chunksize = {
+            "optim_step": 1,
+            "batch": -1,
+            "time": -1,
+            "level": -1,
+            "lat": -1,
+            "lon": -1,
+        }
+        chunksize = {k:v for k,v in chunksize.items() if k in xds}
+        xds = xds.chunk(chunksize)
+        return xds
+
     def get_batches(
         self,
         n_optim_steps=None,
@@ -625,8 +639,9 @@ class ReplayEmulator:
                     base_name = f"{self.local_store_path}/extracted/{mode}-chunk-{chunk_id:04d}-of-{n_chunks:04d}-rank-{self.mpi_rank:03d}-of-{self.mpi_size:03d}-bs-{self.batch_size}-"
                 else:
                     base_name = f"{self.local_store_path}/extracted/{mode}-rank-{self.mpi_rank:03d}-of-{self.mpi_size:03d}-bs-{self.batch_size}-"
-                def combine_save(xds, name):
+                def combine_chunk_save(xds, name):
                     xds = xr.combine_by_coords(xds)
+                    xds = self.rechunk(xds)
                     if self.use_preprocessed:
                         file_name = f"{base_name}{name}.zarr"
                         if self.write_per_chunk:
@@ -641,11 +656,11 @@ class ReplayEmulator:
                         xds_chunks[name][chunk_id] = xds
                     return xds
 
-                inputs = combine_save(inputs, "inputs")
-                targets = combine_save(targets, "targets")
-                forcings = combine_save(forcings, "forcings")
+                inputs = combine_chunk_save(inputs, "inputs")
+                targets = combine_chunk_save(targets, "targets")
+                forcings = combine_chunk_save(forcings, "forcings")
                 if mode == "testing":
-                    inittimes = combine_save(inittimes, "inittimes")
+                    inittimes = combine_chunk_save(inittimes, "inittimes")
                 else:
                     inittimes = None
 
