@@ -44,11 +44,10 @@ def get_chunk_data(generator, gen_lock, data: dict, load_chunk: bool, shuffle: b
     # shuffle here
     if shuffle:
         # shuffle optim_step coord
-        optim_step = inputs.coords["optim_step"].values
-        np.random.shuffle(optim_step)
+        permuted_indices = np.random.permutation(inputs["optim_step"].size)
         # shuffle each of inputs/targets/forcings/inittimes
         def shuffle_ds(ds):
-            return ds.assign_coords(optim_step=optim_step)
+            return ds.isel({"optim_step": permuted_indices})
 
         inputs = shuffle_ds(inputs)
         targets = shuffle_ds(targets)

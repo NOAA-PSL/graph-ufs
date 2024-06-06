@@ -404,18 +404,25 @@ class ReplayEmulator:
                     chunk_size = math.ceil((n_optim_steps * self.num_gpus) / (n_chunks * self.num_gpus))
 
                     # zarr files array
-                    message = f"Chunks for {mode}: {n_chunks} where each chunk contains {chunk_size} batches"
+                    message = f"Chunks for {mode}: {n_chunks}"
                     for chunk_id in range(n_chunks):
                         if chunk_id == n_chunks - 1:
                             sl = slice(chunk_id * chunk_size, n_optim_steps)
                         else:
                             sl = slice(chunk_id * chunk_size, (chunk_id + 1) * chunk_size)
-                        message += f"\nChunk {chunk_id+1} : {sl.stop - sl.start} steps"
-                        xds_chunks["inputs"][chunk_id] = inputs.isel(optim_step=sl)
-                        xds_chunks["targets"][chunk_id] = targets.isel(optim_step=sl)
-                        xds_chunks["forcings"][chunk_id] = forcings.isel(optim_step=sl)
+                        n_steps = sl.stop - sl.start
+                        message += f"\nChunk {chunk_id+1} : {n_steps} steps"
+
+                        def assign_chunk(xds):
+                            xdsn = xds.isel(optim_step=sl)
+                            return xdsn.assign_coords(optim_step=[i for i in range(n_steps)])
+
+                        xds_chunks["inputs"][chunk_id] = assign_chunk(inputs)
+                        xds_chunks["targets"][chunk_id] = assign_chunk(targets)
+                        xds_chunks["forcings"][chunk_id] = assign_chunk(forcings)
                         if mode == "testing":
-                            xds_chunks["inittimes"][chunk_id] = inittimes.isel(optim_step=sl)
+                            xds_chunks["inittimes"][chunk_id] = assign_chunk(inittimes)
+
                     logging.info(message)
                     has_preprocessed = True
                 except:
@@ -597,7 +604,9 @@ class ReplayEmulator:
                         this_inittimes = this_inittimes.to_dataset(name="inittimes")
                         inittimes.append(this_inittimes.expand_dims({"optim_step": [optim_step + k]}))
 
-                optim_step += n_optim_steps
+                # update optim_step for next chunk
+                if not self.write_per_chunk:
+                    optim_step = inputs[-1]["optim_step"][0] + 1
 
                 # write chunks to disk
                 if self.write_per_chunk:
