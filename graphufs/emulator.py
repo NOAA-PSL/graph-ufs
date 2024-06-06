@@ -330,12 +330,34 @@ class ReplayEmulator:
 
         return all_xds
 
+    @staticmethod
+    def divide_into_slices(N, K):
+        """
+        Divide N items into K groups and return an array of slice objects.
+
+        Args:
+            N (int): Total number of items.
+            K (int): Number of groups.
+        Returns:
+           list of slice: A list containing slice objects for each group.
+        """
+        base_size = N // K
+        extra_items = N % K
+
+        slices = []
+        start = 0
+        for i in range(K):
+            end = start + base_size + (1 if i < extra_items else 0)
+            slices.append(slice(start, end))
+            start = end
+
+        return slices
+
     def get_batches(
         self,
         n_optim_steps=None,
         drop_cftime=True,
         mode="training",
-        allow_overlapped_chunks=None,
     ):
         """Get a dataset with all the batches of data necessary for training
 
@@ -346,7 +368,6 @@ class ReplayEmulator:
             n_optim_steps (int, optional): number of training batches to grab ... number of times we will update the parameters during optimization. If not specified, use as many as are available based on the available training data.
             drop_cftime (bool, optional): may be useful for debugging
             mode (str, optional): can be either "training", "validation" or "testing"
-            allow_overlapped_chunks (bool, optional): overlapp chunks
         Returns:
             inputs, targets, forcings (xarray.Dataset): with new dimension "batch"
                 and appropriate fields for each dataset, based on the variables in :attr:`task_config`
@@ -375,7 +396,6 @@ class ReplayEmulator:
                     message = f"Chunks for {mode}: {n_chunks}"
                     for chunk_id in range(n_chunks):
                         base_name = f"{self.local_store_path}/extracted/{mode}-chunk-{chunk_id:04d}-of-{n_chunks:04d}-rank-{self.mpi_rank:03d}-of-{self.mpi_size:03d}-bs-{self.batch_size}-"
-                        logging.debug(f"Opening chunk {chunk_id}.")
                         xds_chunks["inputs"][chunk_id] = xr.open_zarr(f"{base_name}inputs.zarr")
                         xds_chunks["targets"][chunk_id] = xr.open_zarr(f"{base_name}targets.zarr")
                         xds_chunks["forcings"][chunk_id] = xr.open_zarr(f"{base_name}forcings.zarr")
@@ -398,18 +418,19 @@ class ReplayEmulator:
                     inittimes = None
                     if mode == "testing":
                         inittimes = xr.open_zarr(f"{base_name}inittimes.zarr")
+                    has_preprocessed = True
+                except:
+                    has_preprocessed = False
 
+                if has_preprocessed:
                     # compute chunk size
-                    n_optim_steps = len(inputs["optim_step"])
-                    chunk_size = math.ceil((n_optim_steps * self.num_gpus) / (n_chunks * self.num_gpus))
+                    n_optim_steps_file = len(inputs["optim_step"])
+                    slices = self.divide_into_slices(n_optim_steps_file, n_chunks)
 
                     # zarr files array
                     message = f"Chunks for {mode}: {n_chunks}"
                     for chunk_id in range(n_chunks):
-                        if chunk_id == n_chunks - 1:
-                            sl = slice(chunk_id * chunk_size, n_optim_steps)
-                        else:
-                            sl = slice(chunk_id * chunk_size, (chunk_id + 1) * chunk_size)
+                        sl = slices[chunk_id]
                         n_steps = sl.stop - sl.start
                         message += f"\nChunk {chunk_id+1} : {n_steps} steps"
 
@@ -422,11 +443,7 @@ class ReplayEmulator:
                         xds_chunks["forcings"][chunk_id] = assign_chunk(forcings)
                         if mode == "testing":
                             xds_chunks["inittimes"][chunk_id] = assign_chunk(inittimes)
-
                     logging.info(message)
-                    has_preprocessed = True
-                except:
-                    has_preprocessed = False
 
 
         # raw dataset
@@ -444,19 +461,14 @@ class ReplayEmulator:
                 all_new_time = all_new_time[start:end]
                 logging.info(f"Data for {mode} MPI rank {self.mpi_rank}: {all_new_time[0]} to {all_new_time[-1]} : {len(all_new_time)} time stamps.")
 
-
+            # download the data
             all_xds = self.get_the_data(all_new_time=all_new_time, mode=mode)
-            # split dataset into chunks
-            chunk_size = len(all_new_time) // n_chunks
-            all_new_time_chunks = []
 
-            # overlap chunks by lead time + input duration
-            overlap_step = (self.target_lead_time + self.input_duration) // delta_t if allow_overlapped_chunks else 0
-            for i in range(n_chunks):
-                if i == n_chunks - 1:
-                    all_new_time_chunks.append(all_new_time[i * chunk_size:len(all_new_time)])
-                else:
-                    all_new_time_chunks.append(all_new_time[i * chunk_size:(i + 1) * chunk_size + overlap_step])
+            # split dataset into chunks
+            slices = self.divide_into_slices(len(all_new_time), n_chunks)
+            all_new_time_chunks = []
+            for sl in slices:
+                all_new_time_chunks.append(all_new_time[sl])
 
             # print chunk boundaries
             message = f"Chunks for {mode}: {len(all_new_time_chunks)}"
@@ -481,12 +493,12 @@ class ReplayEmulator:
 
                 # check for pre-processed inputs
                 if self.use_preprocessed:
-                    inittimes = None
                     if xds_chunks["inputs"][chunk_id] is not None:
                         logging.debug(f"\nReusing {mode} chunk {chunk_id}.")
                         inputs = xds_chunks["inputs"][chunk_id]
                         targets = xds_chunks["targets"][chunk_id]
                         forcings = xds_chunks["forcings"][chunk_id]
+                        inittimes = None
                         if mode == "testing":
                             inittimes = xds_chunks["inittimes"][chunk_id]
                         yield inputs, targets, forcings, inittimes
