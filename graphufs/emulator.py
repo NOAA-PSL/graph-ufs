@@ -347,8 +347,12 @@ class ReplayEmulator:
         slices = []
         start = 0
         for i in range(K):
-            end = start + base_size + (1 if i < extra_items else 0)
-            slices.append(slice(start, end))
+            if i < extra_items:
+                end = start + base_size + 1
+                slices.append(slice(start, end))
+            else:
+                end = start + base_size
+                slices.append(slice(start - (1 if extra_items else 0), end))
             start = end
 
         return slices
@@ -464,15 +468,11 @@ class ReplayEmulator:
         if not has_preprocessed:
             all_new_time = self.get_time(mode=mode)
 
-            # split the dataset across nodes
-            # make sure work is _exactly_ equally distirubuted to prevent hangs
-            # when the number of time stamps is not evenly divisible by the number of ranks,
-            # we discard whatever data is left over. Not a problem because parallelization is not done for testing.
+            # split the dataset _equally_ across nodes to prevent hangs
+            # Note: The possible overlaps maybe a problem if/when testing is parallelized
             if self.mpi_size > 1:
-                mpi_chunk_size = len(all_new_time) // self.mpi_size
-                start = self.mpi_rank * mpi_chunk_size
-                end = (self.mpi_rank + 1) * mpi_chunk_size
-                all_new_time = all_new_time[start:end]
+                slices = self.divide_into_slices(len(all_new_time), self.mpi_size)
+                all_new_time = all_new_time[slices[self.mpi_rank]]
                 logging.info(f"Data for {mode} MPI rank {self.mpi_rank}: {all_new_time[0]} to {all_new_time[-1]} : {len(all_new_time)} time stamps.")
 
             # download the data
