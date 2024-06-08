@@ -595,7 +595,7 @@ class ReplayEmulator:
                                 bs = random.randint(0,s-1)
                                 mds = ds_list[bs].copy()
                                 mds["batch"] = [b]
-                            mds["optim_step"] = [k]
+                            mds["optim_step"] = [optim_step + k]
                             ds_list.append(mds)
                         if mode != "testing":
                             copy_values(inputs)
