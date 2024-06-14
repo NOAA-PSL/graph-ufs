@@ -22,7 +22,7 @@ from graphufs import (
 )
 import jax
 
-from simple_emulator import P0Emulator
+from mini_emulator_coupled import P0Emulator
 
 if __name__ == "__main__":
 
