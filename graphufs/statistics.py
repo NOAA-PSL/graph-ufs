@@ -202,11 +202,17 @@ class StatisticsComputer:
         """
         return str(xval.values.astype("M8[h]"))
 
-def add_derived_vars(xds):
+def add_derived_vars(xds,component="atm"):
 
     with xr.set_options(keep_attrs=True):
-        xds = xds.rename({"time": "datetime", "grid_xt": "lon", "grid_yt": "lat", "pfull": "level"})
-        data_utils.add_derived_vars(xds)
-        xds = xds.rename({"datetime": "time", "lon": "grid_xt", "lat": "grid_yt", "level": "pfull"})
+        if component.lower() == "atm".lower():
+            xds = xds.rename({"time": "datetime", "grid_xt": "lon", "grid_yt": "lat", "pfull": "level"})
+            data_utils.add_derived_vars(xds)
+            xds = xds.rename({"datetime": "time", "lon": "grid_xt", "lat": "grid_yt", "level": "pfull"})
+        
+        elif component.lower() == "ocean".lower():
+            xds = xds.rename({"time": "datetime"})
+            data_utils.add_derived_vars(xds)
+            xds = xds.rename({"datetime": "time"})
 
     return xds
