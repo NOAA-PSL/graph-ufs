@@ -419,8 +419,8 @@ class ReplayEmulator:
                         xds_chunks["forcings"][chunk_id] = xr.open_zarr(f"{base_name}forcings.zarr")
                         if mode == "testing":
                             xds_chunks["inittimes"][chunk_id] = xr.open_zarr(f"{base_name}inittimes.zarr")
-                        n_steps = len(xds_chunks["inputs"][chunk_id]["optim_step"])
-                        message += f"\nChunk {chunk_id+1}: {n_steps} steps"
+                    n_steps = len(xds_chunks["inputs"][0]["optim_step"])
+                    message += f" each with {n_steps} steps"
                     logging.info(message)
                     has_preprocessed = True
                 except:
@@ -450,7 +450,6 @@ class ReplayEmulator:
                     for chunk_id in range(n_chunks):
                         sl = slices[chunk_id]
                         n_steps = sl.stop - sl.start
-                        message += f"\nChunk {chunk_id+1} : {n_steps} steps"
 
                         def assign_chunk(xds):
                             xdsn = xds.isel(optim_step=sl)
@@ -461,6 +460,8 @@ class ReplayEmulator:
                         xds_chunks["forcings"][chunk_id] = assign_chunk(forcings)
                         if mode == "testing":
                             xds_chunks["inittimes"][chunk_id] = assign_chunk(inittimes)
+                    n_steps = slices[0].stop - slices[0].start
+                    message += f" each with {n_steps} steps"
                     logging.info(message)
 
 
@@ -485,9 +486,7 @@ class ReplayEmulator:
                 all_new_time_chunks.append(all_new_time[sl])
 
             # print chunk boundaries
-            message = f"Chunks for {mode}: {len(all_new_time_chunks)}"
-            for chunk_id, new_time in enumerate(all_new_time_chunks):
-                message += f"\nChunk {chunk_id+1}: {new_time[0]} to {new_time[-1]} : {len(new_time)} time stamps"
+            message = f"Chunks for {mode}: {len(all_new_time_chunks)} each with {len(all_new_time_chunks[0])} time stamps"
             logging.info(message)
 
         # list of chunk ids
