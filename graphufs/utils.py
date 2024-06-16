@@ -22,24 +22,10 @@ def get_chunk_data(generator, gen_lock, data: dict, load_chunk: bool, shuffle: b
     # get batches from replay on GCS
     try:
         with gen_lock:
-            inputs_, targets_, forcings_, inittimes_ = next(generator)
+            inputs, targets, forcings, inittimes = next(generator)
     except Exception as e:
         logging.info(e)
         return
-
-    # load into ram unless specified otherwise
-    if load_chunk:
-        inputs = inputs_.compute()
-        targets = targets_.compute()
-        forcings = forcings_.compute()
-        if inittimes_ is not None:
-            inittimes = inittimes_.compute()
-        else:
-            inittimes = None
-    else:
-        inputs, targets, forcings, inittimes = (
-            inputs_, targets_, forcings_, inittimes_
-        )
 
     # shuffle here
     if shuffle:
@@ -55,13 +41,27 @@ def get_chunk_data(generator, gen_lock, data: dict, load_chunk: bool, shuffle: b
         if inittimes is not None:
             inittimes = shuffle_ds(inittimes)
 
+    # load into ram unless specified otherwise
+    if load_chunk:
+        inputs_ = inputs.compute()
+        targets_ = targets.compute()
+        forcings_ = forcings.compute()
+        if inittimes is not None:
+            inittimes_ = inittimes.compute()
+        else:
+            inittimes_ = None
+    else:
+        inputs_, targets_, forcings_, inittimes_ = (
+            inputs, targets, forcings, inittimes
+        )
+
     # update dictionary
     data.update(
         {
-            "inputs": inputs,
-            "targets": targets,
-            "forcings": forcings,
-            "inittimes": inittimes,
+            "inputs": inputs_,
+            "targets": targets_,
+            "forcings": forcings_,
+            "inittimes": inittimes_,
         }
     )
 
