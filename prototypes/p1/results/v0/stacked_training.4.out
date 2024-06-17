@@ -1,0 +1,88 @@
+[52 s] [Rank 0] [INFO] Unable to initialize backend 'rocm': NOT_FOUND: Could not find registered platform with name: "rocm". Available platform names are: CUDA
+[52 s] [Rank 0] [INFO] Unable to initialize backend 'tpu': INTERNAL: Failed to open libtpu.so: libtpu.so: cannot open shared object file: No such file or directory
+[52 s] [Rank 0] [INFO] Using 4 GPUs.
+[53 s] [Rank 0] [INFO] 
+jax:    0.4.27
+jaxlib: 0.4.23.dev20240503
+numpy:  1.26.4
+python: 3.11.9 | packaged by conda-forge | (main, Apr 19 2024, 18:36:13) [GCC 12.3.0]
+jax.devices (4 total, 4 local): [cuda(id=0) cuda(id=1) cuda(id=2) cuda(id=3)]
+process_count: 1
+platform: uname_result(system='Linux', node='timsmith-p1rocky-00016-3-0001', release='4.18.0-513.18.1.el8_9.x86_64', version='#1 SMP Wed Feb 21 21:34:36 UTC 2024', machine='x86_64')
+
+
+$ nvidia-smi
+Tue Jun 11 12:25:14 2024       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 550.54.15              Driver Version: 550.54.15      CUDA Version: 12.4     |
+|-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA A100 80GB PCIe          On  |   00000001:00:00.0 Off |                    0 |
+| N/A   37C    P0             71W /  300W |     425MiB /  81920MiB |      1%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA A100 80GB PCIe          On  |   00000002:00:00.0 Off |                    0 |
+| N/A   38C    P0             78W /  300W |     425MiB /  81920MiB |      1%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+|   2  NVIDIA A100 80GB PCIe          On  |   00000003:00:00.0 Off |                    0 |
+| N/A   38C    P0             72W /  300W |     425MiB /  81920MiB |      1%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+|   3  NVIDIA A100 80GB PCIe          On  |   00000004:00:00.0 Off |                    0 |
+| N/A   39C    P0             72W /  300W |     425MiB /  81920MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+                                                                                         
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI        PID   Type   Process name                              GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A     12650      C   python                                        416MiB |
+|    1   N/A  N/A     12650      C   python                                        416MiB |
+|    2   N/A  N/A     12650      C   python                                        416MiB |
+|    3   N/A  N/A     12650      C   python                                        416MiB |
++-----------------------------------------------------------------------------------------+
+
+[53 s] [Rank 0] [INFO] Local devices: 4 [cuda(id=0), cuda(id=1), cuda(id=2), cuda(id=3)]
+[53 s] [Rank 0] [INFO] Global devices: 4 [cuda(id=0), cuda(id=1), cuda(id=2), cuda(id=3)]
+[70 s] [Rank 0] [INFO] Initial Setup
+[121 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_0.npz
+[121 s] [Rank 0] [INFO] Starting Training with:
+[121 s] [Rank 0] [INFO] 	 4748 linearly increasing LR steps
+[121 s] [Rank 0] [INFO] 	 707452 cosine decay LR steps
+[121 s] [Rank 0] [INFO] 	 712200 total training steps
+[121 s] [Rank 0] [INFO] 	 325 validation steps
+[121 s] [Rank 0] [INFO] Training on epoch 1
+[122 s] [Rank 0] [INFO] Started jitting optim_step
+[197 s] [Rank 0] [INFO] Finished jitting optim_step
+[197 s] [Rank 0] [INFO] Started jitting validation loss
+[213 s] [Rank 0] [INFO] Finished jitting validation loss
+[6632 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_1.npz
+Done with epoch 1: 6510.5491 seconds
+
+[6632 s] [Rank 0] [INFO] Training on epoch 2
+[13051 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_2.npz
+Done with epoch 2: 6419.0638 seconds
+
+[13051 s] [Rank 0] [INFO] Training on epoch 3
+[19212 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_3.npz
+Done with epoch 3: 6161.0822 seconds
+
+[19212 s] [Rank 0] [INFO] Training on epoch 4
+[25420 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_4.npz
+Done with epoch 4: 6207.9933 seconds
+
+[25420 s] [Rank 0] [INFO] Training on epoch 5
+[31596 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_5.npz
+Done with epoch 5: 6176.1722 seconds
+
+[31596 s] [Rank 0] [INFO] Training on epoch 6
+[37789 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_6.npz
+Done with epoch 6: 6193.4935 seconds
+
+[37789 s] [Rank 0] [INFO] Training on epoch 7

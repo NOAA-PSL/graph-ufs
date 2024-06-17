@@ -1,0 +1,264 @@
+[66 s] [Rank 0] [INFO] Unable to initialize backend 'rocm': NOT_FOUND: Could not find registered platform with name: "rocm". Available platform names are: CUDA
+[66 s] [Rank 0] [INFO] Unable to initialize backend 'tpu': INTERNAL: Failed to open libtpu.so: libtpu.so: cannot open shared object file: No such file or directory
+[66 s] [Rank 0] [INFO] Using 4 GPUs.
+[67 s] [Rank 0] [INFO] 
+jax:    0.4.27
+jaxlib: 0.4.23.dev20240503
+numpy:  1.26.4
+python: 3.11.9 | packaged by conda-forge | (main, Apr 19 2024, 18:36:13) [GCC 12.3.0]
+jax.devices (4 total, 4 local): [cuda(id=0) cuda(id=1) cuda(id=2) cuda(id=3)]
+process_count: 1
+platform: uname_result(system='Linux', node='timsmith-p1rocky-00017-3-0008', release='4.18.0-513.18.1.el8_9.x86_64', version='#1 SMP Wed Feb 21 21:34:36 UTC 2024', machine='x86_64')
+
+
+$ nvidia-smi
+Wed Jun 12 19:13:18 2024       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 550.54.15              Driver Version: 550.54.15      CUDA Version: 12.4     |
+|-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA A100 80GB PCIe          On  |   00000001:00:00.0 Off |                    0 |
+| N/A   35C    P0             73W /  300W |     425MiB /  81920MiB |      1%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA A100 80GB PCIe          On  |   00000002:00:00.0 Off |                    0 |
+| N/A   37C    P0             75W /  300W |     425MiB /  81920MiB |      1%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+|   2  NVIDIA A100 80GB PCIe          On  |   00000003:00:00.0 Off |                    0 |
+| N/A   36C    P0             70W /  300W |     425MiB /  81920MiB |      2%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+|   3  NVIDIA A100 80GB PCIe          On  |   00000004:00:00.0 Off |                    0 |
+| N/A   36C    P0             72W /  300W |     425MiB /  81920MiB |      2%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+                                                                                         
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI        PID   Type   Process name                              GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A     12294      C   python                                        416MiB |
+|    1   N/A  N/A     12294      C   python                                        416MiB |
+|    2   N/A  N/A     12294      C   python                                        416MiB |
+|    3   N/A  N/A     12294      C   python                                        416MiB |
++-----------------------------------------------------------------------------------------+
+
+[67 s] [Rank 0] [INFO] Local devices: 4 [cuda(id=0), cuda(id=1), cuda(id=2), cuda(id=3)]
+[67 s] [Rank 0] [INFO] Global devices: 4 [cuda(id=0), cuda(id=1), cuda(id=2), cuda(id=3)]
+[85 s] [Rank 0] [INFO] Initial Setup
+[136 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_0.npz
+[136 s] [Rank 0] [INFO] Starting Training with:
+[136 s] [Rank 0] [INFO] 	 1000 linearly increasing LR steps
+[136 s] [Rank 0] [INFO] 	 236400 cosine decay LR steps
+[136 s] [Rank 0] [INFO] 	 237400 total training steps
+[136 s] [Rank 0] [INFO] 	 325 validation steps
+[136 s] [Rank 0] [INFO] Training on epoch 1
+[137 s] [Rank 0] [INFO] Started jitting optim_step
+[210 s] [Rank 0] [INFO] Finished jitting optim_step
+[210 s] [Rank 0] [INFO] Started jitting validation loss
+[227 s] [Rank 0] [INFO] Finished jitting validation loss
+[7027 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_1.npz
+Done with epoch 1: 6891.5072 seconds
+
+[7027 s] [Rank 0] [INFO] Training on epoch 2
+[13821 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_2.npz
+Done with epoch 2: 6794.2835 seconds
+
+[13821 s] [Rank 0] [INFO] Training on epoch 3
+[20373 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_3.npz
+Done with epoch 3: 6551.7884 seconds
+
+[20373 s] [Rank 0] [INFO] Training on epoch 4
+[26899 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_4.npz
+Done with epoch 4: 6525.9586 seconds
+
+[26899 s] [Rank 0] [INFO] Training on epoch 5
+[33430 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_5.npz
+Done with epoch 5: 6530.7679 seconds
+
+[33430 s] [Rank 0] [INFO] Training on epoch 6
+[39975 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_6.npz
+Done with epoch 6: 6545.0722 seconds
+
+[39975 s] [Rank 0] [INFO] Training on epoch 7
+[46503 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_7.npz
+Done with epoch 7: 6527.7260 seconds
+
+[46503 s] [Rank 0] [INFO] Training on epoch 8
+[53068 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_8.npz
+Done with epoch 8: 6565.4486 seconds
+
+[53068 s] [Rank 0] [INFO] Training on epoch 9
+[59567 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_9.npz
+Done with epoch 9: 6498.3978 seconds
+
+[59567 s] [Rank 0] [INFO] Training on epoch 10
+[66121 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_10.npz
+Done with epoch 10: 6554.1603 seconds
+
+[66121 s] [Rank 0] [INFO] Training on epoch 11
+[72678 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_11.npz
+Done with epoch 11: 6557.0341 seconds
+
+[72678 s] [Rank 0] [INFO] Training on epoch 12
+[79274 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_12.npz
+Done with epoch 12: 6596.1075 seconds
+
+[79274 s] [Rank 0] [INFO] Training on epoch 13
+[85896 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_13.npz
+Done with epoch 13: 6622.4475 seconds
+
+[85896 s] [Rank 0] [INFO] Training on epoch 14
+[92465 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_14.npz
+Done with epoch 14: 6568.3940 seconds
+
+[92465 s] [Rank 0] [INFO] Training on epoch 15
+[99049 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_15.npz
+Done with epoch 15: 6584.3229 seconds
+
+[99049 s] [Rank 0] [INFO] Training on epoch 16
+[105528 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_16.npz
+Done with epoch 16: 6478.8762 seconds
+
+[105528 s] [Rank 0] [INFO] Training on epoch 17
+[112043 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_17.npz
+Done with epoch 17: 6515.4600 seconds
+
+[112043 s] [Rank 0] [INFO] Training on epoch 18
+[118535 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_18.npz
+Done with epoch 18: 6491.4842 seconds
+
+[118535 s] [Rank 0] [INFO] Training on epoch 19
+[125023 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_19.npz
+Done with epoch 19: 6488.4608 seconds
+
+[125023 s] [Rank 0] [INFO] Training on epoch 20
+[131546 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_20.npz
+Done with epoch 20: 6522.9247 seconds
+
+[131546 s] [Rank 0] [INFO] Training on epoch 21
+[138012 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_21.npz
+Done with epoch 21: 6465.8753 seconds
+
+[138012 s] [Rank 0] [INFO] Training on epoch 22
+[144527 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_22.npz
+Done with epoch 22: 6514.6992 seconds
+
+[144527 s] [Rank 0] [INFO] Training on epoch 23
+[151047 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_23.npz
+Done with epoch 23: 6520.5077 seconds
+
+[151047 s] [Rank 0] [INFO] Training on epoch 24
+[157539 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_24.npz
+Done with epoch 24: 6491.8899 seconds
+
+[157539 s] [Rank 0] [INFO] Training on epoch 25
+[164114 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_25.npz
+Done with epoch 25: 6575.2559 seconds
+
+[164114 s] [Rank 0] [INFO] Training on epoch 26
+[170624 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_26.npz
+Done with epoch 26: 6509.5911 seconds
+
+[170624 s] [Rank 0] [INFO] Training on epoch 27
+[177162 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_27.npz
+Done with epoch 27: 6537.9409 seconds
+
+[177162 s] [Rank 0] [INFO] Training on epoch 28
+[183692 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_28.npz
+Done with epoch 28: 6529.9413 seconds
+
+[183692 s] [Rank 0] [INFO] Training on epoch 29
+[190201 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_29.npz
+Done with epoch 29: 6509.5785 seconds
+
+[190201 s] [Rank 0] [INFO] Training on epoch 30
+[196717 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_30.npz
+Done with epoch 30: 6515.1234 seconds
+
+[196717 s] [Rank 0] [INFO] Training on epoch 31
+[203219 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_31.npz
+Done with epoch 31: 6502.4703 seconds
+
+[203219 s] [Rank 0] [INFO] Training on epoch 32
+[209710 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_32.npz
+Done with epoch 32: 6490.7934 seconds
+
+[209710 s] [Rank 0] [INFO] Training on epoch 33
+[216224 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_33.npz
+Done with epoch 33: 6513.7669 seconds
+
+[216224 s] [Rank 0] [INFO] Training on epoch 34
+[222753 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_34.npz
+Done with epoch 34: 6529.1609 seconds
+
+[222753 s] [Rank 0] [INFO] Training on epoch 35
+[229402 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_35.npz
+Done with epoch 35: 6649.3842 seconds
+
+[229402 s] [Rank 0] [INFO] Training on epoch 36
+[236006 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_36.npz
+Done with epoch 36: 6603.9058 seconds
+
+[236006 s] [Rank 0] [INFO] Training on epoch 37
+[242595 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_37.npz
+Done with epoch 37: 6589.1541 seconds
+
+[242595 s] [Rank 0] [INFO] Training on epoch 38
+[249146 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_38.npz
+Done with epoch 38: 6550.7122 seconds
+
+[249146 s] [Rank 0] [INFO] Training on epoch 39
+[255701 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_39.npz
+Done with epoch 39: 6554.8103 seconds
+
+[255701 s] [Rank 0] [INFO] Training on epoch 40
+[262282 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_40.npz
+Done with epoch 40: 6580.9359 seconds
+
+[262282 s] [Rank 0] [INFO] Training on epoch 41
+[268836 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_41.npz
+Done with epoch 41: 6553.9453 seconds
+
+[268836 s] [Rank 0] [INFO] Training on epoch 42
+[275375 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_42.npz
+Done with epoch 42: 6539.8644 seconds
+
+[275375 s] [Rank 0] [INFO] Training on epoch 43
+[282312 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_43.npz
+Done with epoch 43: 6936.4571 seconds
+
+[282312 s] [Rank 0] [INFO] Training on epoch 44
+[288885 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_44.npz
+Done with epoch 44: 6573.0612 seconds
+
+[288885 s] [Rank 0] [INFO] Training on epoch 45
+[295456 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_45.npz
+Done with epoch 45: 6571.2452 seconds
+
+[295456 s] [Rank 0] [INFO] Training on epoch 46
+[302015 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_46.npz
+Done with epoch 46: 6558.5096 seconds
+
+[302015 s] [Rank 0] [INFO] Training on epoch 47
+[308604 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_47.npz
+Done with epoch 47: 6588.8815 seconds
+
+[308604 s] [Rank 0] [INFO] Training on epoch 48
+[315237 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_48.npz
+Done with epoch 48: 6633.7680 seconds
+
+[315237 s] [Rank 0] [INFO] Training on epoch 49
+[321834 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_49.npz
+Done with epoch 49: 6596.4923 seconds
+
+[321834 s] [Rank 0] [INFO] Training on epoch 50
+[328414 s] [Rank 0] [INFO] Stored checkpoint: /lustre/stacked-p1-data/models/model_50.npz
+Done with epoch 50: 6580.4740 seconds
+
+[328414 s] [Rank 0] [INFO] Done Training
