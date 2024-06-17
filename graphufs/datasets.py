@@ -274,8 +274,7 @@ class Dataset():
             xds = self.get_container(template=template, name=name)
             if "batch" in xds:
                 xds = xds.drop_vars("batch")
-            encoding = {name: {"compressor": None}}
-            xds.to_zarr(path, compute=False, mode="w", encoding=encoding, consolidated=True)
+            xds.to_zarr(path, compute=False, mode="w", consolidated=True)
 
 
 class PackedDataset():
