@@ -59,15 +59,16 @@ def setup(mode, level=logging.INFO):
     return p1, tds, loader
 
 
-def submit_slurm_job(mode):
+def submit_slurm_job():
 
     the_code = \
         f"from stacked_preprocess import store_batch_of_samples\n"+\
-        f"store_batch_of_samples('{mode}')\n"
+        f"store_batch_of_samples('training')\n"
+        f"store_batch_of_samples('validation')\n"
 
-    slurm_dir = f"slurm/stacked-preprocess/{mode}"
+    slurm_dir = f"slurm/stacked-preprocess"
     txt = "#!/bin/bash\n\n" +\
-        f"#SBATCH -J sp{mode[0]}\n"+\
+        f"#SBATCH -J spreproc\n"+\
         f"#SBATCH -o {slurm_dir}/%j.out\n"+\
         f"#SBATCH -e {slurm_dir}/%j.err\n"+\
         f"#SBATCH --nodes=1\n"+\
@@ -80,7 +81,7 @@ def submit_slurm_job(mode):
         f'python -c "{the_code}"'
 
     script_dir = "job-scripts"
-    fname = f"{script_dir}/submit_sp_{mode}.sh"
+    fname = f"{script_dir}/submit_stacked_preprocess.sh"
 
     for this_dir in [slurm_dir, script_dir]:
         if not os.path.isdir(this_dir):
@@ -184,7 +185,5 @@ if __name__ == "__main__":
         make_container(mode)
 
     # Pull the training and validation data and store to data/data.zarr
-    time.sleep(10)
-    submit_slurm_job("training")
-    time.sleep(10)
-    submit_slurm_job("validation")
+    # Do this in one slurm job because concurrent I/O on lustre is problematic
+    submit_slurm_job()
