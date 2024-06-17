@@ -1,7 +1,6 @@
 name: graphufs-cpu
 channels:
     - conda-forge
-    - pytorch
 dependencies:
     - python=3.11
 # Basics
@@ -42,7 +41,5 @@ dependencies:
 # legit progress bar
     - tqdm
 # StackedGraphCast
-    - pytorch
-    - torchvision
     - xbatcher
     - pytest
