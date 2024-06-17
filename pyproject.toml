@@ -1,0 +1,58 @@
+[project]
+name = "graph-ufs"
+version = "0.1.0"
+description = "GraphCast trained on NOAA UFS Replay Data"
+license = {file = "LICENSE"}
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "scipy",
+    "xarray",
+    "matplotlib",
+    "dask[complete]",
+    "zarr",
+    "netCDF4",
+    "bottleneck",
+    "cftime",
+    "fsspec",
+    "gcsfs",
+    "cartopy",
+    "chex",
+    "google-colab",
+    "dm-haiku",
+    "jax",
+    "optax",
+    "jraph",
+    "pandas",
+    "rtree",
+    "dm-tree",
+    "trimesh",
+    "typing_extensions",
+    "google-api-python-client",
+    "apache-beam",
+    "xarray-beam",
+    "xesmf",
+    "tqdm",
+    "xbatcher",
+    "pytest"
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest", "coverage",
+]
+gpus = [
+    "jaxlib=*=*cuda*", "cuda-nvcc",
+]
+
+[project.urls]
+homepage="https://github.com/NOAA-PSL/graph-ufs"
+source="https://github.com/NOAA-PSL/graph-ufs"
+
+[build-system]
+requires = ["setuptools>=64.0.0", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["graphufs"]
