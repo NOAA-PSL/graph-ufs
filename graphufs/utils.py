@@ -4,17 +4,19 @@ import logging
 import threading
 import queue
 import xarray as xr
+import numpy as np
 import concurrent.futures
 
 
-def get_chunk_data(generator, gen_lock, data: dict, no_load_chunk: bool):
+def get_chunk_data(generator, gen_lock, data: dict, load_chunk: bool, shuffle: bool):
     """Get multiple training batches.
 
     Args:
         generator: chunk generator object
         gen_lock: generator lock - because generators are not thread-safe
         data (dict): A dict containing the [inputs, targets, forcings]
-        no_load_chunk: don't load chunk into RAM
+        load_chunk: load chunk into RAM
+        shuffle: shuffle dataset
     """
 
     # get batches from replay on GCS
@@ -25,21 +27,41 @@ def get_chunk_data(generator, gen_lock, data: dict, no_load_chunk: bool):
         logging.info(e)
         return
 
-    # load into ram unless specified otherwise
-    if not no_load_chunk:
-        inputs.load()
-        targets.load()
-        forcings.load()
+    # shuffle here
+    if shuffle:
+        # shuffle optim_step coord
+        permuted_indices = np.random.permutation(inputs["optim_step"].size)
+        # shuffle each of inputs/targets/forcings/inittimes
+        def shuffle_ds(ds):
+            return ds.isel({"optim_step": permuted_indices})
+
+        inputs = shuffle_ds(inputs)
+        targets = shuffle_ds(targets)
+        forcings = shuffle_ds(forcings)
         if inittimes is not None:
-            inittimes.load()
+            inittimes = shuffle_ds(inittimes)
+
+    # load into ram unless specified otherwise
+    if load_chunk:
+        inputs_ = inputs.compute()
+        targets_ = targets.compute()
+        forcings_ = forcings.compute()
+        if inittimes is not None:
+            inittimes_ = inittimes.compute()
+        else:
+            inittimes_ = None
+    else:
+        inputs_, targets_, forcings_, inittimes_ = (
+            inputs, targets, forcings, inittimes
+        )
 
     # update dictionary
     data.update(
         {
-            "inputs": inputs,
-            "targets": targets,
-            "forcings": forcings,
-            "inittimes": inittimes,
+            "inputs": inputs_,
+            "targets": targets_,
+            "forcings": forcings_,
+            "inittimes": inittimes_,
         }
     )
 
@@ -63,7 +85,8 @@ class DataGenerator:
         self.gen_lock = threading.Lock()
 
         # initialize batch generator
-        self.no_load_chunk = emulator.no_load_chunk
+        self.load_chunk = emulator.load_chunk
+        self.shuffle = (mode != "testing") and emulator.use_preprocessed
         self.gen = emulator.get_batches(
             n_optim_steps=n_optim_steps,
             mode=mode,
@@ -82,7 +105,7 @@ class DataGenerator:
         """ Data generator function called by workers """
         while not self.stop_event.is_set():
             chunk_data = {}
-            get_chunk_data(self.gen, self.gen_lock, chunk_data, self.no_load_chunk)
+            get_chunk_data(self.gen, self.gen_lock, chunk_data, self.load_chunk, self.shuffle)
             self.data_queue.put(chunk_data)
 
     def get_data(self):
@@ -91,7 +114,7 @@ class DataGenerator:
             return self.data_queue.get()
         else:
             chunk_data = {}
-            get_chunk_data(self.gen, self.gen_lock, chunk_data, self.no_load_chunk)
+            get_chunk_data(self.gen, self.gen_lock, chunk_data, self.load_chunk, self.shuffle)
             return chunk_data
 
     def stop(self):
@@ -289,7 +312,7 @@ def str2bool(v):
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
-def get_approximate_memory_usage(data, max_queue_size, num_workers, no_load_chunk):
+def get_approximate_memory_usage(data, max_queue_size, num_workers, load_chunk):
     """Gets approximate memory usage of a given configuration.
     Each data generator's memory usage depends on the chunk size, bigger chunks requiring more RAM.
     Since we keep two chunks in RAM by default, the requirement doubles.
@@ -299,12 +322,12 @@ def get_approximate_memory_usage(data, max_queue_size, num_workers, no_load_chun
         data (list(dict)): a list of training and validation data
         max_queue_size (int): maximum queue size
         num_workers (int): number of worker threads
-        no_load_chunk: don't load chunk into RAM
+        load_chunk: load chunk into RAM
     Returns:
         memory usage in GBs
     """
     total = 6
-    if not no_load_chunk:
+    if load_chunk:
         for d in data:
             chunk_ram = 0
             for k, v in d.items():

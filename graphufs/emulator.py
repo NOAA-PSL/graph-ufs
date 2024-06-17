@@ -42,7 +42,7 @@ class ReplayEmulator:
     stacked_norm = dict()
     wb2_obs_url = ""
     local_store_path = None     # directory where zarr file, model weights etc are stored
-    no_cache_data = None        # don't cache or use zarr dataset downloaded from GCS on disk
+    cache_data = None           # cache or use zarr dataset downloaded from GCS on disk
 
     # these could be moved to a yaml file later
     # task config options
@@ -71,8 +71,9 @@ class ReplayEmulator:
     checkpoint_chunks = None        # save model after this many chunks are processed
     max_queue_size = None           # number of chunks in queue of data generators
     num_workers = None              # number of worker threads for data generators
-    no_load_chunk = None            # don't load chunk into RAM, has the lowest memory usage if true
+    load_chunk = None               # load chunk into RAM, has the lowest memory usage if false
     store_loss = None               # store loss in a netcdf file
+    use_preprocessed = None         # use pre-processed dataset
 
     # others
     num_gpus = None                 # number of GPUs to use for training
@@ -301,11 +302,11 @@ class ReplayEmulator:
 
         all_new_time = all_new_time if all_new_time is not None else self.get_time(mode=mode)
         # download only missing dates and write them to disk
-        if self.no_cache_data or not os.path.exists(self.local_data_path):
+        if not self.cache_data or not os.path.exists(self.local_data_path):
             logging.info(f"Downloading missing {mode} data for {len(all_new_time)} time stamps.")
             xds = xr.open_zarr(self.data_url, storage_options={"token": "anon"})
             all_xds = self.subsample_dataset(xds, new_time=all_new_time)
-            if not self.no_cache_data:
+            if self.cache_data:
                 all_xds.to_zarr(self.local_data_path)
                 all_xds.close()
                 all_xds = xr.open_zarr(self.local_data_path)
@@ -328,12 +329,52 @@ class ReplayEmulator:
 
         return all_xds
 
+    @staticmethod
+    def divide_into_slices(N, K):
+        """
+        Divide N items into K groups and return an array of slice objects.
+
+        Args:
+            N (int): Total number of items.
+            K (int): Number of groups.
+        Returns:
+           list of slice: A list containing slice objects for each group.
+        """
+        base_size = N // K
+        extra_items = N % K
+
+        slices = []
+        start = 0
+        for i in range(K):
+            if i < extra_items:
+                end = start + base_size + 1
+                slices.append(slice(start, end))
+            else:
+                end = start + base_size
+                slices.append(slice(start - (1 if extra_items else 0), end))
+            start = end
+
+        return slices
+
+    @staticmethod
+    def rechunk(xds):
+        chunksize = {
+            "optim_step": 1,
+            "batch": -1,
+            "time": -1,
+            "level": -1,
+            "lat": -1,
+            "lon": -1,
+        }
+        chunksize = {k:v for k,v in chunksize.items() if k in xds}
+        xds = xds.chunk(chunksize)
+        return xds
+
     def get_batches(
         self,
         n_optim_steps=None,
         drop_cftime=True,
         mode="training",
-        allow_overlapped_chunks=None,
     ):
         """Get a dataset with all the batches of data necessary for training
 
@@ -344,60 +385,100 @@ class ReplayEmulator:
             n_optim_steps (int, optional): number of training batches to grab ... number of times we will update the parameters during optimization. If not specified, use as many as are available based on the available training data.
             drop_cftime (bool, optional): may be useful for debugging
             mode (str, optional): can be either "training", "validation" or "testing"
-            allow_overlapped_chunks (bool, optional): overlapp chunks
         Returns:
             inputs, targets, forcings (xarray.Dataset): with new dimension "batch"
                 and appropriate fields for each dataset, based on the variables in :attr:`task_config`
         """
-        all_new_time = self.get_time(mode=mode)
-
-        # split the dataset across nodes
-        # make sure work is _exactly_ equally distirubuted to prevent hangs
-        # when the number of time stamps is not evenly divisible by the number of ranks,
-        # we discard whatever data is left over. Not a problem because parallelization is not done for testing.
-        if self.mpi_size > 1:
-            mpi_chunk_size = len(all_new_time) // self.mpi_size
-            start = self.mpi_rank * mpi_chunk_size
-            end = (self.mpi_rank + 1) * mpi_chunk_size
-            all_new_time = all_new_time[start:end]
-            logging.info(f"Data for {mode} MPI rank {self.mpi_rank}: {all_new_time[0]} to {all_new_time[-1]} : {len(all_new_time)} time stamps.")
-
-
-        all_xds = self.get_the_data(all_new_time=all_new_time, mode=mode)
-        # split dataset into chunks
-        n_chunks = self.chunks_per_epoch
-        chunk_size = len(all_new_time) // n_chunks
-        all_new_time_chunks = []
-
-        # overlap chunks by lead time + input duration
-        overlap_step = (self.target_lead_time + self.input_duration) // delta_t if allow_overlapped_chunks else 0
-        for i in range(n_chunks):
-            if i == n_chunks - 1:
-                all_new_time_chunks.append(all_new_time[i * chunk_size:len(all_new_time)])
-            else:
-                all_new_time_chunks.append(all_new_time[i * chunk_size:(i + 1) * chunk_size + overlap_step])
-
-        # print chunk boundaries
-        message = f"Chunks for {mode}: {len(all_new_time_chunks)}"
-        for chunk_id, new_time in enumerate(all_new_time_chunks):
-            message += f"\nChunk {chunk_id+1}: {new_time[0]} to {new_time[-1]} : {len(new_time)} time stamps"
-        logging.info(message)
 
         # warnings before we get started
         if pd.Timedelta(self.target_lead_time) > self.delta_t:
             warnings.warn("ReplayEmulator.get_training_batches: need to rework this to pull targets for all steps at delta_t intervals between initial conditions and target_lead times, at least in part because we need the forcings at each delta_t time step, and the data extraction code only pulls this at each specified target_lead_time")
+
+        # pre-processed dataset
+        n_chunks = self.chunks_per_epoch
+        has_preprocessed = False
+        if self.use_preprocessed:
+
+            # chunks zarr datasets
+            xds_chunks = {
+                "inputs": [None] * n_chunks,
+                "targets": [None] * n_chunks,
+                "forcings": [None] * n_chunks,
+                "inittimes": [None] * n_chunks,
+            }
+
+            # open chunk files if they exist
+            try:
+                message = f"Chunks for {mode}: {n_chunks}"
+                for chunk_id in range(n_chunks):
+                    base_name = f"{self.local_store_path}/extracted/{mode}-chunk-{chunk_id:04d}-of-{n_chunks:04d}-rank-{self.mpi_rank:03d}-of-{self.mpi_size:03d}-bs-{self.batch_size}-"
+                    xds_chunks["inputs"][chunk_id] = xr.open_zarr(f"{base_name}inputs.zarr")
+                    xds_chunks["targets"][chunk_id] = xr.open_zarr(f"{base_name}targets.zarr")
+                    xds_chunks["forcings"][chunk_id] = xr.open_zarr(f"{base_name}forcings.zarr")
+                    if mode == "testing":
+                        xds_chunks["inittimes"][chunk_id] = xr.open_zarr(f"{base_name}inittimes.zarr")
+                n_steps = len(xds_chunks["inputs"][0]["optim_step"])
+                message += f" each with {n_steps} steps"
+                logging.info(message)
+                has_preprocessed = True
+            except:
+                has_preprocessed = False
+
+        # raw dataset
+        if not has_preprocessed:
+            all_new_time = self.get_time(mode=mode)
+
+            # split the dataset _equally_ across nodes to prevent hangs
+            # Note: The possible overlaps maybe a problem if/when testing is parallelized
+            if self.mpi_size > 1:
+                slices = self.divide_into_slices(len(all_new_time), self.mpi_size)
+                all_new_time = all_new_time[slices[self.mpi_rank]]
+                logging.info(f"Data for {mode} MPI rank {self.mpi_rank}: {all_new_time[0]} to {all_new_time[-1]} : {len(all_new_time)} time stamps.")
+
+            # download the data
+            all_xds = self.get_the_data(all_new_time=all_new_time, mode=mode)
+
+            # split dataset into chunks
+            slices = self.divide_into_slices(len(all_new_time), n_chunks)
+            all_new_time_chunks = []
+            for sl in slices:
+                all_new_time_chunks.append(all_new_time[sl])
+
+            # print chunk boundaries
+            message = f"Chunks for {mode}: {len(all_new_time_chunks)} each with {len(all_new_time_chunks[0])} time stamps"
+            logging.info(message)
+
+        # list of chunk ids
+        chunk_ids = [i for i in range(n_chunks)]
+        n_optim_steps_arg = n_optim_steps
 
         # loop forever
         while True:
 
             # shuffle chunks
             if mode != "testing":
-                random.shuffle(all_new_time_chunks)
+                random.shuffle(chunk_ids)
 
             # iterate over all chunks
-            for chunk_id, new_time in enumerate(all_new_time_chunks):
+            for chunk_id in chunk_ids:
+
+                # check for pre-processed inputs
+                if self.use_preprocessed:
+                    if xds_chunks["inputs"][chunk_id] is not None:
+                        logging.debug(f"\nReusing {mode} chunk {chunk_id}.")
+                        inputs = xds_chunks["inputs"][chunk_id]
+                        targets = xds_chunks["targets"][chunk_id]
+                        forcings = xds_chunks["forcings"][chunk_id]
+                        inittimes = None
+                        if mode == "testing":
+                            inittimes = xds_chunks["inittimes"][chunk_id]
+                        yield inputs, targets, forcings, inittimes
+                        continue
+                    else:
+                        logging.debug(f"\nOpening {mode} chunk {chunk_id} from scratch.")
 
                 # chunk start and end times
+                new_time = all_new_time_chunks[chunk_id]
                 start = new_time[0]
                 end = new_time[-1]
 
@@ -409,7 +490,7 @@ class ReplayEmulator:
                     raise ValueError(f"n_max_forecasts for {mode} is {n_max_forecasts}")
 
                 n_max_optim_steps = math.ceil(n_max_forecasts / self.batch_size)
-                n_optim_steps = n_max_optim_steps if n_optim_steps is None else n_optim_steps
+                n_optim_steps = n_max_optim_steps if n_optim_steps_arg is None else n_optim_steps_arg
                 n_forecasts = n_optim_steps * self.batch_size
                 n_forecasts = min(n_forecasts, n_max_forecasts)
 
@@ -418,9 +499,6 @@ class ReplayEmulator:
                 if n_optim_steps > n_max_optim_steps:
                     n_optim_steps = n_max_optim_steps
                     warnings.warn(f"There's less data than the number of batches requested, reducing n_optim_steps to {n_optim_steps}")
-
-                if self.steps_per_chunk is None and mode != "validation":
-                    self.steps_per_chunk = n_optim_steps
 
                 # create a new time vector with desired delta_t
                 # this has to end such that we can pull an entire forecast from the training data
@@ -452,7 +530,6 @@ class ReplayEmulator:
                     "time": "datetime",
                     })
                 xds = xds.drop(["cftime", "ftime"])
-                xds.load()
 
                 # iterate through batches
                 inputs = []
@@ -510,15 +587,29 @@ class ReplayEmulator:
                         this_inittimes = this_inittimes.to_dataset(name="inittimes")
                         inittimes.append(this_inittimes.expand_dims({"optim_step": [k]}))
 
-                del xds
-                inputs = xr.combine_by_coords(inputs)
-                targets = xr.combine_by_coords(targets)
-                forcings = xr.combine_by_coords(forcings)
+                # write chunks to disk
+                base_name = f"{self.local_store_path}/extracted/{mode}-chunk-{chunk_id:04d}-of-{n_chunks:04d}-rank-{self.mpi_rank:03d}-of-{self.mpi_size:03d}-bs-{self.batch_size}-"
+                def combine_chunk_save(xds, name):
+                    xds = xr.combine_by_coords(xds)
+                    xds = self.rechunk(xds)
+                    if self.use_preprocessed:
+                        file_name = f"{base_name}{name}.zarr"
+                        xds.to_zarr(file_name)
+                        xds.close()
+                        xds = xr.open_zarr(file_name)
+                        xds_chunks[name][chunk_id] = xds
+                    return xds
+
+                inputs = combine_chunk_save(inputs, "inputs")
+                targets = combine_chunk_save(targets, "targets")
+                forcings = combine_chunk_save(forcings, "forcings")
                 if mode == "testing":
-                    inittimes = xr.combine_by_coords(inittimes)
+                    inittimes = combine_chunk_save(inittimes, "inittimes")
                 else:
                     inittimes = None
+
                 yield inputs, targets, forcings, inittimes
+
 
 
     def set_normalization(self, **kwargs):

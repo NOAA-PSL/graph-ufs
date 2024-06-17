@@ -101,12 +101,12 @@ def init_model(emulator, data: dict):
 
     init_jitted = jit(run_forward.init)
 
-    inputs=data["inputs"].sel(optim_step=0)
-    targets=data["targets"].sel(optim_step=0)
-    forcings=data["forcings"].sel(optim_step=0)
+    inputs=data["inputs"].isel(optim_step=0)
+    targets=data["targets"].isel(optim_step=0)
+    forcings=data["forcings"].isel(optim_step=0)
     # if we are not loading chunks, load slice as it
     # seems init_jitted requires it
-    if emulator.no_load_chunk:
+    if not emulator.load_chunk:
         inputs = inputs.load()
         targets = targets.load()
         forcings = forcings.load()
@@ -143,6 +143,7 @@ def optimize(
     training_data,
     validation_data,
     opt_state=None,
+    compute_mean_grad=False,
 ):
     """Optimize the model parameters by running through all optim_steps in data
 
@@ -474,13 +475,17 @@ def optimize(
             for key, val in diagnostics.items():
                 loss_by_var[key].append(val)
 
-            mean_grad = np.mean(
-                tree_util.tree_flatten(
-                    tree_util.tree_map(lambda x: np.abs(x).mean(), grads)
-                )[0]
-            )
+            if compute_mean_grad:
+                mean_grad = np.mean(
+                    tree_util.tree_flatten(
+                        tree_util.tree_map(lambda x: np.abs(x).mean(), grads)
+                    )[0]
+                )
+            else:
+                mean_grad = 0
             mean_grad_avg += mean_grad
-            description = f"loss = {loss:.5f}, val_loss = {loss_valid:.5f}, mean(|grad|) = {mean_grad:.8f}, lr = {lr:.5e}"
+            description = f"loss = {loss:.5f}, val_loss = {loss_valid:.5f}, lr = {lr:.5e}"
+            if compute_mean_grad: description += f"mean(|grad|) = {mean_grad:.8f}"
             progress_bar.set_description(description)
             progress_bar.update(num_gpus)
 
@@ -491,7 +496,8 @@ def optimize(
         loss_valid_avg /= N
         mean_grad_avg /= N
         lr = learning_rates[-1]
-        description = f"loss = {loss_avg:.5f}, val_loss = {loss_valid_avg:.5f}, mean(|grad|) = {mean_grad_avg:.8f}, lr = {lr:0.5e}"
+        description = f"loss = {loss_avg:.5f}, val_loss = {loss_valid_avg:.5f}, lr = {lr:0.5e}"
+        if compute_mean_grad: description += f"mean(|grad|) = {mean_grad_avg:.8f}"
         progress_bar.set_description(description)
         progress_bar.close()
 
