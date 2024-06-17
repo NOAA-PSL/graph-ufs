@@ -460,7 +460,6 @@ class ReplayEmulator:
                 random.shuffle(chunk_ids)
 
             # iterate over all chunks
-            optim_step = 0
             for chunk_id in chunk_ids:
 
                 # check for pre-processed inputs
@@ -553,7 +552,7 @@ class ReplayEmulator:
                                 bs = random.randint(0,s-1)
                                 mds = ds_list[bs].copy()
                                 mds["batch"] = [b]
-                            mds["optim_step"] = [optim_step + k]
+                            mds["optim_step"] = [k]
                             ds_list.append(mds)
                         if mode != "testing":
                             copy_values(inputs)
@@ -578,15 +577,15 @@ class ReplayEmulator:
                     )
 
                     # note that the optim_step dim has to be added after the extract_inputs_targets_forcings call
-                    inputs.append(this_input.expand_dims({"optim_step": [optim_step + k]}))
-                    targets.append(this_target.expand_dims({"optim_step": [optim_step + k]}))
-                    forcings.append(this_forcing.expand_dims({"optim_step": [optim_step + k]}))
+                    inputs.append(this_input.expand_dims({"optim_step": [k]}))
+                    targets.append(this_target.expand_dims({"optim_step": [k]}))
+                    forcings.append(this_forcing.expand_dims({"optim_step": [k]}))
 
                     if mode == "testing":
                         # fix this later for batch_size != 1
                         this_inittimes = batch.datetime.isel(time=0)
                         this_inittimes = this_inittimes.to_dataset(name="inittimes")
-                        inittimes.append(this_inittimes.expand_dims({"optim_step": [optim_step + k]}))
+                        inittimes.append(this_inittimes.expand_dims({"optim_step": [k]}))
 
                 # write chunks to disk
                 base_name = f"{self.local_store_path}/extracted/{mode}-chunk-{chunk_id:04d}-of-{n_chunks:04d}-rank-{self.mpi_rank:03d}-of-{self.mpi_size:03d}-bs-{self.batch_size}-"
