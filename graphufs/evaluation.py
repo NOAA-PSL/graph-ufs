@@ -37,14 +37,21 @@ def convert_wb2_format(gufs, ds, inittimes) -> xr.Dataset:
     ds_out = regridder(ds)
 
     # rename variables
-    ds_out = ds_out.rename_vars(
-        {
-            "pressfc": "surface_pressure",
-            "tmp": "temperature",
-            "ugrd10m": "10m_u_component_of_wind",
-            "vgrd10m": "10m_v_component_of_wind",
-        }
-    )
+    rename_dict = {
+        "pressfc": "surface_pressure",
+        "ugrd10m": "10m_u_component_of_wind",
+        "vgrd10m": "10m_v_component_of_wind",
+        "tmp2m": "2m_temperature",
+        "tmp": "temperature",
+        "ugrd": "u_component_of_wind",
+        "vgrd": "v_component_of_wind",
+        "dzdt": "vertical_velocity",
+        "spfh": "specific_humidity",
+        "delz": "geopotential",
+        "prateb_ave": "total_preciptation_3hr",
+    }
+    rename_dict = {k: rename_dict[k] for k in ds_out.data_vars.keys()}
+    ds_out = ds_out.rename_vars(rename_dict)
 
     # fix pressure levels to match obs
     ds_out["level"] = np.array(list(gufs.pressure_levels), dtype=np.float32)

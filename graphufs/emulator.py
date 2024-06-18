@@ -591,7 +591,8 @@ class ReplayEmulator:
                 base_name = f"{self.local_store_path}/extracted/{mode}-chunk-{chunk_id:04d}-of-{n_chunks:04d}-rank-{self.mpi_rank:03d}-of-{self.mpi_size:03d}-bs-{self.batch_size}-"
                 def combine_chunk_save(xds, name):
                     xds = xr.combine_by_coords(xds)
-                    xds = self.rechunk(xds)
+                    if name != "inittimes":
+                        xds = self.rechunk(xds)
                     if self.use_preprocessed:
                         file_name = f"{base_name}{name}.zarr"
                         xds.to_zarr(file_name)

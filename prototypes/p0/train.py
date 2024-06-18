@@ -137,9 +137,7 @@ if __name__ == "__main__":
                 params=params,
                 state=state,
                 emulator=gufs,
-                input_batches=data["inputs"],
-                target_batches=data["targets"],
-                forcing_batches=data["forcings"],
+                testing_data=data,
             )
 
             targets = data["targets"]

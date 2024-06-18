@@ -555,9 +555,7 @@ def predict(
     params,
     state,
     emulator,
-    input_batches,
-    target_batches,
-    forcing_batches,
+    testing_data,
 ) -> xr.Dataset:
     @hk.transform_with_state
     def run_forward(inputs, targets_template, forcings):
@@ -575,17 +573,20 @@ def predict(
     # process steps one by one
     all_predictions = []
 
-    n_steps = input_batches["optim_step"].size
+    n_steps = testing_data["inputs"]["optim_step"].size
     progress_bar = tqdm(total=n_steps, ncols=160, desc="Processing")
 
     for k in range(0, n_steps):
 
+        i_batches = testing_data["inputs"].isel(optim_step=k).compute()
+        t_batches = testing_data["targets"].isel(optim_step=k).compute()
+        f_batches = testing_data["forcings"].isel(optim_step=k).compute()
         predictions = rollout.chunked_prediction(
             apply_jitted,
             rng=PRNGKey(0),
-            inputs=input_batches.isel(optim_step=k),
-            targets_template=target_batches.isel(optim_step=k),
-            forcings=forcing_batches.isel(optim_step=k),
+            inputs=i_batches,
+            targets_template=t_batches,
+            forcings=f_batches,
         )
 
         all_predictions.append(predictions)

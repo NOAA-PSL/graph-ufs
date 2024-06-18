@@ -101,12 +101,14 @@ class P0Emulator(ReplayEmulator):
     num_workers = 1
     load_chunk = True
     store_loss = True
+    use_preprocessed = True
 
     # others
     num_gpus = 1
     log_only_rank0 = False
     use_jax_distributed = False
     use_xla_flags = False
+    dask_threads = None
 
 tree_util.register_pytree_node(
     P0Emulator,
