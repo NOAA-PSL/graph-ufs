@@ -6,44 +6,38 @@ license = {file = "LICENSE"}
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
+    #
+    # xarray, dask, zarr, numpy stack
     "numpy",
     "scipy",
     "xarray",
+    "pandas",
     "matplotlib",
     "dask[complete]",
     "zarr",
     "netCDF4",
     "bottleneck",
     "cftime",
-    "fsspec",
-    "gcsfs",
-    "cartopy",
-    "chex",
-    "google-colab",
-    "dm-haiku",
-    "jax",
+    #
+    # GraphCast installed separately + optimization with optax
     "optax",
-    "jraph",
-    "pandas",
-    "rtree",
-    "dm-tree",
-    "trimesh",
-    "typing_extensions",
-    "google-api-python-client",
-    "apache-beam",
-    "xarray-beam",
-    "xesmf",
     "tqdm",
     "xbatcher",
-    "pytest"
+    #
+    # Weatherbench2  dependencies
+    "apache-beam>=2.31.0",
+    "xarray-beam",
+    "xesmf",
+    #
+    # For GCS access
+    "fsspec",
+    "gcsfs",
+    "google-api-python-client",
 ]
 
 [project.optional-dependencies]
 test = [
     "pytest", "coverage",
-]
-gpus = [
-    "jaxlib=*=*cuda*", "cuda-nvcc",
 ]
 
 [project.urls]
