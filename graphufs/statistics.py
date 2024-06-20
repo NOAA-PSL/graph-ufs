@@ -25,6 +25,7 @@ class StatisticsComputer:
         self,
         path_in: str,
         path_out: str,
+        comp: str,
         start_date: str = None,
         end_date: str = None,
         time_skip: int = None,
@@ -46,6 +47,7 @@ class StatisticsComputer:
         """
         self.path_in = path_in
         self.path_out = path_out
+        self.comp = comp
         self.start_date = start_date
         self.end_date = end_date
         self.time_skip = time_skip
@@ -67,7 +69,7 @@ class StatisticsComputer:
 
         localtime.start("Setup")
         ds = xr.open_zarr(self.path_in, **self.open_zarr_kwargs)
-        ds = add_derived_vars(ds)
+        ds = add_derived_vars(ds, self.comp)
 
         # select variables
         if data_vars is not None:
