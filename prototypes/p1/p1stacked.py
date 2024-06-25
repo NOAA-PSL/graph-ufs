@@ -67,7 +67,7 @@ class P1Emulator(ReplayEmulator):
     # time related
     delta_t = "3h"
     input_duration = "6h"
-    target_lead_time = "3h"
+    target_lead_time = ["3h", "6h", "9h", "12h"]#, "15h", "18h", "21h", "24h"]
     training_dates = (
         "1993-12-31T18",
         "2019-12-31T21"
@@ -77,8 +77,9 @@ class P1Emulator(ReplayEmulator):
         "2023-10-13T03"
     )
     testing_dates = (
-        "2020-01-01T00",
-        "2020-02-01T00"
+        "2022-01-01T00",
+        "2022-01-03T00",
+    #    "2023-10-13T03"
     )
 
     # training protocol
@@ -91,6 +92,7 @@ class P1Emulator(ReplayEmulator):
     num_workers = 1
     load_chunk = True
     store_loss = True
+    use_preprocessed = False
 
     # multi GPU and xla options
     num_gpus = 4

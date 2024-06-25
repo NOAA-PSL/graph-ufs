@@ -15,7 +15,7 @@ from jax import tree_util
 from ufs2arco.regrid.ufsregridder import UFSRegridder
 from graphcast import checkpoint
 from graphcast.graphcast import ModelConfig, TaskConfig, CheckPoint
-from graphcast.data_utils import extract_inputs_targets_forcings
+from graphcast import data_utils
 from graphcast.model_utils import dataset_to_stacked
 from graphcast.losses import normalized_level_weights, normalized_latitude_weights
 
@@ -58,7 +58,8 @@ class ReplayEmulator:
     # time related
     delta_t = None              # the model time step
     input_duration = None       # time covered by initial condition(s)
-    target_lead_time = None     # how long the forecast is, i.e., when we compare to data
+    target_lead_time = None     # when we compare to data, e.g. singular "3h", or many ["3h", "12h", "24h"]
+    forecast_duration = None    # Created in __init__, total forecast time
     training_dates = tuple()    # bounds of training data (inclusive)
     testing_dates = tuple()     # bounds of testing data (inclusive)
     validation_dates = tuple()  # bounds of validation data (inclusive)
@@ -179,6 +180,16 @@ class ReplayEmulator:
         # convert some types
         self.delta_t = pd.Timedelta(self.delta_t)
         self.input_duration = pd.Timedelta(self.input_duration)
+        lead_times, duration = data_utils._process_target_lead_times_and_get_duration(self.target_lead_time)
+        self.forecast_duration = duration
+
+        logging.debug(f"target_lead_time: {self.target_lead_time}")
+        logging.debug(f"lead_times: {lead_times}")
+        logging.debug(f"self.forecast_duration: {self.forecast_duration}")
+        logging.debug(f"self.time_per_forecast: {self.time_per_forecast}")
+        logging.debug(f"self.n_input: {self.n_input}")
+        logging.debug(f"self.n_forecast: {self.n_forecast}")
+        logging.debug(f"self.n_target: {self.n_target}")
 
         # set normalization here so that we can jit compile with this class
         self.set_normalization()
@@ -187,7 +198,7 @@ class ReplayEmulator:
 
     @property
     def time_per_forecast(self):
-        return self.target_lead_time + self.input_duration
+        return self.forecast_duration + self.input_duration
 
     @property
     def n_input(self):
@@ -202,7 +213,7 @@ class ReplayEmulator:
     @property
     def n_target(self):
         """Number of steps in the target, doesn't include initial condition(s)"""
-        return self.target_lead_time // self.delta_t
+        return self.forecast_duration // self.delta_t
 
     @property
     def extract_kwargs(self):
@@ -390,10 +401,6 @@ class ReplayEmulator:
                 and appropriate fields for each dataset, based on the variables in :attr:`task_config`
         """
 
-        # warnings before we get started
-        if pd.Timedelta(self.target_lead_time) > self.delta_t:
-            warnings.warn("ReplayEmulator.get_training_batches: need to rework this to pull targets for all steps at delta_t intervals between initial conditions and target_lead times, at least in part because we need the forcings at each delta_t time step, and the data extraction code only pulls this at each specified target_lead_time")
-
         # pre-processed dataset
         n_chunks = self.chunks_per_epoch
         has_preprocessed = False
@@ -485,7 +492,7 @@ class ReplayEmulator:
                 # figure out duration of IC(s), forecast, all of training
                 data_duration = end - start
 
-                n_max_forecasts = (data_duration - self.input_duration) // self.delta_t
+                n_max_forecasts = (data_duration - self.time_per_forecast) // self.delta_t + 1
                 if n_max_forecasts <= 0:
                     raise ValueError(f"n_max_forecasts for {mode} is {n_max_forecasts}")
 
@@ -571,7 +578,7 @@ class ReplayEmulator:
                         batch_index=b,
                     )
 
-                    this_input, this_target, this_forcing = extract_inputs_targets_forcings(
+                    this_input, this_target, this_forcing = data_utils.extract_inputs_targets_forcings(
                         batch,
                         **self.extract_kwargs,
                     )
@@ -583,7 +590,7 @@ class ReplayEmulator:
 
                     if mode == "testing":
                         # fix this later for batch_size != 1
-                        this_inittimes = batch.datetime.isel(time=0)
+                        this_inittimes = batch.datetime.isel(time=self.n_input-1)
                         this_inittimes = this_inittimes.to_dataset(name="inittimes")
                         inittimes.append(this_inittimes.expand_dims({"optim_step": [k]}))
 

@@ -1,5 +1,6 @@
 from .emulator import ReplayEmulator
 from .training import (
+    construct_wrapped_graphcast,
     optimize,
     predict,
     init_model,
