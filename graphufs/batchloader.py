@@ -163,3 +163,20 @@ class XBatchLoader(BatchLoader):
             return x, y
         else:
             raise StopIteration
+
+class ExpandedBatchLoader(BatchLoader):
+    """Returns xarray DataArrays ready for original GraphCast, not Stacked form
+    """
+    def _next_data(self):
+
+        if self.data_counter < len(self):
+            st = self.data_counter * self.batch_size
+            ed = st + self.batch_size
+            batch_indices = self.sample_indices[st:ed]
+            data = self.dataset.get_batch_of_xarrays(batch_indices)
+            for d in data:
+                d.load()
+            self.data_counter += 1
+            return data
+        else:
+            raise StopIteration

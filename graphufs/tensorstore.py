@@ -45,3 +45,16 @@ class BatchLoader(BaseBatchLoader):
             return x, y
         else:
             raise StopIteration
+
+class ExpandedBatchLoader(BaseBatchLoader):
+    def _next_data(self):
+
+        if self.data_counter < len(self):
+            st = self.data_counter * self.batch_size
+            ed = st + self.batch_size
+            batch_indices = self.sample_indices[st:ed]
+            data = self.dataset.get_batch_of_xarrays(batch_indices)
+            self.data_counter += 1
+            return tuple(d.compute() for d in data)
+        else:
+            raise StopIteration
