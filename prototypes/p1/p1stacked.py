@@ -10,7 +10,7 @@ class P1Emulator(ReplayEmulator):
         "std": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.statistics.1993-2019/stddev_by_level.zarr",
         "stddiff": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.statistics.1993-2019/diffs_stddev_by_level.zarr",
     }
-    wb2_obs_url = "gs://weatherbench2/datasets/era5/1959-2022-6h-64x32_equiangular_conservative.zarr"
+    wb2_obs_url = "gs://weatherbench2/datasets/era5/1959-2023_01_10-6h-240x121_equiangular_with_poles_conservative.zarr"
     local_store_path = "/lustre/stacked-p1-data"
     cache_data = True
 
@@ -67,19 +67,21 @@ class P1Emulator(ReplayEmulator):
     # time related
     delta_t = "3h"
     input_duration = "6h"
-    target_lead_time = ["3h", "6h", "9h", "12h"]#, "15h", "18h", "21h", "24h"]
+    #target_lead_time = ["3h", "6h", "9h", "12h", "15h", "18h", "21h", "24h"]
+    target_lead_time = ["6h", "12h", "18h", "24h"]
+    #target_lead_time = ["24h", "48h", "72h", "96h", "120h", "144h", "168h", "192h", "216h", "240h"]
     training_dates = (
         "1993-12-31T18",
         "2019-12-31T21"
     )
     validation_dates = (
-        "2022-01-01T00",
-        "2023-10-13T03"
+        "2022-01-01T03",
+        "2022-04-01T03",
+        #"2023-10-13T03"
     )
     testing_dates = (
-        "2022-01-01T00",
-        "2022-01-03T00",
-    #    "2023-10-13T03"
+        "2020-01-01T00",
+        "2020-02-01T03",
     )
 
     # training protocol

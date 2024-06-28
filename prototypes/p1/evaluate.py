@@ -20,6 +20,8 @@ import numpy as np
 import dask
 import xarray as xr
 from tqdm import tqdm
+import xesmf
+import cf_xarray as cfxr
 
 from graphcast import rollout
 
@@ -32,10 +34,87 @@ from graphufs.stacked_training import init_model, optimize
 from ufs2arco import Timer
 from p1stacked import P1Emulator
 
-def get_all_t0(dataset):
+from ufs2arco.regrid.gaussian_grid import gaussian_latitudes
 
-    em = dataset.emulator
-    time = dataset.xds.datetime[em.n_inputs-1:-em.n_forecast]
+def get_bounds(xds, is_gaussian=False):
+    xds = xds.cf.add_bounds(["lat", "lon"])
+
+    for key in ["lat", "lon"]:
+        corners = cfxr.bounds_to_vertices(
+            bounds=xds[f"{key}_bounds"],
+            bounds_dim="bounds",
+            order=None,
+        )
+        xds = xds.assign_coords({f"{key}_b": corners})
+        xds = xds.drop_vars(f"{key}_bounds")
+
+    if is_gaussian:
+        xds = xds.drop_vars("lat_b")
+        _, lat_b = gaussian_latitudes(len(xds.lat)//2)
+        lat_b = np.concatenate([lat_b[:,0], [lat_b[-1,-1]]])
+        if xds["lat"][0] > 0:
+            lat_b = lat_b[::-1]
+        xds["lat_b"] = xr.DataArray(
+            lat_b,
+            dims="lat_vertices",
+        )
+        xds = xds.set_coords("lat_b")
+    return xds
+
+def create_output_dataset(lat, lon, is_gaussian):
+    xds = xr.Dataset({
+        "lat": lat,
+        "lon": lon,
+    })
+    return get_bounds(xds, is_gaussian)
+
+def regrid_and_rename(xds, url):
+    """Note that it's assumed the obs dataset is not on a Gaussian grid but input is"""
+
+    obs = xr.open_zarr(url, storage_options={"token":"anon"})
+    if "with_poles" in url:
+        obs = obs.sel(latitude=slice(-89, 89))
+
+
+    ds_out = create_output_dataset(
+        lat=obs["latitude"].values,
+        lon=obs["longitude"].values,
+        is_gaussian=False,
+    )
+    if "lat_b" not in xds and "lon_b" not in xds:
+        xds = get_bounds(xds, is_gaussian=True)
+
+    regridder = xesmf.Regridder(
+        ds_in=xds,
+        ds_out=ds_out,
+        method="conservative",
+        reuse_weights=False,
+    )
+    ds_out = regridder(xds, keep_attrs=True)
+
+    rename_dict = {
+        "pressfc": "surface_pressure",
+        "ugrd10m": "10m_u_component_of_wind",
+        "vgrd10m": "10m_v_component_of_wind",
+        "tmp2m": "2m_temperature",
+        "tmp": "temperature",
+        "ugrd": "u_component_of_wind",
+        "vgrd": "v_component_of_wind",
+        "dzdt": "vertical_velocity",
+        "spfh": "specific_humidity",
+        "prateb_ave": "total_preciptation_3hr",
+        "lat": "latitude",
+        "lon": "longitude",
+    }
+    rename_dict = {k: v for k,v in rename_dict.items() if k in ds_out}
+    ds_out = ds_out.rename(rename_dict)
+    ds_out = ds_out.transpose("time", ..., "longitude", "latitude")
+
+    # ds_out has the lat/lon boundaries from input dataset
+    # remove these because it doesn't make sense anymore
+    ds_out = ds_out.drop_vars(["lat_b", "lon_b"])
+    return ds_out
+
 
 def swap_batch_time_dims(predictions, targets, inittimes):
 
@@ -67,6 +146,20 @@ def swap_batch_time_dims(predictions, targets, inittimes):
 
     return predictions, targets
 
+def make_fake_plevels(xds, plevels):
+
+    xds = xds.rename({"level": "hybrid"})
+    xds["level"] = xr.DataArray(
+        np.array(list(plevels)),
+        coords=xds.hybrid.coords,
+        dims=xds.hybrid.dims,
+    )
+    xds = xds.swap_dims({"hybrid": "level"}).drop_vars("hybrid")
+
+    xds = xds.sel(level=[100, 500, 850])
+    return xds
+
+
 
 def store_container(path, xds, time, **kwargs):
 
@@ -96,7 +189,6 @@ def store_container(path, xds, time, **kwargs):
     container.to_zarr(path, compute=False, **kwargs)
     logging.info(f"Stored container at {path}")
 
-
 def predict(
     params,
     state,
@@ -118,11 +210,10 @@ def predict(
     gc = drop_state(with_params(jax.jit(run_forward.apply)))
 
     hours = int(emulator.forecast_duration.value / 1e9 / 3600)
-    pname = f"results/v1/{batchloader.dataset.mode}/predictions.{hours}h.zarr"
-    tname = f"results/v1/{batchloader.dataset.mode}/targets.{hours}h.zarr"
+    pname = f"results/v1/{batchloader.dataset.mode}/predictions.fakeplevel.{hours}h.zarr"
+    tname = f"results/v1/{batchloader.dataset.mode}/replay.fakeplevel.{hours}h.zarr"
 
-    all_inittimes = batchloader.dataset.xds.datetime[emulator.n_input-1:-emulator.n_forecast]
-
+    all_inittimes = batchloader.dataset.xds.datetime[emulator.n_input-1:-emulator.n_target]
     n_steps = len(batchloader)
     progress_bar = tqdm(total=n_steps, ncols=80, desc="Processing")
     for k in range(n_steps):
@@ -145,14 +236,22 @@ def predict(
         # Add t0 as new variable, and swap out for logical sample/batch index
         predictions, targets = swap_batch_time_dims(predictions, targets, inittimes)
 
+        # HACK: make fake pressure levels and select only a few
+        predictions = make_fake_plevels(predictions, p1.pressure_levels)
+        targets = make_fake_plevels(targets, p1.pressure_levels)
+
+        # regrid and rename variables
+        predictions = regrid_and_rename(predictions, p1.wb2_obs_url)
+        targets = regrid_and_rename(targets, p1.wb2_obs_url)
+
         # Store to zarr one batch at a time
         if k == 0:
             store_container(pname, predictions, time=all_inittimes.values)
             store_container(tname, targets, time=all_inittimes.values)
 
         # Get time slice
-        tslice = slice(k*batchloader.batch_size, (k+1)*batchloader.batch_size)
-        assert (all_inittimes.values[tslice] == inittimes).all()
+        bs = batchloader.batch_size
+        tslice = slice(k*bs, (k+1)*bs)
 
         # Store to zarr
         spatial_region = {k: slice(None, None) for k in predictions.dims if k != "time"}
