@@ -134,6 +134,13 @@ def aggregate_across_nodes(d):
 
     return tree_util.tree_map(lambda x: aggregate(x), d)
 
+def add_trees(tree1, tree2):
+    def add_inplace(x, y):
+        x += y
+        return x
+
+    tree_util.tree_map(add_inplace, tree1, tree2)
+    return tree1
 
 def optimize(
     params,
@@ -163,6 +170,8 @@ def optimize(
     num_gpus = emulator.num_gpus
     mpi_size = emulator.mpi_size
     use_jax_distributed = emulator.use_jax_distributed
+    batch_size = emulator.batch_size
+    num_batch_splits = emulator.num_batch_splits
 
     @hk.transform_with_state
     def loss_fn(emulator, inputs, targets, forcings):
@@ -174,15 +183,29 @@ def optimize(
 
     def vloss(params, state, input_batches, target_batches, forcing_batches):
         def ploss(inputs, targets, forcings):
-            (loss, _), _ = loss_fn.apply(
-                params=params,
-                state=state,
-                emulator=emulator,
-                inputs=inputs,
-                targets=targets,
-                forcings=forcings,
-                rng=PRNGKey(0),
-            )
+            loss = None
+            batch_size_s = batch_size // num_batch_splits
+            for i in range(num_batch_splits):
+
+                sl = slice(i * batch_size_s, (i + 1) * batch_size_s)
+                ix = inputs.isel(batch=sl)
+                tx = targets.isel(batch=sl)
+                fx = forcings.isel(batch=sl)
+
+                (loss_i, _), _ = loss_fn.apply(
+                    params=params,
+                    state=state,
+                    emulator=emulator,
+                    inputs=ix,
+                    targets=tx,
+                    forcings=fx,
+                    rng=PRNGKey(0),
+                )
+                if loss is None:
+                    loss = (loss_i / num_batch_splits)
+                else:
+                    loss += (loss_i / num_batch_splits)
+
             if num_gpus > 1:
                 loss = pmean(loss, axis_name="optim_step")
             if (not use_jax_distributed) and (mpi_size > 1):
@@ -219,15 +242,36 @@ def optimize(
 
         # process one batch per GPU
         def process_batch(inputs, targets, forcings):
-            (loss, (diagnostics, next_state)), grads = value_and_grad(
-                _aux, has_aux=True
-            )(
-                params,
-                state,
-                inputs,
-                targets,
-                forcings,
-            )
+            # compute loss and gradient for each split batch and then
+            # sum the gradients
+            loss = None
+            batch_size_s = batch_size // num_batch_splits
+            for i in range(num_batch_splits):
+
+                sl = slice(i * batch_size_s, (i + 1) * batch_size_s)
+                ix = inputs.isel(batch=sl)
+                tx = targets.isel(batch=sl)
+                fx = forcings.isel(batch=sl)
+
+                (loss_i, (diagnostics_i, next_state_i)), grads_i = value_and_grad(
+                    _aux, has_aux=True
+                )(
+                    params,
+                    state,
+                    ix,
+                    tx,
+                    fx,
+                )
+                if loss is None:
+                    loss = (loss_i / num_batch_splits)
+                    grads = grads_i
+                    diagnostics = diagnostics_i
+                    next_state = next_state_i
+                else:
+                    loss += (loss_i / num_batch_splits)
+                    add_trees(grads, grads_i)
+                    add_trees(diagnostics, diagnostics_i)
+                    add_trees(next_state, next_state_i)
 
             # aggregate across local devices
             if num_gpus > 1:
@@ -267,7 +311,6 @@ def optimize(
         return params, loss, diagnostics, opt_state, grads
 
     # compute number of steps
-    batch_size = len(training_data["inputs"]["batch"])
     n_steps = len(training_data["inputs"]["optim_step"])
     n_steps_valid = len(validation_data["inputs"]["optim_step"])
     if n_steps_valid > n_steps:

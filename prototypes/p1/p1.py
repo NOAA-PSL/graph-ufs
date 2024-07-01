@@ -83,6 +83,7 @@ class P1Emulator(ReplayEmulator):
 
     # training protocol
     batch_size = 32
+    num_batch_splits = 1
     num_epochs = 2
     chunks_per_epoch = 48
     steps_per_chunk = None

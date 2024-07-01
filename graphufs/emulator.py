@@ -65,6 +65,7 @@ class ReplayEmulator:
 
     # training protocol
     batch_size = None               # number of forecasts averaged over in loss per optim_step
+    num_batch_splits = None         # number of batch splits
     num_epochs = None               # number of epochs
     chunks_per_epoch = None         # number of chunks per epoch
     steps_per_chunk = None          # number of steps to train for in each chunk
