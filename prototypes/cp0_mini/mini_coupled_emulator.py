@@ -1,11 +1,11 @@
 from jax import tree_util
 
-from graphufs import ReplayEmulator
+from graphufs import ReplayCoupledEmulator
 
-class P0Emulator(ReplayEmulator):
+class CP0Emulator(ReplayCoupledEmulator):
 
-    data_url = "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/03h-freq/zarr/fv3.zarr"
-    norm_urls = {
+    atm_data_url = "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/03h-freq/zarr/fv3.zarr"
+    atm_norm_urls = {
         "mean": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/fv3.statistics.1993-1997/mean_by_level.zarr",
         "std": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/fv3.statistics.1993-1997/stddev_by_level.zarr",
         "stddiff": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/fv3.statistics.1993-1997/diffs_stddev_by_level.zarr",
@@ -13,9 +13,9 @@ class P0Emulator(ReplayEmulator):
 
     ocn_data_url = "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/mom6.zarr"
     ocn_norm_urls = {
-        "mean": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/fv3.statistics.1993-1997/mean_by_level.zarr",
-        "std": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/fv3.statistics.1993-1997/stddev_by_level.zarr",
-        "stddiff": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/fv3.statistics.1993-1997/diffs_stddev_by_level.zarr",
+        "mean": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/mom6.statistics.1993-1997/mean_by_level.zarr",
+        "std": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/mom6.statistics.1993-1997/stddev_by_level.zarr",
+        "stddiff": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/mom6.statistics.1993-1997/diffs_stddev_by_level.zarr",
     }
     wb2_obs_url = "gs://weatherbench2/datasets/era5/1959-2022-6h-64x32_equiangular_conservative.zarr"
     
@@ -25,27 +25,32 @@ class P0Emulator(ReplayEmulator):
 
     # these could be moved to a yaml file later
     # task config options
-    input_variables = (
+    # make sure that atm_inputs and ocn_inputs are mutually exclusive sets
+    atm_input_variables = (
         "pressfc",
         "ugrd10m",
         "vgrd10m",
         "tmp",
-        "SSH"
-        "so" # salinity
-        "temp" # temperature
         "year_progress_sin",
         "year_progress_cos",
         "day_progress_sin",
         "day_progress_cos",
     )
-    target_variables = (
+    ocn_input_variables = (
+        "SSH",
+        "so",
+        "temp",
+    )
+    atm_target_variables = (
         "pressfc",
         "ugrd10m",
         "vgrd10m",
         "tmp",
+    )
+    ocn_target_variables = (
         "SSH",
-        "so"
-        "temp"
+        "so",
+        "temp",
     )
     forcing_variables = (
         "land",
@@ -55,19 +60,21 @@ class P0Emulator(ReplayEmulator):
         "day_progress_cos",
     )
     all_variables = tuple() # this is created in __init__
-    pressure_levels = (
+    atm_pressure_levels = (
         100,
         500,
         1000,
     )
     ocn_vert_levels = (
         0.5,
-        10,
         50,
+        200,
     )
 
     # time related
-    delta_t = "6h"              # the model time step
+    delta_t = "6h"              # the model time step, assumed to be the same for both atm and ocn for now.
+                                # A more complicated case of diffential time steps and grid size will be 
+                                # developed in the future
     input_duration = "12h"      # time covered by initial condition(s) + delta_t (necessary for GraphCast code)
     target_lead_time = "6h"     # how long is the forecast ... at what point do we compare model to targets
     training_dates = (          # bounds of training data (inclusive)
@@ -99,15 +106,17 @@ class P0Emulator(ReplayEmulator):
     # loss weighting, defaults to GraphCast implementation
     weight_loss_per_latitude = True
     weight_loss_per_level = True
-    loss_weights_per_variable = {
+    atm_loss_weights_per_variable = {
         "tmp2m"         : 1.0,
         "ugrd10m"       : 0.1,
         "vgrd10m"       : 0.1,
         "pressfc"       : 0.1,
         "prateb_ave"    : 0.1,
-        "SSH"           : 0.1
-        "so"            : 0.1
-        "temp"          : 1.0
+    }
+    ocn_loss_weights_per_variable = {
+        "SSH"           : 1.0,
+        "so"            : 0.1,
+        "temp"          : 0.1,
     }
 
     # this is used for initializing the state in the gradient computation
@@ -131,7 +140,7 @@ class P0Emulator(ReplayEmulator):
     use_xla_flags = False
 
 tree_util.register_pytree_node(
-    P0Emulator,
-    P0Emulator._tree_flatten,
-    P0Emulator._tree_unflatten
+    CP0Emulator,
+    CP0Emulator._tree_flatten,
+    CP0Emulator._tree_unflatten
 )

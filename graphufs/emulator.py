@@ -15,7 +15,7 @@ from jax import tree_util
 from ufs2arco.regrid.ufsregridder import UFSRegridder
 from graphcast import checkpoint
 from graphcast.graphcast import ModelConfig, TaskConfig, CheckPoint
-from graphcast.data_utils import extract_inputs_targets_forcings
+from graphcast.data_utils import extract_inputs_targets_forcings_coupled
 from graphcast.model_utils import dataset_to_stacked
 from graphcast.losses import normalized_level_weights, normalized_latitude_weights
 
@@ -25,15 +25,15 @@ from .utils import (
 )
 
 
-class ReplayEmulator:
-    """An emulator based on UFS Replay data. This manages all model configuration settings and normalization fields. Currently it is designed to be inherited for a specific use-case, and this could easily be generalized to read in settings via a configuration file (yaml, json, etc). Be sure to register any inherited class as a pytree for it to work with JAX.
+class ReplayCoupledEmulator:
+    """A coupled emulator based on UFS Replay data. This manages all model configuration settings and normalization fields. Currently it is designed to be inherited for a specific use-case, and this could easily be generalized to read in settings via a configuration file (yaml, json, etc). Be sure to register any inherited class as a pytree for it to work with JAX.
 
     Example:
-        see graph-ufs/prototypes/p0/simple_emulator.py for example usage
+        see graph-ufs/prototypes/cp0_mini/mini_coupled_emulator.py for example usage
     """
 
-    data_url = ""
-    norm_urls = {
+    atm_data_url = ""
+    atm_norm_urls = {
         "mean": "",
         "std": "",
         "stddiff": "",
@@ -46,17 +46,20 @@ class ReplayEmulator:
 
     # these could be moved to a yaml file later
     # task config options
-    input_variables = tuple()
-    target_variables = tuple()
+    atm_input_variables = tuple()
+    atm_target_variables = tuple()
+    ocn_input_variables = tuple()
+    ocn_target_variables = tuple()
     forcing_variables = tuple()
     all_variables = tuple()     # this is created in __init__
-    pressure_levels = tuple()
+    atm_pressure_levels = tuple()
+    ocn_vert_levels = tuple()
     levels = list()             # created in __init__, has exact pfull level values
     latitude = tuple()
     longitude = tuple()
 
     # time related
-    delta_t = None              # the model time step
+    delta_t = None              # the model time step, same for both ocean and atmosphere
     input_duration = None       # time covered by initial condition(s)
     target_lead_time = None     # how long the forecast is, i.e., when we compare to data
     training_dates = tuple()    # bounds of training data (inclusive)
@@ -65,7 +68,6 @@ class ReplayEmulator:
 
     # training protocol
     batch_size = None               # number of forecasts averaged over in loss per optim_step
-    num_epochs = None               # number of epochs
     chunks_per_epoch = None         # number of chunks per epoch
     steps_per_chunk = None          # number of steps to train for in each chunk
     checkpoint_chunks = None        # save model after this many chunks are processed
@@ -100,12 +102,17 @@ class ReplayEmulator:
     # loss weighting, defaults to GraphCast implementation
     weight_loss_per_latitude = True
     weight_loss_per_level = True
-    loss_weights_per_variable = {
+    atm_loss_weights_per_variable = {
         "tmp2m"         : 1.0,
         "ugrd10m"       : 0.1,
         "vgrd10m"       : 0.1,
         "pressfc"       : 0.1,
         "prateb_ave"    : 0.1,
+    }
+    ocn_loss_weights_per_variable = {
+        "SSH"           : 1.0,
+        "so"            : 0.1,
+        "temp"          : 0.1,
     }
 
     # this is used for initializing the state in the gradient computation
@@ -122,21 +129,34 @@ class ReplayEmulator:
     def __init__(self, mpi_rank=None, mpi_size=None):
 
         if self.local_store_path is None:
-            warnings.warn("ReplayEmulator.__init__: no local_store_path set, data will always be accessed remotely. Proceed with patience.")
-
-        if any(x not in self.input_variables for x in self.target_variables):
-            raise NotImplementedError(f"GraphUFS cannot predict target variables that are not also inputs")
-
+            warnings.warn("ReplayCoupledEmulator.__init__: no local_store_path set, data will always be accessed remotely. Proceed with patience.")
+        
+        # make sure target_variables is a subset of input_variables
+        if any(x not in self.atm_input_variables for x in self.atm_target_variables):
+            raise NotImplementedError(f"GraphUFS cannot predict atm target variables that are not also inputs")
+        
+        if any(x not in self.ocn_input_variables for x in self.ocn_target_variables):
+            raise NotImplementedError(f"GraphUFS cannot predict ocn target variables that are not also inputs")
+        
         self.mpi_rank = mpi_rank
         self.mpi_size = mpi_size
 
-        pfull = self._get_replay_vertical_levels()
+        # get vertical levels
+        pfull = self._get_replay_vertical_levels(es_comp="atm")
+        z_l = self._get_replay_vertical_levels(es_comp="ocn")
+
         latitude, longitude = self._get_replay_grid(self.resolution)
         self.latitude = tuple(float(x) for x in latitude)
         self.longitude = tuple(float(x) for x in longitude)
-        self.levels = list(
+        self.atm_levels = list(
             pfull.sel(
-                pfull=list(self.pressure_levels),
+                pfull=list(self.atm_pressure_levels),
+                method="nearest",
+            ).values
+        )
+        self.ocn_levels = list(
+            z_l.sel(
+                z_l=list(self.ocn_vert_levels),
                 method="nearest",
             ).values
         )
@@ -149,6 +169,11 @@ class ReplayEmulator:
             radius_query_fraction_edge_length=self.radius_query_fraction_edge_length,
             mesh2grid_edge_normalization_factor=self.mesh2grid_edge_normalization_factor,
         )
+
+        # Combine ocn/atm input and target variables
+        self.input_variables = tuple(set(self.atm_input_variables+self.ocn_input_variables))
+        self.target_variables = tuple(set(self.atm_target_variables+self.ocn_target_variables))
+
         # try/except logic to support original graphcast.graphcast.TaskConfig
         # since I couldn't get inspect.getfullargspec to work
         try:
@@ -156,7 +181,8 @@ class ReplayEmulator:
                 input_variables=self.input_variables,
                 target_variables=self.target_variables,
                 forcing_variables=self.forcing_variables,
-                pressure_levels=tuple(self.levels),
+                pressure_levels=tuple(set(self.atm_levels)),
+                ocn_vert_levels=tuple(set(self.ocn_levels)),
                 input_duration=self.input_duration,
                 longitude=self.longitude,
                 latitude=self.latitude,
@@ -166,15 +192,17 @@ class ReplayEmulator:
                 input_variables=self.input_variables,
                 target_variables=self.target_variables,
                 forcing_variables=self.forcing_variables,
-                pressure_levels=tuple(self.levels),
+                pressure_levels=tuple(set(self.atm_levels)),
+                ocn_vert_levels=tuple(set(self.ocn_levels)),
                 input_duration=self.input_duration,
             )
 
-
-        self.all_variables = tuple(set(
-            self.input_variables + self.target_variables + self.forcing_variables
-        ))
-
+        self.all_variables = tuple(
+                set(self.input_variables +
+                    self.target_variables +
+                    self.forcing_variables)
+            )
+        
         # convert some types
         self.delta_t = pd.Timedelta(self.delta_t)
         self.input_duration = pd.Timedelta(self.input_duration)
@@ -184,7 +212,6 @@ class ReplayEmulator:
         self.set_stacked_normalization()
 
 
-    @property
     def time_per_forecast(self):
         return self.target_lead_time + self.input_duration
 
@@ -218,10 +245,13 @@ class ReplayEmulator:
         return os.path.join(self.local_store_path, "models")
 
 
-    def open_dataset(self, **kwargs):
-        xds = xr.open_zarr(self.data_url, storage_options={"token": "anon"}, **kwargs)
+    def open_atm_dataset(self, **kwargs):
+        xds = xr.open_zarr(self.atm_data_url, storage_options={"token": "anon"}, **kwargs)
         return xds
-
+    
+    def open_ocn_dataset(self, **kwargs):
+        xds = xr.open_zarr(self.ocn_data_url, storage_options={"token": "anon"}, **kwargs)
+        return xds
 
     def get_time(self, mode):
         # choose dates based on mode
@@ -249,11 +279,12 @@ class ReplayEmulator:
         return time
 
 
-    def subsample_dataset(self, xds, new_time=None):
+    def subsample_dataset(self, xds, es_comp="atm", new_time=None):
         """Get the subset of the data that we want in terms of time, vertical levels, and variables
 
         Args:
             xds (xarray.Dataset): with replay data
+            es_comp (string): earth system component, currenty only "atm/ocn/coupled" or "atmosphere/ocean/coupled"
             new_time (pandas.Daterange or similar, optional): time vector to select from the dataset
 
         Returns:
@@ -261,7 +292,14 @@ class ReplayEmulator:
         """
 
         # select our vertical levels
-        xds = xds.sel(pfull=self.levels)
+        if es_comp.lower() == "atm".lower() or es_comp.lower() == "atmosphere".lower() :
+            xds = xds.sel(pfull=self.atm_levels)
+        elif es_comp.lower() == "ocn".lower() or es_comp.lower() == "ocean".lower():
+            xds = xds.sel(z_l=self.ocn_levels)
+        elif es_comp.lower() == "coupled".lower():
+            xds = xds.sel(pfull=self.atm_levels, z_l=self.ocn_levels)
+        else:
+            raise ValueError("Unknown earth system component: only ocean and atmosphere are supported" )
 
         # only grab variables we care about
         myvars = list(x for x in self.all_variables if x in xds)
@@ -303,8 +341,12 @@ class ReplayEmulator:
         # download only missing dates and write them to disk
         if self.no_cache_data or not os.path.exists(self.local_data_path):
             logging.info(f"Downloading missing {mode} data for {len(all_new_time)} time stamps.")
-            xds = xr.open_zarr(self.data_url, storage_options={"token": "anon"})
-            all_xds = self.subsample_dataset(xds, new_time=all_new_time)
+            xds_atm = xr.open_zarr(self.atm_data_url, storage_options={"token": "anon"})
+            all_xds_atm = self.subsample_dataset(xds_atm, new_time=all_new_time, es_comp="atm")
+            xds_ocn = xr.open_zarr(self.ocn_data_url, storage_options={"token": "anon"})
+            all_xds_ocn = self.subsample_dataset(xds_ocn, new_time=all_new_time, es_comp="ocn")
+            all_xds_ocn = all_xds_ocn.rename({"lat":"grid_yt", "lon":"grid_xt"})
+            all_xds = xr.merge([all_xds_atm, all_xds_ocn])
             if not self.no_cache_data:
                 all_xds.to_zarr(self.local_data_path)
                 all_xds.close()
@@ -318,8 +360,12 @@ class ReplayEmulator:
                 logging.info(f"Downloading missing {mode} data for {len(missing_dates)} time stamps.")
                 # download and write missing dates to disk
 
-                missing_xds = self.open_dataset()
-                missing_xds = self.subsample_dataset(missing_xds, new_time=list(missing_dates))
+                missing_xds_atm = self.open_atm_dataset()
+                missing_xds_atm = self.subsample_dataset(missing_xds_atm, new_time=list(missing_dates), es_comp="atm")
+                missing_xds_ocn = self.open_ocn_dataset()
+                missing_xds_ocn = self.subsample_dataset(missing_xds_ocn, new_time=list(missing_dates), es_comp="ocn")
+                missing_xds_ocn = missing_xds_ocn.rename({"lat":"grid_yt", "lon":"grid_xt"})
+                missing_xds = xr.merge([missing_xds_atm, missing_xds_ocn])
                 missing_xds.to_zarr(self.local_data_path, append_dim="time")
                 # now that the data on disk is complete, reopen the dataset from disk
                 all_xds = xr.open_zarr(self.local_data_path)
@@ -350,7 +396,6 @@ class ReplayEmulator:
                 and appropriate fields for each dataset, based on the variables in :attr:`task_config`
         """
         all_new_time = self.get_time(mode=mode)
-
         # split the dataset across nodes
         # make sure work is _exactly_ equally distirubuted to prevent hangs
         # when the number of time stamps is not evenly divisible by the number of ranks,
@@ -426,11 +471,10 @@ class ReplayEmulator:
                 # this has to end such that we can pull an entire forecast from the training data
                 all_initial_times = pd.date_range(
                     start=start,
-                    end=end - self.time_per_forecast,
+                    end=end - self.time_per_forecast(),
                     freq=self.delta_t,
                     inclusive="both",
                 )
-
                 # randomly sample without replacement
                 # note that GraphCast samples with replacement
                 if mode != "testing":
@@ -444,9 +488,11 @@ class ReplayEmulator:
                     forecast_initial_times = all_initial_times[:n_forecasts]
 
                 # subsample in time, grab variables and vertical levels we want
-                xds = self.subsample_dataset(all_xds, new_time=new_time)
+                xds = self.subsample_dataset(all_xds, es_comp="coupled", new_time=new_time)
+
                 xds = xds.rename({
                     "pfull": "level",
+                    #"z_l": "level", # this is justified since no variable would have both pfull and z_l dimensions
                     "grid_xt": "lon",
                     "grid_yt": "lat",
                     "time": "datetime",
@@ -485,16 +531,17 @@ class ReplayEmulator:
 
                     timestamps_in_this_forecast = pd.date_range(
                         start=forecast_initial_times[i],
-                        end=forecast_initial_times[i]+self.time_per_forecast,
+                        end=forecast_initial_times[i]+self.time_per_forecast(),
                         freq=self.delta_t,
                         inclusive="both",
                     )
+                    
                     batch = self.preprocess(
                         xds.sel(datetime=timestamps_in_this_forecast),
                         batch_index=b,
                     )
-
-                    this_input, this_target, this_forcing = extract_inputs_targets_forcings(
+                    
+                    this_input, this_target, this_forcing = extract_inputs_targets_forcings_coupled(
                         batch,
                         **self.extract_kwargs,
                     )
@@ -534,7 +581,8 @@ class ReplayEmulator:
             local_path = os.path.join(
                 self.local_store_path,
                 "normalization",
-                os.path.basename(self.norm_urls[component]),
+                "coupled",
+                os.path.basename(self.atm_norm_urls[component]),
             )
 
             if os.path.isdir(local_path):
@@ -543,10 +591,15 @@ class ReplayEmulator:
                 foundit = True
 
             else:
-                xds = xr.open_zarr(self.norm_urls[component], **kwargs)
-                myvars = list(x for x in self.all_variables if x in xds)
-                xds = xds[myvars]
-                xds = xds.sel(pfull=self.levels)
+                xds_atm = xr.open_zarr(self.atm_norm_urls[component], **kwargs)
+                xds_ocn = xr.open_zarr(self.ocn_norm_urls[component], **kwargs)
+                vars_atm = list(x for x in self.all_variables if x in xds_atm)
+                vars_ocn = list(x for x in self.all_variables if x in xds_ocn)
+                xds_atm = xds_atm[vars_atm]
+                xds_atm = xds_atm.sel(pfull=self.atm_levels)
+                xds_ocn = xds_ocn[vars_ocn]
+                xds_ocn = xds_ocn.sel(z_l=self.ocn_levels)
+                xds = xr.merge([xds_atm, xds_ocn])
                 xds = xds.load()
                 xds = xds.rename({"pfull": "level"})
                 xds.to_zarr(local_path)
@@ -566,13 +619,13 @@ class ReplayEmulator:
                 self.local_store_path,
                 "stacked-normalization",
                 "inputs",
-                os.path.basename(self.norm_urls[component]),
+                os.path.basename(self.atm_norm_urls[component]),
             )
             targets_path = os.path.join(
                 self.local_store_path,
                 "stacked-normalization",
                 "targets",
-                os.path.basename(self.norm_urls[component]),
+                os.path.basename(self.atm_norm_urls[component]),
             )
 
             if os.path.isdir(inputs_path) and os.path.isdir(targets_path):
@@ -608,7 +661,7 @@ class ReplayEmulator:
                 [norms.copy() for _ in range(n_time)],
                 dim="time",
             )
-            dimorder = ("batch", "time", "level", "lat", "lon")
+            dimorder = ("batch", "time", "level", "z_l", "lat", "lon")
             dimorder = tuple(x for x in dimorder if x in norms.dims)
             norms = norms.transpose(*dimorder)
             return dataset_to_stacked(norms, **kwargs)
@@ -676,15 +729,25 @@ class ReplayEmulator:
 
 
     @staticmethod
-    def _get_replay_vertical_levels():
-        pfull_path = os.path.join(os.path.dirname(__file__), "replay_vertical_levels.yaml")
-        with open(pfull_path, "r") as f:
-            pfull = yaml.safe_load(f)["pfull"]
-        return xr.DataArray(pfull, coords={"pfull": pfull}, dims="pfull")
+    def _get_replay_vertical_levels(es_comp="atm"):
+        if es_comp.lower() == "atm".lower():
+            pfull_path = os.path.join(os.path.dirname(__file__), "replay_atm_vertical_levels.yaml")
+            with open(pfull_path, "r") as f:
+                pfull = yaml.safe_load(f)["pfull"]
+            return xr.DataArray(pfull, coords={"pfull": pfull}, dims="pfull")
+
+        elif es_comp.lower() == "ocn".lower():
+            z_l_path = os.path.join(os.path.dirname(__file__), "replay_ocn_vertical_levels.yaml")
+            with open(z_l_path, "r") as f:
+                z_l = yaml.safe_load(f)["z_l"]
+            return xr.DataArray(z_l, coords={"z_l": z_l}, dims="z_l")
+        
+        else:
+            raise ValueError("only atm and ocn are supported")
 
     def _get_replay_grid(self, resolution: int | float):
         if int(resolution) == 1:
-            if "0.25-degree-subsampled" in self.data_url:
+            if "0.25-degree-subsampled" in self.atm_data_url:
                 lats, lons = UFSRegridder.compute_gaussian_grid(768, 1536)
                 lats = lats[::4]
                 lons = lons[::4]
@@ -805,7 +868,7 @@ class ReplayEmulator:
 
 
 tree_util.register_pytree_node(
-    ReplayEmulator,
-    ReplayEmulator._tree_flatten,
-    ReplayEmulator._tree_unflatten,
+    ReplayCoupledEmulator,
+    ReplayCoupledEmulator._tree_flatten,
+    ReplayCoupledEmulator._tree_unflatten,
 )

@@ -15,7 +15,7 @@ from graphufs import (
     init_devices,
 )
 
-from mini_emulator_coupled import P0Emulator
+from mini_coupled_emulator import CP0Emulator
 
 
 """
@@ -37,7 +37,7 @@ Usage:
 if __name__ == "__main__":
 
     # parse arguments
-    gufs, args = P0Emulator.from_parser()
+    gufs, args = CP0Emulator.from_parser()
 
     # for multi-gpu training
     init_devices(gufs)
@@ -51,6 +51,7 @@ if __name__ == "__main__":
         mode="testing" if args.test else "training",
     )
     data_train = generator.get_data()
+    print("training data:", data_train)
 
     # validation
     if not args.test:
@@ -62,9 +63,7 @@ if __name__ == "__main__":
             mode="validation",
         )
         data_valid = validator.get_data()
-
-
-
+    print('validation data:', data_valid)
 
     # load weights or initialize a random model
     if gufs.checkpoint_exists(args.id) and args.id >= 0:

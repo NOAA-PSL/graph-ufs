@@ -19,8 +19,6 @@ class StatisticsComputer:
         load_full_dataset (bool): Whether to load the full dataset.
     """
 
-    dims = ("time", "grid_yt", "grid_xt")
-
     def __init__(
         self,
         path_in: str,
@@ -54,8 +52,15 @@ class StatisticsComputer:
         self.open_zarr_kwargs = open_zarr_kwargs if open_zarr_kwargs is not None else dict()
         self.to_zarr_kwargs = to_zarr_kwargs if to_zarr_kwargs is not None else dict()
         self.load_full_dataset = load_full_dataset
-
-        self.delta_t = f"{self.time_skip*3} hour" if self.time_skip is not None else "3 hour"
+        
+        if self.comp.lower() == "atm".lower():
+            self.delta_t = f"{self.time_skip*3} hour" if self.time_skip is not None else "3 hour"
+            self.dims = ("time", "grid_yt", "grid_xt")
+        elif self.comp.lower() == "ocean".lower():
+            self.delta_t = f"{self.time_skip*6} hour" if self.time_skip is not None else "6 hour"
+            self.dims = ("time", "lat", "lon")
+        else:
+            raise ValueError("component can only be atm or ocean")
 
     def __call__(self, data_vars=None):
         """Processes the input dataset to compute normalization statistics.
@@ -204,7 +209,8 @@ class StatisticsComputer:
         """
         return str(xval.values.astype("M8[h]"))
 
-def add_derived_vars(xds,component="atm"):
+def add_derived_vars(xds, component="atm"):
+    """Adds year and day progress features to xds if missing."""
 
     with xr.set_options(keep_attrs=True):
         if component.lower() == "atm".lower():

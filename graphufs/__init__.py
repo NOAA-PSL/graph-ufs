@@ -1,4 +1,4 @@
-from .emulator import ReplayEmulator
+from .emulator import ReplayCoupledEmulator
 from .training import (
     optimize,
     predict,
