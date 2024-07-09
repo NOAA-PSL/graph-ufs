@@ -68,16 +68,16 @@ class P1Emulator(ReplayEmulator):
     delta_t = "3h"
     input_duration = "6h"
     #target_lead_time = ["3h", "6h", "9h", "12h", "15h", "18h", "21h", "24h"]
-    target_lead_time = ["6h", "12h", "18h", "24h"]
+    #target_lead_time = ["6h", "12h", "18h", "24h"]
     #target_lead_time = ["24h", "48h", "72h", "96h", "120h", "144h", "168h", "192h", "216h", "240h"]
+    target_lead_time = ["120h", "240h", "360h", "480h", "600h", "720h"]
     training_dates = (
         "1993-12-31T18",
         "2019-12-31T21"
     )
     validation_dates = (
         "2022-01-01T03",
-        "2022-04-01T03",
-        #"2023-10-13T03"
+        "2023-10-13T03"
     )
     testing_dates = (
         "2020-01-01T00",
