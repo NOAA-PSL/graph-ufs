@@ -9,4 +9,4 @@
 [submodule "weatherbench2"]
     path = weatherbench2
     url = git@github.com:NOAA-PSL/weatherbench2.git
-    branch = main
+    branch = stash/lat-bds-and-schema-tab
