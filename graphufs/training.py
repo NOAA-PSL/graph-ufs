@@ -97,14 +97,9 @@ def init_model(emulator, data: dict):
     @hk.transform_with_state
     def run_forward(emulator, inputs, targets_template, forcings):
         predictor = construct_wrapped_graphcast(emulator)
-        print("Predictor object created..")
-        print("Inputs:", inputs)
-        print("targets_template:", targets_template)
-        print("forcings:", forcings)
         return predictor(inputs, targets_template=targets_template, forcings=forcings)
 
     init_jitted = jit(run_forward.init)
-    print("init_jitted done...")
     inputs=data["inputs"].sel(optim_step=0)
     targets=data["targets"].sel(optim_step=0)
     forcings=data["forcings"].sel(optim_step=0)

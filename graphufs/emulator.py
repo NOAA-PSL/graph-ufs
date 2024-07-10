@@ -182,7 +182,7 @@ class ReplayCoupledEmulator:
                 target_variables=self.target_variables,
                 forcing_variables=self.forcing_variables,
                 pressure_levels=tuple(set(self.atm_levels)),
-                ocn_vert_levels=tuple(set(self.ocn_levels)),
+                ocn_vert_levels=sorted(tuple(set(self.ocn_levels))),
                 input_duration=self.input_duration,
                 longitude=self.longitude,
                 latitude=self.latitude,
@@ -193,7 +193,7 @@ class ReplayCoupledEmulator:
                 target_variables=self.target_variables,
                 forcing_variables=self.forcing_variables,
                 pressure_levels=tuple(set(self.atm_levels)),
-                ocn_vert_levels=tuple(set(self.ocn_levels)),
+                ocn_vert_levels=sorted(tuple(set(self.ocn_levels))),
                 input_duration=self.input_duration,
             )
 
@@ -409,6 +409,7 @@ class ReplayCoupledEmulator:
 
 
         all_xds = self.get_the_data(all_new_time=all_new_time, mode=mode)
+        print("all_xds:", all_xds)
         # split dataset into chunks
         n_chunks = self.chunks_per_epoch
         chunk_size = len(all_new_time) // n_chunks
@@ -489,10 +490,8 @@ class ReplayCoupledEmulator:
 
                 # subsample in time, grab variables and vertical levels we want
                 xds = self.subsample_dataset(all_xds, es_comp="coupled", new_time=new_time)
-
                 xds = xds.rename({
                     "pfull": "level",
-                    #"z_l": "level", # this is justified since no variable would have both pfull and z_l dimensions
                     "grid_xt": "lon",
                     "grid_yt": "lat",
                     "time": "datetime",
@@ -540,7 +539,6 @@ class ReplayCoupledEmulator:
                         xds.sel(datetime=timestamps_in_this_forecast),
                         batch_index=b,
                     )
-                    
                     this_input, this_target, this_forcing = extract_inputs_targets_forcings_coupled(
                         batch,
                         **self.extract_kwargs,
