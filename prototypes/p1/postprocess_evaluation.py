@@ -47,12 +47,15 @@ def get_valid_initial_conditions(forecast, truth):
     forecast_valid_time = forecast["time"] + forecast["lead_time"]
     valid_time = list(set(truth["time"].values).intersection(set(forecast_valid_time.values.flatten())))
 
-    t0 = xr.where(
-        [t in valid_time for t in forecast_valid_time.isel(lead_time=0, drop=True)],
+    initial_times = xr.where(
+        [t0 in valid_time and tf in valid_time for t0, tf in zip(
+            forecast.time.values,
+            forecast_valid_time.isel(lead_time=-1, drop=True).values
+        )],
         forecast["time"],
         np.datetime64("NaT"),
     ).dropna("time")
-    return t0
+    return initial_times
 
 
 def regrid_and_rename(xds, url):
