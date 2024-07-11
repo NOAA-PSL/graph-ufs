@@ -63,7 +63,7 @@ def submit_slurm_job():
 
     the_code = \
         f"from stacked_preprocess import store_batch_of_samples\n"+\
-        f"store_batch_of_samples('training')\n"
+        f"store_batch_of_samples('training')\n" +\
         f"store_batch_of_samples('validation')\n"
 
     slurm_dir = f"slurm/stacked-preprocess"
