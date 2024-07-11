@@ -97,7 +97,7 @@ def predict(
     gc = drop_state(with_params(jax.jit(run_forward.apply)))
 
     hours = int(emulator.forecast_duration.value / 1e9 / 3600)
-    pname = f"/p1-evaluation/v1/{batchloader.dataset.mode}/predictions.{hours}h.zarr"
+    pname = f"/p1-evaluation/v1/{batchloader.dataset.mode}/graphufs.{hours}h.zarr"
     tname = f"/p1-evaluation/v1/{batchloader.dataset.mode}/replay.{hours}h.zarr"
 
     n_steps = len(batchloader)

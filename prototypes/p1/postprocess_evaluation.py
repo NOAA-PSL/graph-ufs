@@ -131,7 +131,7 @@ if __name__ == "__main__":
 
     duration = p1.target_lead_time[-1]
 
-    for name in ["predictions", "replay"]:
+    for name in ["graphufs", "replay"]:
         ds = xr.open_zarr(f"/p1-evaluation/v1/validation/{name}.{duration}.zarr")
 
         ds = ds[["pressfc", "tmp2m", "ugrd10m", "vgrd10m"]]
