@@ -67,16 +67,14 @@ class P1Emulator(ReplayEmulator):
     # time related
     delta_t = "3h"
     input_duration = "6h"
-    #target_lead_time = ["3h", "6h", "9h", "12h", "15h", "18h", "21h", "24h"]
-    #target_lead_time = ["6h", "12h", "18h", "24h"]
-    #target_lead_time = ["24h", "48h", "72h", "96h", "120h", "144h", "168h", "192h", "216h", "240h"]
-    target_lead_time = ["120h", "240h", "360h", "480h", "600h", "720h"]
+    #target_lead_time = "3h"
+    target_lead_time = [f"{n}h" for n in range(6, 6*4*10+1, 6)]
     training_dates = (
         "1993-12-31T18",
         "2019-12-31T21"
     )
     validation_dates = (
-        "2022-01-01T03",
+        "2022-01-01T00",
         "2023-10-13T03"
     )
     testing_dates = (
@@ -95,6 +93,9 @@ class P1Emulator(ReplayEmulator):
     load_chunk = True
     store_loss = True
     use_preprocessed = False
+
+    # evaluation
+    sample_stride = 9 # sample every 27h, results in 569 ICs, ~1.6 TiB of data
 
     # multi GPU and xla options
     num_gpus = 4
