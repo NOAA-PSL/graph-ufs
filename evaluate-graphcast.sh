@@ -1,5 +1,7 @@
 #!/bin/bash
 
+export PYTHONPATH=$PYTHONPATH:$PWD/weatherbench2:$PWD/weatherbench2/weatherbench2:$PWD/weatherbench2/scripts
+
 year=2018
 output_dir=/p1-evaluation/v1/validation
 time_start="${year}-01-01T00"
@@ -15,18 +17,33 @@ truth_paths=( \
 )
 
 model_names=("era5_forecasts" "ifs_ens_mean" "graphcast" "pangu")
-model_paths=( \
-    "gs://weatherbench2/datasets/era5-forecasts/2018-240x121_equiangular_with_poles_conservative.zarr" \
+regridded_model_paths=( \
+    "gs://weatherbench2/datasets/era5-forecasts/${year}-240x121_equiangular_with_poles_conservative.zarr" \
     "gs://weatherbench2/datasets/ifs_ens/2018-2022-240x121_equiangular_with_poles_conservative_mean.zarr" \
     "gs://weatherbench2/datasets/graphcast/${year}/date_range_2017-11-16_2019-02-01_12_hours-240x121_equiangular_with_poles_conservative.zarr" \
     "gs://weatherbench2/datasets/pangu/2018-2022_0012_240x121_equiangular_with_poles_conservative.zarr" \
+)
+native_model_paths=( \
+    "gs://weatherbench2/datasets/era5-forecasts/${year}-1440x721.zarr" \
+    "gs://weatherbench2/datasets/ifs_ens/2018-2022-1440x721_mean.zarr" \
+    "gs://weatherbench2/datasets/graphcast/2018/date_range_2017-11-16_2019-02-01_12_hours.zarr" \
+    "gs://weatherbench2/datasets/pangu/2018-2022_0012_0p25.zarr" \
+)
+
+rename_variables=( \
+    "None", \
+    "None", \
+    "{'lat':'latitude','lon':'longitude'}", \
+    "None", \
 )
 
 for i in "${!model_names[@]}"
 do
 
     model_name=${model_names[i]}
-    model_path=${model_paths[i]}
+    regridded_model_path=${regridded_model_paths[i]}
+    native_model_path=${native_model_paths[i]}
+    rv=${rename_variables[i]}
 
     for j in "${!truth_names[@]}"
     do
@@ -35,7 +52,7 @@ do
 
         echo "Evaluating ${model_name} against ${truth_name} ..."
         python weatherbench2/scripts/evaluate.py \
-         --forecast_path=${model_path} \
+         --forecast_path=${regridded_model_path} \
          --obs_path=${truth_path} \
          --climatology_path=gs://weatherbench2/datasets/era5-hourly-climatology/1990-2019_6h_240x121_equiangular_with_poles_conservative.zarr \
          --output_dir=${output_dir} \
@@ -54,7 +71,7 @@ do
 
     echo "Computing spectra for ${model_name} ..."
     python weatherbench2/scripts/compute_zonal_energy_spectrum.py \
-      --input_path=${model_path} \
+      --input_path=${native_model_path} \
       --output_path=${output_dir}/${model_name}.${year}.spectra.zarr \
       --base_variables=${variables} \
       --time_dim="time" \
@@ -62,6 +79,6 @@ do
       --time_stop=${time_stop} \
       --time_stride=${time_stride} \
       --levels=${levels} \
-      --averaging_dims="time"
-
+      --averaging_dims="time" \
+      --rename_variables=${rv}
 done
