@@ -6,6 +6,7 @@ import xesmf
 import cf_xarray as cfxr
 
 from ufs2arco.regrid.gaussian_grid import gaussian_latitudes
+from ufs2arco import Layers2Pressure
 
 from p1stacked import P1Emulator
 from stacked_preprocess import setup_log
@@ -110,18 +111,43 @@ def regrid_and_rename(xds, url):
     ds_out = ds_out.drop_vars(["lat_b", "lon_b"])
     return ds_out
 
-def make_fake_plevels(xds, plevels):
 
-    xds = xds.rename({"level": "hybrid"})
-    xds["level"] = xr.DataArray(
-        np.array(list(plevels)),
-        coords=xds.hybrid.coords,
-        dims=xds.hybrid.dims,
+def interp2pressure(xds, plevels):
+    """Assume plevels is in hPa"""
+
+    lp = Layers2Pressure()
+    delz = lp.calc_delz(xds["pressfc"], xds["tmp"], xds["spfh"])
+    prsl = lp.calc_layer_mean_pressure(xds["pressfc"], xds["tmp"], xds["spfh"], delz)
+
+    vars2d = [f for f in xds.keys() if "level" not in xds[f].dims]
+    vars3d = [f for f in xds.keys() if "level" in xds[f].dims]
+    pds = xr.Dataset({f: xds[f] for f in vars2d})
+    plevels = np.array(list(plevels))
+    pds["level"] = xr.DataArray(
+        plevels,
+        coords={"level": plevels},
+        dims=("level",),
+        attrs={
+            "description": "Pressure level",
+            "units": "hPa",
+        },
     )
-    xds = xds.swap_dims({"hybrid": "level"}).drop_vars("hybrid")
+    results = {k: list() for k in vars3d}
+    for p in plevels:
 
-    xds = xds.sel(level=[100, 500, 850])
-    return xds
+        cds = lp._get_interp_coefficients(p*100, prsl)
+        mask = (cds["is_right"].sum("level") > 0) & (cds["is_left"].sum("level") > 0)
+        for key in vars3d:
+            interpolated = lp.interp2pressure(xds[key], p*100, prsl, cds)
+            interpolated = interpolated.expand_dims({"level": [p]})
+            interpolated = interpolated.where(mask)
+            results[key].append(interpolated)
+
+    for key in vars3d:
+        pds[key] = xr.concat(results[key], dim="level")
+
+    return pds
+
 
 if __name__ == "__main__":
 
@@ -134,11 +160,8 @@ if __name__ == "__main__":
     for name in ["graphufs", "replay"]:
         ds = xr.open_zarr(f"/p1-evaluation/v1/validation/{name}.{duration}.zarr")
 
-        ds = ds[["pressfc", "tmp2m", "ugrd10m", "vgrd10m"]]
-
-        # HACK: make fake pressure levels and select only a few
-        #ds = make_fake_plevels(ds, p1.pressure_levels)
-        #logging.info(f"Selected fake pressure levels...")
+        ds = interp2pressure(ds, [100, 500, 850])
+        logging.info(f"Interpolated to pressure levels...")
 
         # regrid and rename variables
         ds = regrid_and_rename(ds, p1.wb2_obs_url)
