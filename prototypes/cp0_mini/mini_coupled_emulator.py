@@ -40,6 +40,7 @@ class CP0Emulator(ReplayCoupledEmulator):
         "SSH",
         "so",
         "temp",
+        #"landsea_mask"
     )
     atm_target_variables = (
         "pressfc",
@@ -52,13 +53,15 @@ class CP0Emulator(ReplayCoupledEmulator):
         "so",
         "temp",
     )
-    forcing_variables = (
+    atm_forcing_variables = (
         "land",
         "year_progress_sin",
         "year_progress_cos",
         "day_progress_sin",
         "day_progress_cos",
     )
+    ocn_forcing_variables = ()
+
     all_variables = tuple() # this is created in __init__
     atm_pressure_levels = (
         100,
@@ -114,9 +117,9 @@ class CP0Emulator(ReplayCoupledEmulator):
         "prateb_ave"    : 0.1,
     }
     ocn_loss_weights_per_variable = {
-        "SSH"           : 1.0,
-        "so"            : 0.1,
-        "temp"          : 0.1,
+        "SSH"           : 0.1,
+        "so"            : 1.0,
+        "temp"          : 1.0,
     }
 
     # this is used for initializing the state in the gradient computation

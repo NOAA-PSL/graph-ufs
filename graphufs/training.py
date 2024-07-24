@@ -384,7 +384,7 @@ def optimize(
             break
 
         # The purpose of the following code is best described as confusing
-        # the jix.jat cache system. We start from a deepcopy of slice 0 where the jitting
+        # the jax.jit cache system. We start from a deepcopy of slice 0 where the jitting
         # is carried out, and sneakly update its values. If you use xarray update/copy etc
         # the cache system somehow notices, and either becomes slow or messes up the result
         # Copying variable values individually avoids both, fast and produces same results as before

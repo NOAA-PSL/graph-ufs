@@ -47,7 +47,7 @@ def convert_wb2_format(gufs, ds, inittimes) -> xr.Dataset:
     )
 
     # fix pressure levels to match obs
-    ds_out["level"] = np.array(list(gufs.pressure_levels), dtype=np.float32)
+    ds_out["level"] = np.array(list(gufs.atm_pressure_levels), dtype=np.float32)
 
     # remove batch dimension
     ds_out = ds_out.rename({"optim_step": "o", "time": "t", "batch": "b"})

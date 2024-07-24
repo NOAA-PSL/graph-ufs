@@ -50,7 +50,8 @@ class ReplayCoupledEmulator:
     atm_target_variables = tuple()
     ocn_input_variables = tuple()
     ocn_target_variables = tuple()
-    forcing_variables = tuple()
+    atm_forcing_variables = tuple()
+    ocn_forcing_variables = tuple()
     all_variables = tuple()     # this is created in __init__
     atm_pressure_levels = tuple()
     ocn_vert_levels = tuple()
@@ -173,6 +174,7 @@ class ReplayCoupledEmulator:
         # Combine ocn/atm input and target variables
         self.input_variables = tuple(set(self.atm_input_variables+self.ocn_input_variables))
         self.target_variables = tuple(set(self.atm_target_variables+self.ocn_target_variables))
+        self.forcing_variables = tuple(set(self.atm_forcing_variables+self.ocn_forcing_variables))
 
         # try/except logic to support original graphcast.graphcast.TaskConfig
         # since I couldn't get inspect.getfullargspec to work
@@ -307,7 +309,11 @@ class ReplayCoupledEmulator:
 
         if new_time is not None:
             xds = xds.sel(time=new_time)
-
+        
+        # mask nans in ocean target variables
+        if es_comp.lower() == "ocn".lower() or es_comp.lower() == "ocean".lower():
+            xds = xds.fillna(0)
+        
         return xds
 
 

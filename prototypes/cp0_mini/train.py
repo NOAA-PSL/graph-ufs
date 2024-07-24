@@ -51,6 +51,7 @@ if __name__ == "__main__":
         mode="testing" if args.test else "training",
     )
     data_train = generator.get_data()
+    
 
     # validation
     if not args.test:
