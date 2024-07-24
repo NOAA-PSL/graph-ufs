@@ -4,6 +4,7 @@ import dask
 import xarray as xr
 import xesmf
 import cf_xarray as cfxr
+import pandas as pd
 
 from ufs2arco.regrid.gaussian_grid import gaussian_latitudes
 from ufs2arco import Layers2Pressure
@@ -45,17 +46,28 @@ def create_output_dataset(lat, lon, is_gaussian):
 
 def get_valid_initial_conditions(forecast, truth):
 
-    forecast_valid_time = forecast["time"] + forecast["lead_time"]
-    valid_time = list(set(truth["time"].values).intersection(set(forecast_valid_time.values.flatten())))
+    if "lead_time" in forecast:
+        forecast_valid_time = forecast["time"] + forecast["lead_time"]
+        valid_time = list(set(truth["time"].values).intersection(set(forecast_valid_time.values.flatten())))
 
-    initial_times = xr.where(
-        [t0 in valid_time and tf in valid_time for t0, tf in zip(
-            forecast.time.values,
-            forecast_valid_time.isel(lead_time=-1, drop=True).values
-        )],
-        forecast["time"],
-        np.datetime64("NaT"),
-    ).dropna("time")
+        initial_times = xr.where(
+            [t0 in valid_time and tf in valid_time for t0, tf in zip(
+                forecast.time.values,
+                forecast_valid_time.isel(lead_time=-1, drop=True).values
+            )],
+            forecast["time"],
+            np.datetime64("NaT"),
+        ).dropna("time")
+
+    else:
+        valid_time = list(set(truth["time"].values).intersection(set(forecast.time.values)))
+        initial_times = xr.DataArray(
+            valid_time,
+            coords={"time": valid_time},
+            dims=("time",),
+        )
+    initial_times = initial_times.sortby("time")
+
     return initial_times
 
 
@@ -157,9 +169,23 @@ if __name__ == "__main__":
 
     duration = p1.target_lead_time[-1]
 
-    for name in ["graphufs", "replay"]:
-        ds = xr.open_zarr(f"/p1-evaluation/v1/validation/{name}.{duration}.zarr")
+    # open graphufs, and targets as is
+    gds = xr.open_zarr(f"/p1-evaluation/v1/validation/graphufs.{duration}.zarr")
+    tds = xr.open_zarr(f"/p1-evaluation/v1/validation/replay.{duration}.zarr")
 
+    # replay we actually want to get the original data, in order to avoid
+    # excessive interpolation error due to subsampled vertical levels
+    rds = p1.open_dataset()
+    rds = rds[list(gds.keys())]
+    valid_time = gds["time"] + gds["lead_time"]
+    time_vector = pd.date_range(gds["time"][0].values, valid_time.isel(time=-1, lead_time=-1).values, freq="3h")
+    rds = rds.sel(time=time_vector)
+    rds = rds.rename({"pfull": "level", "grid_xt": "lon", "grid_yt": "lat"})
+
+    for ds, name in zip(
+        [gds, tds, rds],
+        ["graphufs", "replay_targets", "replay"],
+    ):
         ds = interp2pressure(ds, [100, 500, 850])
         logging.info(f"Interpolated to pressure levels...")
 
