@@ -22,7 +22,7 @@ rename_variables='{"pressfc":"surface_pressure","ugrd10m":"10m_u_component_of_wi
 
 
 # Standard WB2 deterministic evaluation
-for dataset in "replay" "graphufs"
+for dataset in "graphufs" "replay"
 do
 
     forecast_path=${output_dir}/${dataset}.${forecast_duration}.postprocessed.zarr
@@ -47,7 +47,7 @@ do
           --by_init=${by_init} \
           --output_dir=${output_dir} \
           --output_file_prefix=${dataset}_vs_${truth_name}_${forecast_duration}_ \
-          --eval_configs=deterministic,deterministic_temporal,deterministic_spatial \
+          --eval_configs=deterministic,deterministic_spatial,deterministic_temporal \
           --time_start=${time_start} \
           --time_stop=${time_stop} \
           --evaluate_climatology=False \
@@ -78,7 +78,7 @@ python weatherbench2/scripts/evaluate.py \
   --by_init=True \
   --output_dir=${output_dir} \
   --output_file_prefix=graphufs_vs_replay_${forecast_duration}_ \
-  --eval_configs=deterministic,deterministic_temporal,deterministic_spatial \
+  --eval_configs=deterministic,deterministic_spatial,deterministic_temporal \
   --time_start=${time_start} \
   --time_stop=${time_stop} \
   --evaluate_climatology=False \
