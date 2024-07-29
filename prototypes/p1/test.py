@@ -12,7 +12,7 @@ from graphufs import (
     compute_rmse_bias,
 )
 
-from p1stacked import P1Emulator
+from p1 import P1Emulator
 from ufs2arco import Timer
 
 if __name__ == "__main__":
