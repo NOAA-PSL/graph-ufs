@@ -12,6 +12,41 @@ from ufs2arco import Layers2Pressure
 from p1stacked import P1Emulator
 from stacked_preprocess import setup_log
 
+def open_datasets(emulator):
+    """
+    Returns:
+        predictions, targets, original_target_dataset, independent_truth_dataset
+    """
+
+    duration = emulator.target_lead_time[-1]
+
+    # open graphufs, and targets as is
+    gds = xr.open_zarr(f"/p1-evaluation/v1/validation/graphufs.{duration}.zarr")
+    tds = xr.open_zarr(f"/p1-evaluation/v1/validation/replay.{duration}.zarr")
+    truth = xr.open_zarr(emulator.wb2_obs_url, storage_options={"token":"anon"})
+
+    # subsample in space to avoid poles
+    if "with_poles" in emulator.wb2_obs_url:
+        truth = truth.sel(latitude=slice(-89, 89))
+
+    # subsample in time, based on truth we can compare to
+    t0 = get_valid_initial_conditions(gds, truth)
+    gds = gds.sel(time=t0)
+    tds = tds.sel(time=t0)
+
+    # for replay we also want to get the original data, in order to avoid
+    # excessive interpolation error due to subsampled vertical levels
+    rds = emulator.open_dataset()
+    keep_vars = list(gds.keys())
+    rds = rds[keep_vars]
+    valid_time = gds["time"] + gds["lead_time"]
+    rds = rds.sel(time=slice(gds.time.values[0], valid_time.isel(time=-1, lead_time=-1).values))
+    rds = rds.rename({"pfull": "level", "grid_xt": "lon", "grid_yt": "lat"})
+    time = get_valid_initial_conditions(rds, truth)
+    rds = rds.sel(time=time)
+    return gds, tds, rds, truth
+
+
 def get_bounds(xds, is_gaussian=False):
     xds = xds.cf.add_bounds(["lat", "lon"])
 
@@ -71,22 +106,12 @@ def get_valid_initial_conditions(forecast, truth):
     return initial_times
 
 
-def regrid_and_rename(xds, url):
-    """Note that it's assumed the obs dataset is not on a Gaussian grid but input is"""
-
-    obs = xr.open_zarr(url, storage_options={"token":"anon"})
-
-    # subsample in space to avoid poles
-    if "with_poles" in url:
-        obs = obs.sel(latitude=slice(-89, 89))
-
-    # subsample forecast dataset in time, only get what we have truth to compare to
-    t0 = get_valid_initial_conditions(xds, obs)
-    xds = xds.sel(time=t0)
+def regrid_and_rename(xds, truth):
+    """Note that it's assumed the truth dataset is not on a Gaussian grid but input is"""
 
     ds_out = create_output_dataset(
-        lat=obs["latitude"].values,
-        lon=obs["longitude"].values,
+        lat=truth["latitude"].values,
+        lon=truth["longitude"].values,
         is_gaussian=False,
     )
     if "lat_b" not in xds and "lon_b" not in xds:
@@ -110,13 +135,12 @@ def regrid_and_rename(xds, url):
         "vgrd": "v_component_of_wind",
         "dzdt": "vertical_velocity",
         "spfh": "specific_humidity",
-        "prateb_ave": "total_preciptation_3hr",
+        "prateb_ave": "total_precipitation_3hr",
         "lat": "latitude",
         "lon": "longitude",
     }
     rename_dict = {k: v for k,v in rename_dict.items() if k in ds_out}
     ds_out = ds_out.rename(rename_dict)
-    ds_out = ds_out.transpose("time", ..., "longitude", "latitude")
 
     # ds_out has the lat/lon boundaries from input dataset
     # remove these because it doesn't make sense anymore
@@ -128,8 +152,7 @@ def interp2pressure(xds, plevels):
     """Assume plevels is in hPa"""
 
     lp = Layers2Pressure()
-    delz = lp.calc_delz(xds["pressfc"], xds["tmp"], xds["spfh"])
-    prsl = lp.calc_layer_mean_pressure(xds["pressfc"], xds["tmp"], xds["spfh"], delz)
+    prsl = lp.calc_layer_mean_pressure(xds["pressfc"], xds["tmp"], xds["spfh"], xds["delz"])
 
     vars2d = [f for f in xds.keys() if "level" not in xds[f].dims]
     vars3d = [f for f in xds.keys() if "level" in xds[f].dims]
@@ -147,7 +170,7 @@ def interp2pressure(xds, plevels):
     results = {k: list() for k in vars3d}
     for p in plevels:
 
-        cds = lp._get_interp_coefficients(p*100, prsl)
+        cds = lp.get_interp_coefficients(p*100, prsl)
         mask = (cds["is_right"].sum("level") > 0) & (cds["is_left"].sum("level") > 0)
         for key in vars3d:
             interpolated = lp.interp2pressure(xds[key], p*100, prsl, cds)
@@ -165,22 +188,10 @@ if __name__ == "__main__":
 
     setup_log()
     p1, args = P1Emulator.from_parser()
-    dask.config.set(scheduler="threads", num_workers=p1.dask_threads)
+    dask.config.set(scheduler="threads", num_workers=48)
 
     duration = p1.target_lead_time[-1]
-
-    # open graphufs, and targets as is
-    gds = xr.open_zarr(f"/p1-evaluation/v1/validation/graphufs.{duration}.zarr")
-    tds = xr.open_zarr(f"/p1-evaluation/v1/validation/replay.{duration}.zarr")
-
-    # replay we actually want to get the original data, in order to avoid
-    # excessive interpolation error due to subsampled vertical levels
-    rds = p1.open_dataset()
-    rds = rds[list(gds.keys())]
-    valid_time = gds["time"] + gds["lead_time"]
-    time_vector = pd.date_range(gds["time"][0].values, valid_time.isel(time=-1, lead_time=-1).values, freq="3h")
-    rds = rds.sel(time=time_vector)
-    rds = rds.rename({"pfull": "level", "grid_xt": "lon", "grid_yt": "lat"})
+    gds, tds, rds, truth = open_datasets(p1)
 
     for ds, name in zip(
         [gds, tds, rds],
@@ -190,7 +201,7 @@ if __name__ == "__main__":
         logging.info(f"Interpolated to pressure levels...")
 
         # regrid and rename variables
-        ds = regrid_and_rename(ds, p1.wb2_obs_url)
+        ds = regrid_and_rename(ds, truth)
         logging.info(f"Done regridding...")
 
         path = f"/p1-evaluation/v1/validation/{name}.{duration}.postprocessed.zarr"

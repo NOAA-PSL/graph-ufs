@@ -24,11 +24,18 @@ class LinePlotter():
         self.nicefig(fig, metric, truth)
         return fig, axs
 
-    def plot_levels(self, dsdict: dict, truth: str, metric: str = "mae", fields: tuple[str] = ("temperature", "specific_humidity", "u_component_of_wind", "v_component_of_wind"), levels: tuple[int] = (100, 500, 850)):
+    def plot_levels(
+        self,
+        dsdict: dict,
+        truth: str,
+        metric: str = "mae",
+        fields: tuple[str] = ("temperature", "specific_humidity", "u_component_of_wind", "v_component_of_wind"),
+        levels: tuple[int] = (100, 500, 850),
+    ):
 
         fig, axs = self.subplots(len(levels), len(fields))
 
-        if len(levels) == 1:
+        if len(levels) == 1 or len(fields) == 1:
             axs = [axs]
 
         for level, axr in zip(levels, axs):
@@ -57,25 +64,26 @@ class LinePlotter():
                     "color": color,
                     "label": label if sps.is_last_row() and sps.is_first_col() else None
                 }
-                plotme = xds[fld].sel(metric=metric)
-                if level is not None:
-                    if level in plotme.level:
-                        plotme = plotme.sel(level=level)
-                    else:
-                        plotme = None
+                if fld in xds:
+                    plotme = xds[fld].sel(metric=metric)
+                    if level is not None:
+                        if level in plotme.level:
+                            plotme = plotme.sel(level=level)
+                        else:
+                            plotme = None
 
-                if plotme is not None:
-                    if "lead_time" in plotme.coords:
-                        plotme.plot(ax=ax, **kw)
-                    else:
-                        ax.axhline(plotme, **kw)
+                    if plotme is not None:
+                        if "lead_time" in plotme.coords:
+                            plotme.plot(ax=ax, **kw)
+                        else:
+                            ax.axhline(plotme, **kw)
 
-                ax.set(
-                    xlabel="Lead time (days)" if sps.is_last_row() else "",
-                    ylabel="" if level is None or not sps.is_first_col() else f"{level} hPa",
-                    title=self.title(fld) if sps.is_first_row() else "",
-                    xticks=xticks,
-                    xticklabels=[x//24 for x in xticks],
-                    ylim=[0, None] if metric in ("mae", "mse") else [None, None],
-                    xlim=[-6, 252],
-                )
+            ax.set(
+                xlabel="Lead time (days)" if sps.is_last_row() else "",
+                ylabel="" if level is None or not sps.is_first_col() else f"{level} hPa",
+                title=self.title(fld) if sps.is_first_row() else "",
+                xticks=xticks,
+                xticklabels=[x//24 for x in xticks],
+                ylim=[0, None] if metric in ("mae", "mse") else [None, None],
+                xlim=[-6, 252],
+            )
