@@ -96,6 +96,7 @@ class P1Emulator(ReplayEmulator):
 
     # evaluation
     sample_stride = 9 # sample every 27h, results in 569 ICs, ~1.6 TiB of data
+    evaluation_checkpoint_id = 50
 
     # multi GPU and xla options
     num_gpus = 4

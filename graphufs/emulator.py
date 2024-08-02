@@ -76,6 +76,10 @@ class ReplayEmulator:
     store_loss = None               # store loss in a netcdf file
     use_preprocessed = None         # use pre-processed dataset
 
+    # evaluation
+    sample_stride = 1               # skip over initial conditions during evaluation by this stride
+    evaluation_checkpoint_id = None # checkpoint used in evaluation scripts
+
     # others
     num_gpus = None                 # number of GPUs to use for training
     log_only_rank0 = None           # log only messages from rank 0

@@ -93,6 +93,10 @@ class P1Emulator(ReplayEmulator):
     store_loss = True
     use_preprocessed = True
 
+    # evaluation
+    sample_stride = 9
+    evaluation_checkpoint_id = 50
+
     # multi GPU and xla options
     num_gpus = 1
     log_only_rank0 = False

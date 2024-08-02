@@ -168,7 +168,8 @@ if __name__ == "__main__":
     # setup weights
     logging.info(f"Reading weights ...")
     # TODO: this looks in local_store_path, but we may want to look somewhere else
-    params, state = p1.load_checkpoint(id=50)
+    ckpt_id = p1.evaluation_checkpoint_id if p1.evaluation_checkpoint_id is not None else p1.num_epochs
+    params, state = p1.load_checkpoint(id=ckpt_id)
 
     predict(
         params=params,

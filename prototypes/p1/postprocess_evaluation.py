@@ -188,7 +188,7 @@ if __name__ == "__main__":
 
     setup_log()
     p1, args = P1Emulator.from_parser()
-    dask.config.set(scheduler="threads", num_workers=48)
+    dask.config.set(scheduler="threads", num_workers=p1.dask_threads)
 
     duration = p1.target_lead_time[-1]
     gds, tds, rds, truth = open_datasets(p1)
