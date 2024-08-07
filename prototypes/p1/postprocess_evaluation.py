@@ -81,7 +81,7 @@ def create_output_dataset(lat, lon, is_gaussian):
 
 def get_valid_initial_conditions(forecast, truth):
 
-    if "lead_time" in forecast:
+    if "lead_time" in forecast.dims:
         forecast_valid_time = forecast["time"] + forecast["lead_time"]
         valid_time = list(set(truth["time"].values).intersection(set(forecast_valid_time.values.flatten())))
 
@@ -152,6 +152,8 @@ def interp2pressure(xds, plevels):
     """Assume plevels is in hPa"""
 
     lp = Layers2Pressure()
+    if "delz" not in xds:
+        xds["delz"] = lp.calc_delz(xds["pressfc"], xds["tmp"], xds["spfh"])
     prsl = lp.calc_layer_mean_pressure(xds["pressfc"], xds["tmp"], xds["spfh"], xds["delz"])
 
     vars2d = [f for f in xds.keys() if "level" not in xds[f].dims]

@@ -17,35 +17,23 @@ from graphufs.datasets import Dataset
 
 from p1stacked import P1Emulator
 
-def swap_batch_time_dims(predictions, targets, inittimes):
+def swap_batch_time_dims(xds, inittimes):
 
-    predictions = predictions.rename({"time": "lead_time"})
-    targets = targets.rename({"time": "lead_time"})
+    xds = xds.rename({"time": "lead_time"})
 
     # create "time" dimension = t0
-    predictions["time"] = xr.DataArray(
+    xds["time"] = xr.DataArray(
         inittimes,
-        coords=predictions["batch"].coords,
-        dims=predictions["batch"].dims,
-        attrs={
-            "description": "Forecast initialization time, last timestep of initial conditions",
-        },
-    )
-
-    targets["time"] = xr.DataArray(
-        inittimes,
-        coords=targets["batch"].coords,
-        dims=targets["batch"].dims,
+        coords=xds["batch"].coords,
+        dims=xds["batch"].dims,
         attrs={
             "description": "Forecast initialization time, last timestep of initial conditions",
         },
     )
 
     # swap logical batch for t0
-    predictions = predictions.swap_dims({"batch": "time"}).drop_vars("batch")
-    targets = targets.swap_dims({"batch": "time"}).drop_vars("batch")
-
-    return predictions, targets
+    xds = xds.swap_dims({"batch": "time"}).drop_vars("batch")
+    return xds
 
 
 def store_container(path, xds, time, **kwargs):
@@ -120,7 +108,8 @@ def predict(
         )
 
         # Add t0 as new variable, and swap out for logical sample/batch index
-        predictions, targets = swap_batch_time_dims(predictions, targets, inittimes)
+        predictions = swap_batch_time_dims(predictions, inittimes)
+        targets = swap_batch_time_dims(predictions, inittimes)
 
         # Store to zarr one batch at a time
         if k == 0:
