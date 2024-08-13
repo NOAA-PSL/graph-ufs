@@ -153,7 +153,7 @@ class P1Emulator(ReplayEmulator):
     )
     validation_dates = (
         "2022-01-01T00",
-        "2023-10-13T03"
+        "2022-12-31T18"
     )
     testing_dates = (
         "2020-01-01T00",

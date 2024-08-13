@@ -57,7 +57,7 @@ if __name__ == "__main__":
 
     for ds, name in zip(
         [gds],
-        ["graphufs"],
+        ["graphufs_gdm"],
     ):
         ds = interp2pressure(ds, [100, 500, 850])
         logging.info(f"Interpolated to pressure levels...")
