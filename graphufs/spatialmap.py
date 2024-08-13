@@ -35,21 +35,6 @@ class SpatialMap():
     def get_figsize(ncols):
         return (5*ncols, 6)
 
-    @staticmethod
-    def get_extend(xdslist, vmin, vmax):
-        minval = np.min([xds.min().values for xds in xdslist])
-        maxval = np.max([xds.max().values for xds in xdslist])
-        vmin = minval if vmin is None else vmin
-        vmax = maxval if vmax is None else vmax
-
-        extend = "neither"
-        if minval < vmin:
-            extend = "min"
-        if maxval > vmax:
-            extend = "max" if extend == "neither" else "both"
-
-        return extend, vmin, vmax
-
 
     def plot(self, gda, tda, subselect=False, **kwargs):
 
@@ -83,7 +68,7 @@ class SpatialMap():
             gda = gda - 273.15
             tda = tda - 273.15
 
-        extend, kwargs["vmin"], kwargs["vmax"] = self.get_extend([gda, tda], kwargs["vmin"], kwargs["vmax"])
+        extend, kwargs["vmin"], kwargs["vmax"] = get_extend([gda, tda], kwargs["vmin"], kwargs["vmax"])
         kw = {"transform": ccrs.PlateCarree(), "add_colorbar": False, **kwargs}
 
         p = gda.plot(ax=axs[0], **kw)
@@ -98,3 +83,17 @@ class SpatialMap():
         fig.colorbar(p, ax=axs, orientation="horizontal", shrink=.6, aspect=35, label=label, extend=extend)
         return fig, axs
 
+
+def get_extend(xdslist, vmin, vmax):
+    minval = np.min([xds.min().values for xds in xdslist])
+    maxval = np.max([xds.max().values for xds in xdslist])
+    vmin = minval if vmin is None else vmin
+    vmax = maxval if vmax is None else vmax
+
+    extend = "neither"
+    if minval < vmin:
+        extend = "min"
+    if maxval > vmax:
+        extend = "max" if extend == "neither" else "both"
+
+    return extend, vmin, vmax
