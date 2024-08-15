@@ -8,11 +8,11 @@ time_start="2022-01-01T00"
 time_stop="2023-10-13T03"
 surface_variables="surface_pressure,10m_u_component_of_wind,10m_v_component_of_wind,2m_temperature"
 level_variables="temperature,specific_humidity,u_component_of_wind,v_component_of_wind"
-extra_variables="o3mr,dpres,clwmr,grle,icmr,rwmr,snmr, ntrnc,nicp,soilt1,soill1,soilw1,snod,weasd,f10m,sfcr"
+extra_variables="o3mr,dpres,clwmr,grle,icmr,rwmr,snmr,ntrnc,nicp,soilt1,soill1,soilw1,snod,weasd,f10m,sfcr"
 all_variables="${surface_variables},total_precipitation_3hr,${extra_variables},${level_variables}"
 
 levels=100,500,850
-native_levels=998.7807,847.7832,505.65207,243.94986,97.823265,47.810493
+native_levels=998.780701,847.783203,505.652069,231.394791,112.316956,1.124391
 
 truth_names=("era5" "hres_analysis")
 truth_paths=( \
@@ -23,7 +23,7 @@ rename_variables='{"pressfc":"surface_pressure","ugrd10m":"10m_u_component_of_wi
 
 
 # Standard WB2 deterministic evaluation
-for dataset in "graphufs"
+for dataset in "graphufs_gdm"
 do
 
     forecast_path=${output_dir}/${dataset}.${forecast_duration}.postprocessed.zarr
@@ -72,38 +72,18 @@ do
       --rename_variables=${rename_variables}
 done
 
-## evaluate native against replay
-#python weatherbench2/scripts/evaluate.py \
-#  --forecast_path=${output_dir}/graphufs.${forecast_duration}.zarr \
-#  --obs_path=${output_dir}/replay.${forecast_duration}.zarr \
-#  --by_init=True \
-#  --output_dir=${output_dir} \
-#  --output_file_prefix=graphufs_vs_replay_${forecast_duration}_ \
-#  --eval_configs=deterministic,deterministic_spatial,deterministic_temporal \
-#  --time_start=${time_start} \
-#  --time_stop=${time_stop} \
-#  --evaluate_climatology=False \
-#  --evaluate_persistence=False \
-#  --variables=${all_variables} \
-#  --rename_variables=${rename_variables} \
-#  --levels=${native_levels}
-
-## evaluate derived delz native against replay
-#for dataset in "graphufs" "replay"
-#do 
-#    echo "Evaluating ${dataset} derived delz against replay"
-#    python weatherbench2/scripts/evaluate.py \
-#      --forecast_path=${output_dir}/${dataset}.${forecast_duration}.diagdelz.zarr \
-#      --obs_path=${output_dir}/replay.${forecast_duration}.zarr \
-#      --by_init=True \
-#      --output_dir=${output_dir} \
-#      --output_file_prefix=${dataset}_vs_replay_${forecast_duration}_diagdelz_ \
-#      --eval_configs=deterministic,deterministic_temporal,deterministic_spatial \
-#      --time_start=${time_start} \
-#      --time_stop=${time_stop} \
-#      --evaluate_climatology=False \
-#      --evaluate_persistence=False \
-#      --variables="layer_thickness" \
-#      --rename_variables='{"delz":"layer_thickness","lat":"latitude","lon":"longitude"}' \
-#      --levels=${native_levels}
-#done
+# evaluate native against replay
+python weatherbench2/scripts/evaluate.py \
+  --forecast_path=${output_dir}/graphufs_gdm.${forecast_duration}.zarr \
+  --obs_path=${output_dir}/replay_gdm.${forecast_duration}.zarr \
+  --by_init=True \
+  --output_dir=${output_dir} \
+  --output_file_prefix=graphufs_gdm_vs_replay_gdm_${forecast_duration}_ \
+  --eval_configs=deterministic,deterministic_spatial,deterministic_temporal \
+  --time_start=${time_start} \
+  --time_stop=${time_stop} \
+  --evaluate_climatology=False \
+  --evaluate_persistence=False \
+  --variables=${all_variables} \
+  --rename_variables=${rename_variables} \
+  --levels=${native_levels}

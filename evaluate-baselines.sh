@@ -41,12 +41,13 @@ do
         levels=100,500,850
     fi
 
-    if [[ ${model_name} == "graphcast" && ${truth_name} == "hres_analysis" ]] ; then
+    rename_variables="None"
+    configs="deterministic"
+    if [[ ${model_name} == "graphcast" ]]  ; then
         rename_variables="{'lat':'latitude','lon':'longitude'}"
-        configs="deterministic,deterministic_spatial,deterministic_temporal"
-    else
-        rename_variables="None"
-        configs="deterministic"
+        if [[ ${truth_name} == "hres_analysis" ]] ; then
+            configs="deterministic,deterministic_spatial,deterministic_temporal"
+        fi
     fi
 
     for j in "${!truth_names[@]}"
