@@ -76,7 +76,8 @@ class StatisticsComputer:
             ds = ds[data_vars]
 
         # subsample in time
-        ds = self.subsample_time(ds)
+        if "time" in ds.dims:
+            ds = self.subsample_time(ds)
         localtime.stop()
 
         # load if not 3D
@@ -94,9 +95,10 @@ class StatisticsComputer:
         self.calc_stddev_by_level(ds)
         localtime.stop()
 
-        localtime.start("Computing diff stddev")
-        self.calc_diffs_stddev_by_level(ds)
-        localtime.stop()
+        if "time" in ds.dims:
+            localtime.start("Computing diff stddev")
+            self.calc_diffs_stddev_by_level(ds)
+            localtime.stop()
 
         walltime.stop("Total Walltime")
 
@@ -154,9 +156,10 @@ class StatisticsComputer:
             result = xds.std(dims)
 
         for key in result.data_vars:
-            result[key].attrs["description"] = "standard deviation over lat, lon, time"
-            result[key].attrs["stats_start_date"] = self._time2str(xds["time"][0])
-            result[key].attrs["stats_end_date"] = self._time2str(xds["time"][-1])
+            result[key].attrs["description"] = f"standard deviation over {str(dims)}"
+            if "time" in xds.dims:
+                result[key].attrs["stats_start_date"] = self._time2str(xds["time"][0])
+                result[key].attrs["stats_end_date"] = self._time2str(xds["time"][-1])
 
         this_path_out = os.path.join(
             self.path_out,
@@ -179,9 +182,10 @@ class StatisticsComputer:
             result = xds.mean(dims)
 
         for key in result.data_vars:
-            result[key].attrs["description"] = "average over lat, lon, time"
-            result[key].attrs["stats_start_date"] = self._time2str(xds["time"][0])
-            result[key].attrs["stats_end_date"] = self._time2str(xds["time"][-1])
+            result[key].attrs["description"] = f"average over {str(dims)}"
+            if "time" in xds.dims:
+                result[key].attrs["stats_start_date"] = self._time2str(xds["time"][0])
+                result[key].attrs["stats_end_date"] = self._time2str(xds["time"][-1])
 
         this_path_out = os.path.join(
             self.path_out,
