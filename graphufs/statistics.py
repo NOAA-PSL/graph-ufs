@@ -1,4 +1,5 @@
 import os
+import logging
 import numpy as np
 import xarray as xr
 from ufs2arco.timer import Timer
@@ -140,6 +141,7 @@ class StatisticsComputer:
             "diffs_stddev_by_level.zarr",
         )
         result.to_zarr(this_path_out, **self.to_zarr_kwargs)
+        logging.info(f"Stored result: {this_path_out}")
         return result
 
     def calc_stddev_by_level(self, xds):
@@ -166,6 +168,7 @@ class StatisticsComputer:
             "stddev_by_level.zarr",
         )
         result.to_zarr(this_path_out, **self.to_zarr_kwargs)
+        logging.info(f"Stored result: {this_path_out}")
         return result
 
     def calc_mean_by_level(self, xds):
@@ -192,6 +195,7 @@ class StatisticsComputer:
             "mean_by_level.zarr",
         )
         result.to_zarr(this_path_out, **self.to_zarr_kwargs)
+        logging.info(f"Stored result: {this_path_out}")
         return result
 
     @staticmethod

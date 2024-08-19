@@ -14,7 +14,7 @@ def main(varname):
 
     normer = StatisticsComputer(
         path_in=path_in,
-        path_out="gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/fv3.statistics.1993-2019",
+        path_out="gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.statistics.1993-2019",
         start_date=None, # original start date
         end_date="2019",
         time_skip=None,
