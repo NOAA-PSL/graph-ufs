@@ -16,42 +16,46 @@ class P1Emulator(ReplayEmulator):
 
     # task config options
     input_variables = (
+        # 3D Variables
         "delz",
-        "hgtsfc",
-        "land",
-        "tmp2m",
-        "pressfc",
-        "ugrd10m",
-        "vgrd10m",
-        "prateb_ave",
-        "dswrf_avetoa",
         "tmp",
         "ugrd",
         "vgrd",
         "dzdt",
         "spfh",
+        # 2D Surface Variables
+        "tmp2m",
+        "pressfc",
+        "ugrd10m",
+        "vgrd10m",
+        "prateb_ave",
+        # Static inputs
+        "hgtsfc_static",
+        "land_static",
+        # Forcing variables at input time
+        "dswrf_avetoa",
         "year_progress_sin",
         "year_progress_cos",
         "day_progress_sin",
         "day_progress_cos",
     )
     target_variables = (
+        # 3D Variables
         "delz",
-        "tmp2m",
-        "pressfc",
-        "ugrd10m",
-        "vgrd10m",
-        "prateb_ave",
         "tmp",
         "ugrd",
         "vgrd",
         "dzdt",
         "spfh",
+        # 2D Surface Variables
+        "tmp2m",
+        "pressfc",
+        "ugrd10m",
+        "vgrd10m",
+        "prateb_ave",
     )
     forcing_variables = (
         "dswrf_avetoa",
-        "land",
-        "hgtsfc",
         "year_progress_sin",
         "year_progress_cos",
         "day_progress_sin",
