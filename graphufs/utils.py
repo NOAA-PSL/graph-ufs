@@ -244,17 +244,19 @@ def get_last_input_mapping(gds):
     inputs_index = get_channel_index(xinputs)
     targets_index = get_channel_index(xtargets)
 
-    # figure out n_time
+    # figure out the max number of timesteps to keep track of
     n_time = 0
     for ival in inputs_index.values():
-        n_time = max(n_time, ival["time"]+1)
+        this_n_time = ival.get("time", -1) + 1
+        n_time = max(n_time, this_n_time)
 
     assert n_time > 0, "Could not find time > 0 in inputs_index"
 
     mapper = {}
     for ti, tval in targets_index.items():
         for ii, ival in inputs_index.items():
-            is_match = ival["time"] == n_time - 1
+            this_n_time = ival.get("time", 0)
+            is_match = this_n_time == n_time - 1
 
             for k, v in tval.items():
                 if k != "time":
@@ -262,6 +264,9 @@ def get_last_input_mapping(gds):
 
             if is_match:
                 mapper[ti] = ii
+        varname = tval["varname"]
+        logging.debug(f"graphufs.utils.get_last_input_mapping: {varname} targets index = {ti}, last time slot of input index = {mapper[ti]}")
+
     return mapper
 
 def add_emulator_arguments(emulator, parser) -> None:

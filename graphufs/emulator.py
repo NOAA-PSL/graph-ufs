@@ -648,11 +648,14 @@ class ReplayEmulator:
 
             else:
                 xds = xr.open_zarr(self.norm_urls[component], storage_options={"token":"anon"})
-                myvars = list(x for x in self.all_variables if x in xds)
-                xds = xds[myvars]
-                xds = xds.sel(pfull=self.levels)
-                xds = xds.load()
-                xds = xds.rename({"pfull": "level"})
+                # keep attributes in order to distinguish static from time varying components
+                with xr.set_options(keep_attrs=True):
+                    myvars = list(x for x in self.all_variables if x in xds)
+                    xds = xds[myvars]
+                    xds = xds.sel(pfull=self.levels)
+                    xds = xds.load()
+                    xds = xds.rename({"pfull": "level"})
+
                 xds.to_zarr(local_path)
             return xds
 
@@ -707,11 +710,13 @@ class ReplayEmulator:
 
         def stackit(xds, varnames, n_time, **kwargs):
             norms = xds[[x for x in varnames if x in xds]]
-            # do this to replicate across time dimension
-            norms = xr.concat(
-                [norms.copy() for _ in range(n_time)],
-                dim="time",
-            )
+            # replicate time varying variables
+            for key in norms.data_vars:
+                if "time" in xds[key].attrs["description"]:
+                    norms[key] = xr.concat(
+                        [norms[key].copy() for _ in range(n_time)],
+                        dim="time",
+                    )
             dimorder = ("batch", "time", "level", "lat", "lon")
             dimorder = tuple(x for x in dimorder if x in norms.dims)
             norms = norms.transpose(*dimorder)
