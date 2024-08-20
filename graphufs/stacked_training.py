@@ -92,6 +92,13 @@ def init_model(emulator, inputs, last_input_channel_mapping):
     )
     return params, state
 
+def add_trees(tree1, tree2):
+    def add_inplace(x, y):
+        x += y
+        return x
+
+    tree_util.tree_map(add_inplace, tree1, tree2)
+    return tree1
 
 def optimize(
     params, state, optimizer, emulator, trainer, validator, weights, last_input_channel_mapping, opt_state=None
@@ -142,6 +149,7 @@ def optimize(
 
         # NOTE I think this can be deleted and we can just use loss_fn.apply directly
         def _aux(params, state, i, t):
+
             (loss, diagnostics), next_state = loss_fn.apply(
                 inputs=i,
                 targets=t,
@@ -153,14 +161,30 @@ def optimize(
 
         # process one batch per GPU
         def process_batch(inputs, targets):
-            (loss, (diagnostics, next_state)), grads = value_and_grad(
-                _aux, has_aux=True
-            )(
-                params,
-                state,
-                inputs,
-                targets,
-            )
+
+            batch_size = inputs.shape[0]
+
+            for i in range(batch_size):
+
+                (local_loss, (local_diagnostics, local_next_state)), local_grads = value_and_grad(
+                    _aux, has_aux=True
+                )(
+                    params,
+                    state,
+                    inputs[i, ...],
+                    targets[i, ...],
+                )
+                if i == 0:
+                    loss = local_loss / batch_size
+                    grads = local_grads
+                    diagnostics = local_diagnostics
+                    next_state = local_next_state
+                else:
+                    loss += local_loss / batch_size
+                    add_trees(grads, local_grads)
+                    add_trees(diagnostics, local_diagnostics)
+                    add_trees(next_state, local_next_state)
+
             return (loss, (diagnostics, next_state)), grads
 
         (loss, (diagnostics, next_state)), grads = process_batch(
@@ -185,21 +209,28 @@ def optimize(
         logging.info("Started jitting optim_step")
 
         # jitted function
-        first_input, first_target = trainer.get_data()
-        first_input = jax.device_put(first_input, sharding)
-        first_target = jax.device_put(first_target, sharding)
-
         optimize.optim_step_jitted = jit(optim_step)
-        x, *_ = optimize.optim_step_jitted(
-            params=params,
-            state=state,
-            opt_state=opt_state,
-            input_batch=first_input,
-            target_batch=first_target,
-        )
+
+        input_batch, target_batch = trainer.get_data()
+        input_batch = jax.device_put(input_batch, sharding)
+        target_batch = jax.device_put(target_batch, sharding)
+        optimize.input_batch = input_batch
+        optimize.target_batch = target_batch
+
+        for k in range(min(2, len(trainer))):
+            x, *_ = optimize.optim_step_jitted(
+                params=params,
+                state=state,
+                opt_state=opt_state,
+                input_batch=input_batch,
+                target_batch=target_batch,
+            )
+
+            block_until_ready(x)
+
         # refill the queue because we pulled this first item
         trainer.restart()
-        block_until_ready(x)
+
 
 
         # Unclear if it's safe to assume whether we'll have the drop_last attr or not
@@ -244,7 +275,10 @@ def optimize(
     weights = jax.device_put(weights, all_gpus)
     last_input_channel_mapping = jax.device_put(last_input_channel_mapping, all_gpus)
 
-    progress_bar = tqdm(total=n_steps, ncols=140, desc="Processing")
+    input_batch = optimize.input_batch
+    target_batch = optimize.target_batch
+
+    progress_bar = tqdm(total=n_steps, ncols=100, desc="Processing")
     for k, (input_batch, target_batch) in enumerate(trainer):
 
         input_batch = jax.device_put(input_batch, sharding)
@@ -270,7 +304,7 @@ def optimize(
         learning_rates.append(lr)
 
         progress_bar.set_description(
-            f"loss = {loss:.5f}, qsize = {trainer.data_queue.qsize()}, LR = {lr:.2e}",
+            f"loss = {loss:.5f}, LR = {lr:.2e}",
         )
         progress_bar.update()
 
@@ -280,10 +314,7 @@ def optimize(
     # validation
     loss_valid_values = []
     n_steps_valid = len(validator)
-    assert (
-        n_steps_valid <= n_steps
-    ), f"Number of validation steps ({n_steps_valid}) must be less than or equal to the number of training steps ({n_steps})"
-    progress_bar = tqdm(total=n_steps_valid, ncols=140, desc="Processing")
+    progress_bar = tqdm(total=n_steps_valid, ncols=100, desc="Processing")
     for input_batch, target_batch in validator:
 
         input_batch = jax.device_put(input_batch, sharding)
@@ -298,7 +329,7 @@ def optimize(
         )
         loss_valid_values.append(loss_valid)
         progress_bar.set_description(
-            f"validation loss = {loss_valid:.5f}, qsize = {validator.data_queue.qsize()}"
+            f"validation loss = {loss_valid:.5f}"
         )
         progress_bar.update()
     loss_valid_avg = np.mean(loss_valid)
