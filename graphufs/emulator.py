@@ -289,6 +289,16 @@ class ReplayEmulator:
 
         return xds
 
+    def check_for_ints(self, xds):
+        """Turn data variable integers into floats, because otherwise the normalization in GraphCast goes haywire
+        """
+
+        for key in xds.data_vars:
+            if "int" in str(xds[key].dtype):
+                logging.debug(f"Converting {key} from {xds[key].dtype} to float32")
+                xds[key] = xds[key].astype(np.float32)
+        return xds
+
 
     def preprocess(self, xds, batch_index=None):
         """Prepare a single batch for GraphCast
@@ -343,6 +353,7 @@ class ReplayEmulator:
             else:
                 all_xds = xds_on_disk
 
+        all_xds = self.check_for_ints(all_xds)
         return all_xds
 
     @staticmethod

@@ -137,6 +137,7 @@ class Dataset():
         xds = self.emulator.open_dataset()
         time = self.emulator.get_time(mode=self.mode)
         xds = self.emulator.subsample_dataset(xds, new_time=time)
+        xds = self.emulator.check_for_ints(xds)
         xds = xds.rename({
             "time": "datetime",
             "pfull": "level",
