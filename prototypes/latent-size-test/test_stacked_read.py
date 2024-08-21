@@ -83,6 +83,7 @@ def remote_read_tensorstore_test(p1, num_tries=10):
     iterloader = iter(trainer)
     avg_time = dict()
     num_workers = 1
+    timer1.start(f"{num_workers}")
     for k in range(num_tries):
         x,y = next(iterloader)
 
@@ -106,5 +107,5 @@ if __name__ == "__main__":
     # parse arguments
     emulator = LatentTestEmulator()
 
-    remote_read_test(emulator, num_tries=5)
+    #remote_read_test(emulator, num_tries=5)
     remote_read_tensorstore_test(emulator, num_tries=5)

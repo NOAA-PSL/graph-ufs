@@ -3,6 +3,7 @@ import sys
 import logging
 from functools import partial
 
+import dask
 import numpy as np
 import optax
 from graphufs.stacked_training import (
@@ -54,6 +55,7 @@ if __name__ == "__main__":
 
     # parse arguments
     emulator, args = LatentTestEmulator.from_parser()
+    dask.config.set(scheduler="threads", num_workers=emulator.dask_threads)
 
     # for multi-gpu training
     init_devices(emulator)
