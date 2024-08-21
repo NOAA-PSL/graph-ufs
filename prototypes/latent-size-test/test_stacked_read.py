@@ -107,5 +107,5 @@ if __name__ == "__main__":
     # parse arguments
     emulator = LatentTestEmulator()
 
-    #remote_read_test(emulator, num_tries=5)
-    remote_read_tensorstore_test(emulator, num_tries=5)
+    remote_read_test(emulator, num_tries=5)
+    #remote_read_tensorstore_test(emulator, num_tries=5)

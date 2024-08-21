@@ -11,7 +11,7 @@ class LatentTestEmulator(ReplayEmulator):
         "stddiff": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.statistics.1993-2019/diffs_stddev_by_level.zarr",
     }
     wb2_obs_url = "gs://weatherbench2/datasets/era5/1959-2023_01_10-6h-240x121_equiangular_with_poles_conservative.zarr"
-    local_store_path = "./local-data"
+    local_store_path = "/testlfs/latent-size-test"
     cache_data = True
 
     # task config options
@@ -105,8 +105,8 @@ class LatentTestEmulator(ReplayEmulator):
     )
 
     # training protocol
-    batch_size = 32
-    num_epochs = 125
+    batch_size = 32 #16
+    num_epochs = 127 #64
     chunks_per_epoch = 48
     steps_per_chunk = None
     checkpoint_chunks = 1
@@ -131,12 +131,12 @@ class LatentTestEmulator(ReplayEmulator):
     log_only_rank0 = False
     use_jax_distributed = False
     use_xla_flags = False
-    dask_threads = 16
+    dask_threads = 32
 
     # model config options
     resolution = 1.0
     mesh_size = 5
-    latent_size = 512
+    latent_size = 256
     gnn_msg_steps = 16
     hidden_layers = 1
     radius_query_fraction_edge_length = 0.6
