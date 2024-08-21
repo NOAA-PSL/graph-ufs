@@ -109,7 +109,7 @@ def store_batch_of_samples(mode):
 
         idx0 = int(inputs.sample.isel(sample=0))
         idx1 = int(inputs.sample.isel(sample=-1))
-        logging.info(f" ... storing indices {idx0} - {idx1}")
+        logging.info(f" ... storing sample indices {idx0} - {idx1}")
         spatial_region = {k : slice(None, None) for k in inputs.dims if k != "sample"}
         region = {"sample": slice(idx0, idx1+1), **spatial_region}
 
@@ -122,7 +122,7 @@ def store_batch_of_samples(mode):
             xda.to_dataset(name=name).to_zarr(path, region=region)
 
         if idx % 10 == 0:
-            logging.info(f"Done with index {idx} / {len(loader)}")
+            logging.info(f"Done with batch {idx} / {len(loader)}")
 
     logging.info(f"Done with mode {mode}")
 
