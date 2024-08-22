@@ -206,6 +206,10 @@ def optimize(
 
     # jit optim_step only once
     if not hasattr(optimize, "optim_step_jitted"):
+        # Unclear if it's safe to assume whether we'll have the drop_last attr or not
+        if not trainer.drop_last:
+            raise NotImplementedError
+
         logging.info("Started jitting optim_step")
 
         # jitted function
@@ -217,26 +221,17 @@ def optimize(
         optimize.input_batch = input_batch
         optimize.target_batch = target_batch
 
-        for k in range(min(2, len(trainer))):
-            x, *_ = optimize.optim_step_jitted(
-                params=params,
-                state=state,
-                opt_state=opt_state,
-                input_batch=input_batch,
-                target_batch=target_batch,
-            )
+        x, *_ = optimize.optim_step_jitted(
+            params=params,
+            state=state,
+            opt_state=opt_state,
+            input_batch=input_batch,
+            target_batch=target_batch,
+        )
 
-            block_until_ready(x)
-
-        # refill the queue because we pulled this first item
-        trainer.restart()
-
-
-
-        # Unclear if it's safe to assume whether we'll have the drop_last attr or not
-        if not trainer.drop_last:
-            raise NotImplementedError
+        block_until_ready(x)
         logging.info("Finished jitting optim_step")
+        trainer.restart(cancel=True)
 
 
     if not hasattr(optimize, "vloss_jitted"):
@@ -256,9 +251,9 @@ def optimize(
             rng=PRNGKey(0),
         )
         # refill validation queue since the first one was popped
-        validator.restart()
         block_until_ready(x)
         logging.info("Finished jitting validation loss")
+        validator.restart(cancel=True)
 
 
     # training

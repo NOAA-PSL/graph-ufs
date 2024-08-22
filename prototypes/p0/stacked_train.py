@@ -49,12 +49,14 @@ if __name__ == "__main__":
         batch_size=gufs.batch_size,
         shuffle=True,
         drop_last=True,
+        num_workers=gufs.num_workers,
     )
     validator = BatchLoader(
         validation_data,
         batch_size=gufs.batch_size,
         shuffle=True,
         drop_last=True,
+        num_workers=gufs.num_workers,
     )
 
     # compute loss function weights once
@@ -65,45 +67,40 @@ if __name__ == "__main__":
     last_input_channel_mapping = get_last_input_mapping(training_data)
 
     # load weights or initialize a random model
-    if gufs.checkpoint_exists(args.id) and args.id >= 0:
-        logging.info(f"Loading weights: {args.id}")
-        params, state = gufs.load_checkpoint(args.id)
-    else:
-        logging.info("Initializing Optimizer and Parameters")
-        inputs, _ = trainer.get_data()
-        params, state = init_model(gufs, inputs, last_input_channel_mapping)
-        loss_name = f"{gufs.local_store_path}/loss.nc"
-        if os.path.exists(loss_name):
-            os.remove(loss_name)
+    logging.info("Initializing Optimizer and Parameters")
+    inputs, _ = trainer.get_data()
+    params, state = init_model(gufs, inputs, last_input_channel_mapping)
+
+    loss_name = f"{gufs.local_store_path}/loss.nc"
+    if os.path.exists(loss_name):
+        os.remove(loss_name)
 
     # training
     opt_state = None
-    if not args.test:
-        logging.info("Starting Training")
+    logging.info("Starting Training")
 
-        optimizer = optax.adam(learning_rate=1e-4)
+    optimizer = optax.adam(learning_rate=1e-4)
 
-        # training loop
-        for e in range(gufs.num_epochs):
-            logging.info(f"Training on epoch {e}")
+    # training loop
+    for e in range(gufs.num_epochs):
+        logging.info(f"Training on epoch {e}")
 
-            # optimize
-            params, loss, opt_state = optimize(
-                params=params,
-                state=state,
-                optimizer=optimizer,
-                emulator=gufs,
-                trainer=trainer,
-                validator=validator,
-                weights=weights,
-                last_input_channel_mapping=last_input_channel_mapping,
-                opt_state=opt_state,
-            )
+        # optimize
+        params, loss, opt_state = optimize(
+            params=params,
+            state=state,
+            optimizer=optimizer,
+            emulator=gufs,
+            trainer=trainer,
+            validator=validator,
+            weights=weights,
+            last_input_channel_mapping=last_input_channel_mapping,
+            opt_state=opt_state,
+        )
 
-            # save weights
-            ckpt_id = e
-            gufs.save_checkpoint(params, ckpt_id)
+        # save weights
+        ckpt_id = e
+        gufs.save_checkpoint(params, ckpt_id)
 
-    # testing
-    else:
-        raise NotImplementedError
+    trainer.shutdown(cancel=True)
+    validator.shutdown(cancel=True)
