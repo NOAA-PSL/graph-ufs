@@ -26,39 +26,40 @@ do
     forecast_path=${output_dir}/${dataset}.${t0}.${forecast_duration}.postprocessed.zarr
     native_forecast_path=${output_dir}/${dataset}.${t0}.${forecast_duration}.zarr
 
-    for i in "${!truth_names[@]}"
-    do
-        truth_name=${truth_names[i]}
-        truth_path=${truth_paths[i]}
+    echo "Computing spectra for ${dataset} ..."
+    python weatherbench2/scripts/compute_zonal_energy_spectrum.py \
+      --input_path=${native_forecast_path} \
+      --output_path=${output_dir}/${dataset}.${t0}.${forecast_duration}.spectra.zarr \
+      --base_variables=${surface_variables} \
+      --time_dim="time" \
+      --time_start=${time_start} \
+      --time_stop=${time_stop} \
+      --levels=${native_levels} \
+      --averaging_dims="" \
+      --rename_variables=${rename_variables}
 
-        echo "Evaluating ${dataset} against ${truth_name} ..."
-        python weatherbench2/scripts/evaluate.py \
-          --forecast_path=${forecast_path} \
-          --obs_path=${truth_path} \
-          --climatology_path=gs://weatherbench2/datasets/era5-hourly-climatology/1990-2019_6h_240x121_equiangular_with_poles_conservative.zarr \
-          --by_init=False \
-          --output_dir=${output_dir} \
-          --output_file_prefix=${dataset}_vs_${truth_name}_${forecast_duration}_ \
-          --eval_configs=deterministic_temporal \
-          --time_start=${time_start} \
-          --time_stop=${time_stop} \
-          --evaluate_climatology=False \
-          --evaluate_persistence=False \
-          --variables="${surface_variables},${level_variables}" \
-          --levels=${levels} \
-          --skipna=True
+#    for i in "${!truth_names[@]}"
+#    do
+#        truth_name=${truth_names[i]}
+#        truth_path=${truth_paths[i]}
+#
+#        echo "Evaluating ${dataset} against ${truth_name} ..."
+#        python weatherbench2/scripts/evaluate.py \
+#          --forecast_path=${forecast_path} \
+#          --obs_path=${truth_path} \
+#          --climatology_path=gs://weatherbench2/datasets/era5-hourly-climatology/1990-2019_6h_240x121_equiangular_with_poles_conservative.zarr \
+#          --by_init=False \
+#          --output_dir=${output_dir} \
+#          --output_file_prefix=${dataset}_vs_${truth_name}_${forecast_duration}_ \
+#          --eval_configs=deterministic_temporal \
+#          --time_start=${time_start} \
+#          --time_stop=${time_stop} \
+#          --evaluate_climatology=False \
+#          --evaluate_persistence=False \
+#          --variables="${surface_variables},${level_variables}" \
+#          --levels=${levels} \
+#          --skipna=True
+#
+#    done
 
-    done
-
-    #echo "Computing spectra for ${dataset} ..."
-    #python weatherbench2/scripts/compute_zonal_energy_spectrum.py \
-    #  --input_path=${native_forecast_path} \
-    #  --output_path=${output_dir}/${dataset}.${t0}.${forecast_duration}.spectra.zarr \
-    #  --base_variables=${surface_variables} \
-    #  --time_dim="time" \
-    #  --time_start=${time_start} \
-    #  --time_stop=${time_stop} \
-    #  --levels=${native_levels} \
-    #  --averaging_dims="" \
-    #  --rename_variables=${rename_variables}
 done
