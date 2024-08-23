@@ -6,8 +6,6 @@ import threading
 import concurrent
 import queue
 
-import jax
-
 class BatchLoader():
     """
 
@@ -51,14 +49,12 @@ class BatchLoader():
         max_queue_size=1,
         rng_seed=None,
         sample_stride=None,
-        device_sharding=None,
     ):
 
         self.dataset = dataset
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.drop_last = drop_last
-        self.device_sharding = device_sharding
 
         self.sample_indices = list(int(idx) for idx in np.arange(len(self.dataset)))
         self.sample_stride = sample_stride
@@ -173,8 +169,6 @@ class BatchLoader():
         if self.num_workers > 0:
             data = self.data_queue.get()
             self.task_done()
-            if self.device_sharding is not None:
-                data = tuple(jax.device_put(x, self.device_sharding) for x in data)
             return data
         else:
             self.data_counter += 1

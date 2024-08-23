@@ -83,7 +83,7 @@ def init_model(emulator, inputs, last_input_channel_mapping):
     sharding = PositionalSharding(devices)
     sharding = sharding.reshape((emulator.num_gpus, 1, 1, 1))
 
-    #inputs = jax.device_put(inputs, sharding)
+    inputs = jax.device_put(inputs, sharding)
 
     init = jax.jit( run_forward.init )
     params, state = init(
@@ -216,8 +216,8 @@ def optimize(
         optimize.optim_step_jitted = jit(optim_step)
 
         input_batch, target_batch = trainer.get_data()
-        #input_batch = jax.device_put(input_batch, sharding)
-        #target_batch = jax.device_put(target_batch, sharding)
+        input_batch = jax.device_put(input_batch, sharding)
+        target_batch = jax.device_put(target_batch, sharding)
         optimize.input_batch = input_batch
         optimize.target_batch = target_batch
 
@@ -239,8 +239,8 @@ def optimize(
 
         first_input, first_target = validator.get_data()
 
-        #first_input = jax.device_put(first_input, sharding)
-        #first_target = jax.device_put(first_target, sharding)
+        first_input = jax.device_put(first_input, sharding)
+        first_target = jax.device_put(first_target, sharding)
 
         optimize.vloss_jitted = jit(loss_fn.apply)
         (x, _), _ = optimize.vloss_jitted(
@@ -276,8 +276,8 @@ def optimize(
     progress_bar = tqdm(total=n_steps, ncols=100, desc="Processing")
     for k, (input_batch, target_batch) in enumerate(trainer):
 
-        #input_batch = jax.device_put(input_batch, sharding)
-        #target_batch = jax.device_put(target_batch, sharding)
+        input_batch = jax.device_put(input_batch, sharding)
+        target_batch = jax.device_put(target_batch, sharding)
 
         # call optimize
         params, loss, diagnostics, opt_state, grads = optimize.optim_step_jitted(
@@ -312,8 +312,8 @@ def optimize(
     progress_bar = tqdm(total=n_steps_valid, ncols=100, desc="Processing")
     for input_batch, target_batch in validator:
 
-        #input_batch = jax.device_put(input_batch, sharding)
-        #target_batch = jax.device_put(target_batch, sharding)
+        input_batch = jax.device_put(input_batch, sharding)
+        target_batch = jax.device_put(target_batch, sharding)
 
         (loss_valid, _), _ = optimize.vloss_jitted(
             params=params,
