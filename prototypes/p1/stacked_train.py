@@ -117,5 +117,5 @@ if __name__ == "__main__":
         timer1.stop(f"Done with epoch {e+1}")
 
     logging.info("Done Training")
-    trainer.shutdown()
-    validator.shutdown()
+    trainer.shutdown(cancel=True)
+    validator.shutdown(cancel=True)
