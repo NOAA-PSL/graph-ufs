@@ -38,6 +38,10 @@ if __name__ == "__main__":
     # for multi-gpu training
     init_devices(gufs)
 
+    devices = jax.devices()
+    sharding = jax.sharding.PositionalSharding(devices)
+    sharding = sharding.reshape((gufs.num_gpus, 1, 1, 1))
+
     # data generators
     training_data = Dataset(gufs, mode="training")
     validation_data = Dataset(gufs, mode="validation")
@@ -50,6 +54,7 @@ if __name__ == "__main__":
         shuffle=True,
         drop_last=True,
         num_workers=gufs.num_workers,
+        device_sharding=sharding,
     )
     validator = BatchLoader(
         validation_data,
@@ -57,6 +62,7 @@ if __name__ == "__main__":
         shuffle=True,
         drop_last=True,
         num_workers=gufs.num_workers,
+        device_sharding=sharding,
     )
 
     # compute loss function weights once
