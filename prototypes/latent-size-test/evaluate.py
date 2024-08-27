@@ -15,7 +15,7 @@ from graphufs import init_devices, construct_wrapped_graphcast
 from graphufs.batchloader import ExpandedBatchLoader
 from graphufs.datasets import Dataset
 
-from p1stacked import P1Emulator
+from configeval import LatentTestEmulator
 
 def swap_batch_time_dims(xds, inittimes):
 
@@ -85,47 +85,83 @@ def predict(
     gc = drop_state(with_params(jax.jit(run_forward.apply)))
 
     hours = int(emulator.forecast_duration.value / 1e9 / 3600)
-    pname = f"/p1-evaluation/v1/{batchloader.dataset.mode}/graphufs.{hours}h.zarr"
-    tname = f"/p1-evaluation/v1/{batchloader.dataset.mode}/replay.{hours}h.zarr"
+    pname = f"{emulator.local_store_path}/evaluation/{batchloader.mode}/graphufs.{hours}h.zarr"
+    tname = f"{emulator.local_store_path}/evaluation/{batchloader.mode}/replay.{hours}h.zarr"
 
     n_steps = len(batchloader)
     progress_bar = tqdm(total=n_steps, ncols=80, desc="Processing")
-    for k in range(n_steps):
-        inputs, targets, forcings = batchloader.get_data()
+    #for k, (inputs, targets, forcings) in enumerate(batchloader):
+    #    if k == n_steps-1:
 
-        # retrieve and drop t0
-        inittimes = inputs.datetime.isel(time=-1).values
-        inputs = inputs.drop_vars("datetime")
-        targets = targets.drop_vars("datetime")
-        forcings = forcings.drop_vars("datetime")
+    #        # retrieve and drop t0
+    #        inittimes = inputs.datetime.isel(time=-1).values
+    #        inputs = inputs.drop_vars("datetime")
+    #        targets = targets.drop_vars("datetime")
+    #        forcings = forcings.drop_vars("datetime")
 
-        predictions = rollout.chunked_prediction(
-            gc,
-            rng=jax.random.PRNGKey(0),
-            inputs=inputs,
-            targets_template=np.nan * targets,
-            forcings=forcings,
-        )
+    #        predictions = rollout.chunked_prediction(
+    #            gc,
+    #            rng=jax.random.PRNGKey(0),
+    #            inputs=inputs,
+    #            targets_template=np.nan * targets,
+    #            forcings=forcings,
+    #        )
+    #        # Add t0 as new variable, and swap out for logical sample/batch index
+    #        predictions = swap_batch_time_dims(predictions, inittimes)
+    #        targets = swap_batch_time_dims(targets, inittimes)
 
-        # Add t0 as new variable, and swap out for logical sample/batch index
-        predictions = swap_batch_time_dims(predictions, inittimes)
-        targets = swap_batch_time_dims(targets, inittimes)
+    #        # Store to zarr one batch at a time
+    #        if k == 0:
+    #            store_container(pname, predictions, time=batchloader.initial_times)
+    #            store_container(tname, targets, time=batchloader.initial_times)
 
-        # Store to zarr one batch at a time
-        if k == 0:
-            store_container(pname, predictions, time=batchloader.initial_times)
-            store_container(tname, targets, time=batchloader.initial_times)
+    #        # Store to zarr
+    #        spatial_region = {k: slice(None, None) for k in predictions.dims if k != "time"}
+    #        region = {
+    #            "time": slice(k*batchloader.batch_size, (k+1)*batchloader.batch_size),
+    #            **spatial_region,
+    #        }
+    #        predictions.to_zarr(pname, region=region)
+    #        targets.to_zarr(tname, region=region)
 
-        # Store to zarr
-        spatial_region = {k: slice(None, None) for k in predictions.dims if k != "time"}
-        region = {
-            "time": slice(k*batchloader.batch_size, (k+1)*batchloader.batch_size),
-            **spatial_region,
-        }
-        predictions.to_zarr(pname, region=region)
-        targets.to_zarr(tname, region=region)
+    #    progress_bar.update()
 
-        progress_bar.update()
+    k = 315
+    inputs, targets, forcings = batchloader.dataset.get_batch_of_xarrays([k])
+    inputs.load();
+    targets.load();
+    forcings.load();
+
+    # retrieve and drop t0
+    inittimes = inputs.datetime.isel(time=-1).values
+    inputs = inputs.drop_vars("datetime")
+    targets = targets.drop_vars("datetime")
+    forcings = forcings.drop_vars("datetime")
+
+    predictions = rollout.chunked_prediction(
+        gc,
+        rng=jax.random.PRNGKey(0),
+        inputs=inputs,
+        targets_template=np.nan * targets,
+        forcings=forcings,
+    )
+    # Add t0 as new variable, and swap out for logical sample/batch index
+    predictions = swap_batch_time_dims(predictions, inittimes)
+    targets = swap_batch_time_dims(targets, inittimes)
+
+    # Store to zarr one batch at a time
+    if k == 0:
+        store_container(pname, predictions, time=batchloader.initial_times)
+        store_container(tname, targets, time=batchloader.initial_times)
+
+    # Store to zarr
+    spatial_region = {k: slice(None, None) for k in predictions.dims if k != "time"}
+    region = {
+        "time": slice(k*batchloader.batch_size, (k+1)*batchloader.batch_size),
+        **spatial_region,
+    }
+    predictions.to_zarr(pname, region=region)
+    targets.to_zarr(tname, region=region)
 
 
 if __name__ == "__main__":
@@ -134,7 +170,7 @@ if __name__ == "__main__":
         stream=sys.stdout,
         level=logging.INFO,
     )
-    p1, args = P1Emulator.from_parser()
+    p1, args = LatentTestEmulator.from_parser()
     init_devices(p1)
     dask.config.set(scheduler="threads", num_workers=p1.dask_threads)
 
@@ -146,11 +182,11 @@ if __name__ == "__main__":
 
     validator = ExpandedBatchLoader(
         vds,
-        batch_size=p1.batch_size,
+        batch_size=1,
         shuffle=False,
         drop_last=True,
-        num_workers=p1.num_workers,
-        max_queue_size=p1.max_queue_size,
+        num_workers=0,
+        max_queue_size=1,
         sample_stride=p1.sample_stride,
     )
 
@@ -166,3 +202,4 @@ if __name__ == "__main__":
         emulator=p1,
         batchloader=validator,
     )
+    validator.shutdown()

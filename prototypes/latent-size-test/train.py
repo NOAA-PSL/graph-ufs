@@ -10,7 +10,8 @@ from graphufs.stacked_training import (
     optimize,
     init_model,
 )
-from graphufs.datasets import Dataset
+from graphufs.datasets import Dataset, PackedDataset
+from graphufs.tensorstore import PackedDataset as TSPackedDataset, BatchLoader as TSBatchLoader
 from graphufs.batchloader import BatchLoader
 
 from graphufs.utils import get_last_input_mapping
@@ -55,35 +56,41 @@ if __name__ == "__main__":
 
     # parse arguments
     emulator, args = LatentTestEmulator.from_parser()
-    dask.config.set(scheduler="threads", num_workers=emulator.dask_threads)
+    #dask.config.set(scheduler="threads", num_workers=emulator.dask_threads)
 
     # for multi-gpu training
     init_devices(emulator)
 
     # data generators
-    training_data = Dataset(emulator, mode="training")
-    validation_data = Dataset(emulator, mode="validation")
+    tds = Dataset(emulator, mode="training")
+    #chunks = {"sample": 1, "lat": -1, "lon": -1, "channel": -1}
+    #training_data = PackedDataset(emulator, mode="training", chunks=chunks)
+    #validation_data = PackedDataset(emulator, mode="validation", chunks=chunks)
+    training_data = TSPackedDataset(emulator, mode="training")
+    validation_data = TSPackedDataset(emulator, mode="validation")
 
-    trainer = BatchLoader(
+
+    trainer = TSBatchLoader(
         training_data,
         batch_size=emulator.batch_size,
         shuffle=True,
         drop_last=True,
+        num_workers=emulator.num_workers,
+        max_queue_size=emulator.max_queue_size,
     )
-    validator = BatchLoader(
+    validator = TSBatchLoader(
         validation_data,
         batch_size=emulator.batch_size,
         shuffle=True,
         drop_last=True,
+        num_workers=emulator.num_workers,
+        max_queue_size=emulator.max_queue_size,
     )
 
     logging.info("Initializing Loss Function Weights and Stacked Mappings")
     # compute loss function weights once
-    weights = emulator.calc_loss_weights(training_data)
-
-    # this is tricky, because it needs to be "rebuildable" in JAX's eyes
-    # so better to just explicitly pass it around
-    last_input_channel_mapping = get_last_input_mapping(training_data)
+    loss_weights = emulator.calc_loss_weights(tds)
+    last_input_channel_mapping = get_last_input_mapping(tds)
 
     # initialize a random model
     logging.info("Initializing Optimizer and Parameters")
@@ -107,6 +114,7 @@ if __name__ == "__main__":
     )
 
     logging.info(f"Starting Training with:")
+    logging.info(f"\t batch_size = {emulator.batch_size}")
     logging.info(f"\t {n_linear} linearly increasing LR steps")
     logging.info(f"\t {n_cosine} cosine decay LR steps")
     logging.info(f"\t {n_total} total training steps")
@@ -125,7 +133,7 @@ if __name__ == "__main__":
             emulator=emulator,
             trainer=trainer,
             validator=validator,
-            weights=weights,
+            weights=loss_weights,
             last_input_channel_mapping=last_input_channel_mapping,
             opt_state=opt_state,
         )
@@ -134,5 +142,5 @@ if __name__ == "__main__":
         emulator.save_checkpoint(params, id=e+1)
 
     logging.info("Done Training")
-    trainer.shutdown()
-    validator.shutdown()
+    trainer.shutdown(cancel=True)
+    validator.shutdown(cancel=True)
