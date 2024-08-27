@@ -131,10 +131,10 @@ class BatchLoader():
         whereas self.data_counter is keeping track of how many data items have been put in the queue
         """
         if self.counter < len(self):
-            x, y = self.get_data()
+            data = self.get_data()
             with self.counter_lock:
                 self.counter += 1
-            return x, y
+            return data
         else:
             logging.debug(f"{self.mode} BatchLoader.__next__: counter > len(self)")
             raise StopIteration
@@ -273,9 +273,7 @@ class ExpandedBatchLoader(BatchLoader):
             ed = st + self.batch_size
             batch_indices = self.sample_indices[st:ed]
             data = self.dataset.get_batch_of_xarrays(batch_indices)
-            for d in data:
-                d.load()
-            return data
+            return (d.load() for d in data)
         else:
             logging.debug(f"{self.mode} BatchLoader.__next__: counter > len(self)")
             raise StopIteration
