@@ -171,8 +171,10 @@ class BatchLoader():
             self.task_done()
             return data
         else:
-            self.data_counter += 1
-            return self._next_data()
+            data = self._next_data()
+            with self.data_counter_lock:
+                self.data_counter += 1
+            return data
 
     def task_done(self):
         self.data_queue.task_done()
