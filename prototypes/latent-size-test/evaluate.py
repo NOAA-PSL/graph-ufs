@@ -88,80 +88,47 @@ def predict(
     pname = f"{emulator.local_store_path}/evaluation/{batchloader.mode}/graphufs.{hours}h.zarr"
     tname = f"{emulator.local_store_path}/evaluation/{batchloader.mode}/replay.{hours}h.zarr"
 
+    for storename in [pname, tname]:
+        thisdir = os.path.dirname(storename)
+        if not os.path.isdir(thisdir):
+            os.makedirs(thisdir)
+
     n_steps = len(batchloader)
     progress_bar = tqdm(total=n_steps, ncols=80, desc="Processing")
-    #for k, (inputs, targets, forcings) in enumerate(batchloader):
-    #    if k == n_steps-1:
+    for k, (inputs, targets, forcings) in enumerate(batchloader):
 
-    #        # retrieve and drop t0
-    #        inittimes = inputs.datetime.isel(time=-1).values
-    #        inputs = inputs.drop_vars("datetime")
-    #        targets = targets.drop_vars("datetime")
-    #        forcings = forcings.drop_vars("datetime")
+        # retrieve and drop t0
+        inittimes = inputs.datetime.isel(time=-1).values
+        inputs = inputs.drop_vars("datetime")
+        targets = targets.drop_vars("datetime")
+        forcings = forcings.drop_vars("datetime")
 
-    #        predictions = rollout.chunked_prediction(
-    #            gc,
-    #            rng=jax.random.PRNGKey(0),
-    #            inputs=inputs,
-    #            targets_template=np.nan * targets,
-    #            forcings=forcings,
-    #        )
-    #        # Add t0 as new variable, and swap out for logical sample/batch index
-    #        predictions = swap_batch_time_dims(predictions, inittimes)
-    #        targets = swap_batch_time_dims(targets, inittimes)
+        predictions = rollout.chunked_prediction(
+            gc,
+            rng=jax.random.PRNGKey(0),
+            inputs=inputs,
+            targets_template=np.nan * targets,
+            forcings=forcings,
+        )
+        # Add t0 as new variable, and swap out for logical sample/batch index
+        predictions = swap_batch_time_dims(predictions, inittimes)
+        targets = swap_batch_time_dims(targets, inittimes)
 
-    #        # Store to zarr one batch at a time
-    #        if k == 0:
-    #            store_container(pname, predictions, time=batchloader.initial_times)
-    #            store_container(tname, targets, time=batchloader.initial_times)
+        # Store to zarr one batch at a time
+        if k == 0:
+            store_container(pname, predictions, time=batchloader.initial_times)
+            store_container(tname, targets, time=batchloader.initial_times)
 
-    #        # Store to zarr
-    #        spatial_region = {k: slice(None, None) for k in predictions.dims if k != "time"}
-    #        region = {
-    #            "time": slice(k*batchloader.batch_size, (k+1)*batchloader.batch_size),
-    #            **spatial_region,
-    #        }
-    #        predictions.to_zarr(pname, region=region)
-    #        targets.to_zarr(tname, region=region)
+        # Store to zarr
+        spatial_region = {k: slice(None, None) for k in predictions.dims if k != "time"}
+        region = {
+            "time": slice(k*batchloader.batch_size, (k+1)*batchloader.batch_size),
+            **spatial_region,
+        }
+        predictions.to_zarr(pname, region=region)
+        targets.to_zarr(tname, region=region)
 
-    #    progress_bar.update()
-
-    k = 315
-    inputs, targets, forcings = batchloader.dataset.get_batch_of_xarrays([k])
-    inputs.load();
-    targets.load();
-    forcings.load();
-
-    # retrieve and drop t0
-    inittimes = inputs.datetime.isel(time=-1).values
-    inputs = inputs.drop_vars("datetime")
-    targets = targets.drop_vars("datetime")
-    forcings = forcings.drop_vars("datetime")
-
-    predictions = rollout.chunked_prediction(
-        gc,
-        rng=jax.random.PRNGKey(0),
-        inputs=inputs,
-        targets_template=np.nan * targets,
-        forcings=forcings,
-    )
-    # Add t0 as new variable, and swap out for logical sample/batch index
-    predictions = swap_batch_time_dims(predictions, inittimes)
-    targets = swap_batch_time_dims(targets, inittimes)
-
-    # Store to zarr one batch at a time
-    if k == 0:
-        store_container(pname, predictions, time=batchloader.initial_times)
-        store_container(tname, targets, time=batchloader.initial_times)
-
-    # Store to zarr
-    spatial_region = {k: slice(None, None) for k in predictions.dims if k != "time"}
-    region = {
-        "time": slice(k*batchloader.batch_size, (k+1)*batchloader.batch_size),
-        **spatial_region,
-    }
-    predictions.to_zarr(pname, region=region)
-    targets.to_zarr(tname, region=region)
+        progress_bar.update()
 
 
 if __name__ == "__main__":
