@@ -100,12 +100,12 @@ class DataGenerator:
 
         # initialize batch generator
         self.no_load_chunk = emulator.no_load_chunk
-        print("Starting to get batches...")
+        print(f"Starting to get {mode} batches")
         self.gen = emulator.get_batches(
             n_optim_steps=n_optim_steps,
             mode=mode,
         )
-        print("self.gen:", self.gen)
+        #print("self.gen:", self.gen)
 
         # create a thread pool of workers for generating data
         if self.num_workers > 0:

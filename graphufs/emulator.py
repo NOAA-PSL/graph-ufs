@@ -416,7 +416,7 @@ class ReplayCoupledEmulator:
 
 
         all_xds = self.get_the_data(all_new_time=all_new_time, mode=mode)
-        print("all_xds:", all_xds)
+        #print("all_xds:", all_xds)
         # split dataset into chunks
         n_chunks = self.chunks_per_epoch
         chunk_size = len(all_new_time) // n_chunks
