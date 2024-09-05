@@ -40,7 +40,7 @@ class CP0Emulator(ReplayCoupledEmulator):
         "SSH",
         "so",
         "temp",
-        #"landsea_mask"
+        "landsea_mask"
     )
     atm_target_variables = (
         "pressfc",
@@ -82,15 +82,15 @@ class CP0Emulator(ReplayCoupledEmulator):
     target_lead_time = "6h"     # how long is the forecast ... at what point do we compare model to targets
     training_dates = (          # bounds of training data (inclusive)
         "1994-01-01T00",        # start
-        "1994-12-31T18"         # stop
+        "1994-01-31T18"         # stop
     )
     testing_dates = (           # bounds of testing data (inclusive)
         "1995-01-01T00",        # start
-        "1995-12-31T18"         # stop
+        "1995-01-31T18"         # stop
     )
     validation_dates = (        # bounds of validation data (inclusive)
         "1996-01-01T00",        # start
-        "1996-12-31T18"         # stop
+        "1996-01-31T18"         # stop
     )
 
     # training protocol

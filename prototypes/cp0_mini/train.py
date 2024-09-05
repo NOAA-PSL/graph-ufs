@@ -118,10 +118,13 @@ if __name__ == "__main__":
         # create predictions and targets zarr file for WB2
         predictions_zarr_name = f"{gufs.local_store_path}/graphufs_predictions.zarr"
         targets_zarr_name = f"{gufs.local_store_path}/graphufs_targets.zarr"
+        inputs_zarr_name = f"{gufs.local_store_path}/graphufs_inputs.zarr"
         if os.path.exists(predictions_zarr_name):
             shutil.rmtree(predictions_zarr_name)
         if os.path.exists(targets_zarr_name):
             shutil.rmtree(targets_zarr_name)
+        if os.path.exists(inputs_zarr_name):
+            shutil.rmtree(inputs_zarr_name)
 
         stats = {}
         for c in range(gufs.chunks_per_epoch):
@@ -129,6 +132,7 @@ if __name__ == "__main__":
 
             # get chunk of data in parallel with inference
             data = generator.get_data()
+            print('Testing Data:', data)
 
             # run predictions
             predictions = predict(
@@ -139,7 +143,7 @@ if __name__ == "__main__":
                 target_batches=data["targets"],
                 forcing_batches=data["forcings"],
             )
-
+            inputs = data["inputs"]
             targets = data["targets"]
             inittimes = data["inittimes"]
 
@@ -147,14 +151,15 @@ if __name__ == "__main__":
             compute_rmse_bias(predictions, targets, stats, c)
 
             # write predictions chunk by chunk to avoid storing all of it in memory
-            predictions = convert_wb2_format(gufs, predictions, inittimes)
-            predictions = predictions.dropna("time")
+            #predictions = convert_wb2_format(gufs, predictions, inittimes)
+            #predictions = predictions.dropna("time")
             predictions.to_zarr(predictions_zarr_name, append_dim="time" if c else None)
 
             # write also targets to compute metrics against it with wb2
-            targets = convert_wb2_format(gufs, targets, inittimes)
-            targets = targets.dropna("time")
+            #targets = convert_wb2_format(gufs, targets, inittimes)
+            #targets = targets.dropna("time")
             targets.to_zarr(targets_zarr_name, append_dim="time" if c else None)
+            inputs.to_zarr(inputs_zarr_name, append_dim="time" if c else None)
 
         logging.info("--------- Statistiscs ---------")
         for k, v in stats.items():

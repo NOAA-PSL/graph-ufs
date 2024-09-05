@@ -21,7 +21,8 @@ from graphcast.losses import normalized_level_weights, normalized_latitude_weigh
 
 from .utils import (
     get_channel_index, get_last_input_mapping,
-    add_emulator_arguments, set_emulator_options
+    add_emulator_arguments, set_emulator_options,
+    get_num_params,
 )
 
 
@@ -346,7 +347,7 @@ class ReplayCoupledEmulator:
         all_new_time = all_new_time if all_new_time is not None else self.get_time(mode=mode)
         # download only missing dates and write them to disk
         if self.no_cache_data or not os.path.exists(self.local_data_path):
-            logging.info(f"Downloading missing {mode} data for {len(all_new_time)} time stamps.")
+            logging.info(f"Downloading {mode} data for {len(all_new_time)} time stamps.")
             xds_atm = xr.open_zarr(self.atm_data_url, storage_options={"token": "anon"})
             all_xds_atm = self.subsample_dataset(xds_atm, new_time=all_new_time, es_comp="atm")
             xds_ocn = xr.open_zarr(self.ocn_data_url, storage_options={"token": "anon"})
@@ -823,6 +824,9 @@ class ReplayCoupledEmulator:
                 license="Public domain",
             )
             checkpoint.dump(f, ckpt)
+        
+        # Check the total number of trainable parameters in this checkpoint
+        print("Total number of trainable parameters:", get_num_params(ckpt))
 
     def checkpoint_exists(self, id):
         ckpt_path = os.path.join(self.checkpoint_dir, f"model_{id}.npz")
