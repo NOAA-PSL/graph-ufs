@@ -68,7 +68,7 @@ class P1Emulator(ReplayEmulator):
     delta_t = "3h"
     input_duration = "6h"
     #target_lead_time = "3h"
-    target_lead_time = [f"{n}h" for n in range(6, 6*4*10+1, 6)]
+    target_lead_time = [f"{n}h" for n in range(3, 3*8*10+1, 3)]
     training_dates = (
         "1993-12-31T18",
         "2019-12-31T21"

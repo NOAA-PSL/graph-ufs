@@ -57,6 +57,11 @@ class LinePlotter():
                     color="gray"
                 elif label == "Replay Targets":
                     color = "C5"
+                elif label == "GraphUFS 6h":
+                    color = "C0"
+                elif label == "GraphUFS GDM 6h":
+                    color = "C1"
+
                 else:
                     color = f"C{j}"
 
@@ -64,6 +69,9 @@ class LinePlotter():
                     "color": color,
                     "label": label if sps.is_last_row() and sps.is_first_col() else None
                 }
+                if label in ("GraphUFS 6h", "GraphUFS GDM 6h"):
+                    kw["linestyle"] = "--"
+
                 if fld in xds:
                     plotme = xds[fld].sel(metric=metric)
                     if level is not None:

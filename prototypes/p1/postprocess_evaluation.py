@@ -25,6 +25,14 @@ def open_datasets(emulator):
     tds = xr.open_zarr(f"/p1-evaluation/v1/validation/replay.{duration}.zarr")
     truth = xr.open_zarr(emulator.wb2_obs_url, storage_options={"token":"anon"})
 
+    # for 3h dt, subsample to 6h
+    if duration == "240h" and len(gds.lead_time) == 80:
+        gds = gds.isel(lead_time=slice(1, None, 2))
+        tds = tds.isel(lead_time=slice(1, None, 2))
+
+        logging.info("Subsampled lead_time to 6h")
+        logging.info(f"New time: {gds.lead_time.values}")
+
     # subsample in space to avoid poles
     if "with_poles" in emulator.wb2_obs_url:
         truth = truth.sel(latitude=slice(-89, 89))

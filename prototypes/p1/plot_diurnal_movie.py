@@ -28,6 +28,8 @@ def movie_func(xds, fig, frame_index, *args, **kwargs):
 
     axs = []
     dalist = []
+
+    truthname = [y for y in list(xds.data_vars) if y not in ("PSL", "GDM")][0]
     # Plot the two forecast datasets
     for i, name in enumerate(["PSL", "GDM"]):
         ax = fig.add_subplot(1, 3, i+1)
@@ -46,13 +48,13 @@ def movie_func(xds, fig, frame_index, *args, **kwargs):
     ax = fig.add_subplot(1, 3, 3)
     axs.append(ax)
     vtime = plotme.valid_time.values
-    plotme = xds["ERA5"].isel(frame_index=frame_index)
+    plotme = xds[truthname].isel(frame_index=frame_index)
     dalist.append(plotme)
     p = plotme.plot(ax=ax, **kwargs)
     ax.set(
         xlabel="",
         ylabel="",
-        title=f"ERA5, {str(vtime)[:13]}",
+        title=f"truthname, {str(vtime)[:13]}",
     )
 
     # now the colorbar

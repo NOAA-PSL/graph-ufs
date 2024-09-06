@@ -90,8 +90,7 @@ def predict(
 
     n_steps = len(batchloader)
     progress_bar = tqdm(total=n_steps, ncols=80, desc="Processing")
-    for k in range(n_steps):
-        inputs, targets, forcings = batchloader.get_data()
+    for k, (inputs, targets, forcings) in enumerate(batchloader):
 
         # retrieve and drop t0
         inittimes = inputs.datetime.isel(time=-1).values
@@ -146,11 +145,11 @@ if __name__ == "__main__":
 
     validator = ExpandedBatchLoader(
         vds,
-        batch_size=p1.batch_size,
+        batch_size=1,
         shuffle=False,
         drop_last=True,
-        num_workers=p1.num_workers,
-        max_queue_size=p1.max_queue_size,
+        num_workers=0,
+        max_queue_size=1,
         sample_stride=p1.sample_stride,
     )
 
@@ -166,3 +165,5 @@ if __name__ == "__main__":
         emulator=p1,
         batchloader=validator,
     )
+
+    validator.shutdown()
