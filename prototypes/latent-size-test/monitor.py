@@ -64,7 +64,7 @@ if __name__ == "__main__":
 
     dslist = []
 
-    for latent_size in [64, 128, 256]:
+    for latent_size in [16, 64, 128, 256]:
         xds = xr.load_dataset(f"/testlfs/latent-size-test-{latent_size:03d}/loss.nc")
         xds = xds.expand_dims({"latent_size": [latent_size]})
         plot_single_experiment(xds)
