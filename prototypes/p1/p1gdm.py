@@ -11,7 +11,7 @@ class P1Emulator(ReplayEmulator):
         "stddiff": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.statistics.1993-2019/diffs_stddev_by_level.zarr",
     }
     wb2_obs_url = "gs://weatherbench2/datasets/era5/1959-2023_01_10-6h-240x121_equiangular_with_poles_conservative.zarr"
-    local_store_path = "/lustre/stacked-p1-data"
+    local_store_path = "/gdm-eval"
     cache_data = True
 
     # task config options
