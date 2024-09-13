@@ -8,53 +8,28 @@ import numpy as np
 import dask
 import xarray as xr
 from tqdm import tqdm
-import gcsfs
 
-from graphcast import rollout, checkpoint
+from graphcast import rollout
 
 from graphufs import init_devices, construct_wrapped_graphcast
 from graphufs.batchloader import ExpandedBatchLoader
 from graphufs.datasets import Dataset
+from graphufs.inference import swap_batch_time_dims, store_container
 
-from p1gdm import P1Emulator
-from evaluate import swap_batch_time_dims, store_container
-from long_forecast import load_checkpoint, run_forward, get_all_variables
+from p1stacked import P1Emulator
 
-_norm_urls = {
-    "mean": "gs://gdm-noaa-ufs-2024/model_01/stats/mean_by_level.nc",
-    "std": "gs://gdm-noaa-ufs-2024/model_01/stats/stddev_by_level.nc",
-    "stddiff": "gs://gdm-noaa-ufs-2024/model_01/stats/diffs_stddev_by_level.nc",
-}
-
-
-def load_normalization(task_config):
-    """Assumes we want normalization from the 1/4 degree subsampled to ~1 degree data"""
-
-    normalization = dict()
-    fs = gcsfs.GCSFileSystem()
-    for key in ["mean", "std", "stddiff"]:
-        with fs.open(_norm_urls[key], "rb") as f:
-            this_norm = xr.load_dataset(f)
-        this_norm = this_norm[[x for x in get_all_variables(task_config) if x in this_norm]]
-        this_norm = this_norm.sel(level=list(task_config.pressure_levels), method="nearest")
-        normalization[key] = this_norm
-
-    # Postprocess normalization stats to handle zero/NaN stddevs
-    eps_scale = 1e-6
-    for key in ["std", "stddiff"]:
-        normalization[key] = normalization[key].fillna(1.)
-        normalization[key] = normalization[key].where(normalization[key] > eps_scale, eps_scale)
-
-    return normalization
 
 def predict(
     params,
     state,
-    model_config,
-    task_config,
+    emulator,
     batchloader,
-    normalization,
 ) -> xr.Dataset:
+
+    @hk.transform_with_state
+    def run_forward(inputs, targets_template, forcings):
+        predictor = construct_wrapped_graphcast(emulator)
+        return predictor(inputs, targets_template=targets_template, forcings=forcings)
 
     def with_params(fn):
         return partial(fn, params=params, state=state)
@@ -62,19 +37,11 @@ def predict(
     def drop_state(fn):
         return lambda **kw: fn(**kw)[0]
 
-    def with_configs(fn):
-        return partial(
-            fn,
-            model_config=model_config,
-            task_config=task_config,
-            normalization=normalization,
-        )
+    gc = drop_state(with_params(jax.jit(run_forward.apply)))
 
-    gc = drop_state(with_params(jax.jit(with_configs(run_forward.apply))))
-
-    hours = int(batchloader.dataset.emulator.forecast_duration.value / 1e9 / 3600)
-    pname = f"/gdm-eval/v1/{batchloader.dataset.mode}/graphufs_gdm.{hours}h.zarr"
-    tname = f"/gdm-eval/v1/{batchloader.dataset.mode}/replay_gdm.{hours}h.zarr"
+    hours = int(emulator.forecast_duration.value / 1e9 / 3600)
+    pname = f"/p1-evaluation/v1/{batchloader.dataset.mode}/graphufs.{hours}h.zarr"
+    tname = f"/p1-evaluation/v1/{batchloader.dataset.mode}/replay.{hours}h.zarr"
 
     n_steps = len(batchloader)
     progress_bar = tqdm(total=n_steps, ncols=80, desc="Processing")
@@ -94,16 +61,14 @@ def predict(
             forcings=forcings,
         )
 
-        predictions = predictions.isel(time=slice(1, None, 2))
-
         # Add t0 as new variable, and swap out for logical sample/batch index
         predictions = swap_batch_time_dims(predictions, inittimes)
-#        targets = swap_batch_time_dims(targets, inittimes)
+        targets = swap_batch_time_dims(targets, inittimes)
 
         # Store to zarr one batch at a time
         if k == 0:
             store_container(pname, predictions, time=batchloader.initial_times)
-#            store_container(tname, targets, time=batchloader.initial_times)
+            store_container(tname, targets, time=batchloader.initial_times)
 
         # Store to zarr
         spatial_region = {k: slice(None, None) for k in predictions.dims if k != "time"}
@@ -112,7 +77,7 @@ def predict(
             **spatial_region,
         }
         predictions.to_zarr(pname, region=region)
-#        targets.to_zarr(tname, region=region)
+        targets.to_zarr(tname, region=region)
 
         progress_bar.update()
 
@@ -140,23 +105,20 @@ if __name__ == "__main__":
         drop_last=True,
         num_workers=0,
         max_queue_size=1,
-        sample_stride=9,
+        sample_stride=p1.sample_stride,
     )
 
     # setup weights
     logging.info(f"Reading weights ...")
-    params, model_config, task_config = load_checkpoint("results/gdm-v1/model_01.npz")
-    state = dict()
-
-    normalization = load_normalization(task_config)
+    # TODO: this looks in local_store_path, but we may want to look somewhere else
+    ckpt_id = p1.evaluation_checkpoint_id if p1.evaluation_checkpoint_id is not None else p1.num_epochs
+    params, state = p1.load_checkpoint(id=ckpt_id)
 
     predict(
         params=params,
         state=state,
-        model_config=model_config,
-        task_config=task_config,
+        emulator=p1,
         batchloader=validator,
-        normalization=normalization,
     )
 
     validator.shutdown()

@@ -22,10 +22,11 @@ from graphcast import (
 from graphufs import init_devices, construct_wrapped_graphcast
 from graphufs.batchloader import ExpandedBatchLoader
 from graphufs.datasets import Dataset
+from graphufs.inference import swap_batch_time_dims, store_container
+from graphufs.utils import load_checkpoint
 
-from p1gdm import P1Emulator
-from evaluate import swap_batch_time_dims, store_container
-from long_forecast import load_checkpoint, get_all_variables
+from config import P1Emulator
+from inference import get_all_variables
 
 _norm_urls = {
     "mean": "gs://gdm-noaa-ufs-2024/model_01/stats/mean_by_level.nc",

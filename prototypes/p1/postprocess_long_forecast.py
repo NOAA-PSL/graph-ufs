@@ -10,8 +10,8 @@ from ufs2arco.regrid.gaussian_grid import gaussian_latitudes
 from ufs2arco import Layers2Pressure
 
 from p1stacked import P1Emulator
-from stacked_preprocess import setup_log
-from postprocess_evaluation import interp2pressure, regrid_and_rename, get_valid_initial_conditions
+from graphufs.log import setup_simple_log
+from graphufs.postprocess import interp2pressure, regrid_and_rename, get_valid_initial_conditions
 
 def open_datasets(t0, duration, truth_url):
     """
@@ -34,7 +34,7 @@ def open_datasets(t0, duration, truth_url):
 
 if __name__ == "__main__":
 
-    setup_log()
+    setup_simple_log()
     dask.config.set(scheduler="threads", num_workers=48)
 
     truth_url = "gs://weatherbench2/datasets/era5/1959-2023_01_10-6h-240x121_equiangular_with_poles_conservative.zarr"

@@ -14,55 +14,9 @@ from graphcast import rollout
 from graphufs import init_devices, construct_wrapped_graphcast
 from graphufs.batchloader import ExpandedBatchLoader
 from graphufs.datasets import Dataset
+from graphufs.inference import swap_batch_time_dims, store_container
 
-from p1stacked import P1Emulator
-
-def swap_batch_time_dims(xds, inittimes):
-
-    xds = xds.rename({"time": "lead_time"})
-
-    # create "time" dimension = t0
-    xds["time"] = xr.DataArray(
-        inittimes,
-        coords=xds["batch"].coords,
-        dims=xds["batch"].dims,
-        attrs={
-            "description": "Forecast initialization time, last timestep of initial conditions",
-        },
-    )
-
-    # swap logical batch for t0
-    xds = xds.swap_dims({"batch": "time"}).drop_vars("batch")
-    return xds
-
-
-def store_container(path, xds, time, **kwargs):
-
-    if "time" in xds:
-        xds = xds.isel(time=0, drop=True)
-
-    container = xr.Dataset()
-    for key in xds.coords:
-        container[key] = xds[key].copy()
-
-    for key in xds.data_vars:
-        dims = ("time",) + xds[key].dims
-        coords = {"time": time, **dict(xds[key].coords)}
-        shape = (len(time),) + xds[key].shape
-        chunks = (1,) + tuple(-1 for _ in xds[key].dims)
-
-        container[key] = xr.DataArray(
-            data=dask.array.zeros(
-                shape=shape,
-                chunks=chunks,
-                dtype=xds[key].dtype,
-            ),
-            coords=coords,
-            dims=dims,
-            attrs=xds[key].attrs.copy(),
-        )
-    container.to_zarr(path, compute=False, **kwargs)
-    logging.info(f"Stored container at {path}")
+from configeval import LatentTestEmulator
 
 def predict(
     params,
@@ -85,8 +39,13 @@ def predict(
     gc = drop_state(with_params(jax.jit(run_forward.apply)))
 
     hours = int(emulator.forecast_duration.value / 1e9 / 3600)
-    pname = f"/p1-evaluation/v1/{batchloader.dataset.mode}/graphufs.{hours}h.zarr"
-    tname = f"/p1-evaluation/v1/{batchloader.dataset.mode}/replay.{hours}h.zarr"
+    pname = f"{emulator.local_store_path}/evaluation/{batchloader.mode}/graphufs.{hours}h.zarr"
+    tname = f"{emulator.local_store_path}/evaluation/{batchloader.mode}/replay.{hours}h.zarr"
+
+    for storename in [pname, tname]:
+        thisdir = os.path.dirname(storename)
+        if not os.path.isdir(thisdir):
+            os.makedirs(thisdir)
 
     n_steps = len(batchloader)
     progress_bar = tqdm(total=n_steps, ncols=80, desc="Processing")
@@ -105,7 +64,6 @@ def predict(
             targets_template=np.nan * targets,
             forcings=forcings,
         )
-
         # Add t0 as new variable, and swap out for logical sample/batch index
         predictions = swap_batch_time_dims(predictions, inittimes)
         targets = swap_batch_time_dims(targets, inittimes)
@@ -133,7 +91,7 @@ if __name__ == "__main__":
         stream=sys.stdout,
         level=logging.INFO,
     )
-    p1, args = P1Emulator.from_parser()
+    p1, args = LatentTestEmulator.from_parser()
     init_devices(p1)
     dask.config.set(scheduler="threads", num_workers=p1.dask_threads)
 
@@ -165,5 +123,4 @@ if __name__ == "__main__":
         emulator=p1,
         batchloader=validator,
     )
-
     validator.shutdown()

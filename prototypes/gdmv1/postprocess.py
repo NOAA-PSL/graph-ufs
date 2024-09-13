@@ -9,9 +9,9 @@ import pandas as pd
 from ufs2arco.regrid.gaussian_grid import gaussian_latitudes
 from ufs2arco import Layers2Pressure
 
-from p1gdm import P1Emulator
-from stacked_preprocess import setup_log
-from postprocess_evaluation import interp2pressure, regrid_and_rename, get_valid_initial_conditions
+from config import P1Emulator
+from graphufs.log import setup_simple_log
+from graphufs.postprocess import interp2pressure, regrid_and_rename, get_valid_initial_conditions
 
 def open_datasets(emulator):
     """
@@ -38,7 +38,7 @@ def open_datasets(emulator):
 
 if __name__ == "__main__":
 
-    setup_log()
+    setup_simple_log()
     p1, args = P1Emulator.from_parser()
     dask.config.set(scheduler="threads", num_workers=p1.dask_threads)
 

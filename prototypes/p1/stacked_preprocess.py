@@ -8,6 +8,7 @@ import dask
 
 from graphufs.batchloader import XBatchLoader
 from graphufs.datasets import Dataset
+from graphufs.log import setup_simple_log
 from p1stacked import P1Emulator
 
 from ufs2arco import Timer
@@ -15,25 +16,9 @@ from ufs2arco import Timer
 _n_cpus = 48
 _partition = "cpuD48v3"
 
-class SimpleFormatter(logging.Formatter):
-    def format(self, record):
-        record.relativeCreated = record.relativeCreated // 1000
-        return super().format(record)
-
-def setup_log(level=logging.INFO):
-
-    logging.basicConfig(
-        stream=sys.stdout,
-        level=level,
-    )
-    logger = logging.getLogger()
-    formatter = SimpleFormatter(fmt="[%(relativeCreated)d s] [%(levelname)s] %(message)s")
-    for handler in logger.handlers:
-        handler.setFormatter(formatter)
-
 def setup(mode, level=logging.INFO):
 
-    setup_log(level=level)
+    setup_simple_log(level=level)
 
     p1 = P1Emulator()
     tds = Dataset(
@@ -177,7 +162,7 @@ def make_container(mode):
 
 if __name__ == "__main__":
 
-    setup_log()
+    setup_simple_log()
     timer = Timer()
 
     # create a container zarr store for all the data

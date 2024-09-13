@@ -10,6 +10,18 @@ import concurrent.futures
 import jax
 from graphcast import graphcast, checkpoint
 
+def load_checkpoint(path):
+
+    with open(path, "rb") as f:
+        ckpt = checkpoint.load(f, graphcast.CheckPoint)
+
+    params = ckpt.params
+    model_config = ckpt.model_config
+    task_config = ckpt.task_config
+    return params, model_config, task_config
+
+
+
 def open_zarr(*args, **kwargs):
     xds = xr.open_zarr(*args, **kwargs)
     return swap_dims(xds)

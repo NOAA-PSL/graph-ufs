@@ -14,7 +14,8 @@ from graphcast import (
     rollout,
 )
 
-from evaluate import swap_batch_time_dims
+from graphufs.inference import swap_batch_time_dims
+from graphufs.utils import load_checkpoint
 
 _norm_urls = {
     "mean": "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.statistics.1993-2019/mean_by_level.zarr",
@@ -23,16 +24,6 @@ _norm_urls = {
 }
 
 _data_url = "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.zarr"
-
-def load_checkpoint(path):
-
-    with open(path, "rb") as f:
-        ckpt = checkpoint.load(f, graphcast.CheckPoint)
-
-    params = ckpt.params
-    model_config = ckpt.model_config
-    task_config = ckpt.task_config
-    return params, model_config, task_config
 
 
 def construct_wrapped_graphcast(model_config, task_config, normalization):
