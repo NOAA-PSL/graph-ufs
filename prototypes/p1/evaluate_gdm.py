@@ -73,12 +73,13 @@ def predict(
     gc = drop_state(with_params(jax.jit(with_configs(run_forward.apply))))
 
     hours = int(batchloader.dataset.emulator.forecast_duration.value / 1e9 / 3600)
-    pname = f"/gdm-eval/v1/{batchloader.dataset.mode}/graphufs_gdm.{hours}h.zarr"
-    tname = f"/gdm-eval/v1/{batchloader.dataset.mode}/replay_gdm.{hours}h.zarr"
+    pname = f"/p1-evaluation/gdm-v1/{batchloader.dataset.mode}/graphufs_gdm.{hours}h.zarr"
+    tname = f"/p1-evaluation/gdm-v1/{batchloader.dataset.mode}/replay_gdm.{hours}h.zarr"
 
     n_steps = len(batchloader)
     progress_bar = tqdm(total=n_steps, ncols=80, desc="Processing")
-    for k, (inputs, targets, forcings) in enumerate(batchloader):
+    for k in range(n_steps):
+        inputs, targets, forcings = batchloader.get_data()
 
         # retrieve and drop t0
         inittimes = inputs.datetime.isel(time=-1).values
@@ -94,16 +95,14 @@ def predict(
             forcings=forcings,
         )
 
-        predictions = predictions.isel(time=slice(1, None, 2))
-
         # Add t0 as new variable, and swap out for logical sample/batch index
         predictions = swap_batch_time_dims(predictions, inittimes)
-#        targets = swap_batch_time_dims(targets, inittimes)
+        targets = swap_batch_time_dims(targets, inittimes)
 
         # Store to zarr one batch at a time
         if k == 0:
             store_container(pname, predictions, time=batchloader.initial_times)
-#            store_container(tname, targets, time=batchloader.initial_times)
+            store_container(tname, targets, time=batchloader.initial_times)
 
         # Store to zarr
         spatial_region = {k: slice(None, None) for k in predictions.dims if k != "time"}
@@ -112,7 +111,7 @@ def predict(
             **spatial_region,
         }
         predictions.to_zarr(pname, region=region)
-#        targets.to_zarr(tname, region=region)
+        targets.to_zarr(tname, region=region)
 
         progress_bar.update()
 
@@ -158,5 +157,3 @@ if __name__ == "__main__":
         batchloader=validator,
         normalization=normalization,
     )
-
-    validator.shutdown()

@@ -90,7 +90,8 @@ def predict(
 
     n_steps = len(batchloader)
     progress_bar = tqdm(total=n_steps, ncols=80, desc="Processing")
-    for k, (inputs, targets, forcings) in enumerate(batchloader):
+    for k in range(n_steps):
+        inputs, targets, forcings = batchloader.get_data()
 
         # retrieve and drop t0
         inittimes = inputs.datetime.isel(time=-1).values
@@ -108,7 +109,7 @@ def predict(
 
         # Add t0 as new variable, and swap out for logical sample/batch index
         predictions = swap_batch_time_dims(predictions, inittimes)
-        targets = swap_batch_time_dims(targets, inittimes)
+        targets = swap_batch_time_dims(predictions, inittimes)
 
         # Store to zarr one batch at a time
         if k == 0:
@@ -145,11 +146,11 @@ if __name__ == "__main__":
 
     validator = ExpandedBatchLoader(
         vds,
-        batch_size=1,
+        batch_size=p1.batch_size,
         shuffle=False,
         drop_last=True,
-        num_workers=0,
-        max_queue_size=1,
+        num_workers=p1.num_workers,
+        max_queue_size=p1.max_queue_size,
         sample_stride=p1.sample_stride,
     )
 
@@ -165,5 +166,3 @@ if __name__ == "__main__":
         emulator=p1,
         batchloader=validator,
     )
-
-    validator.shutdown()

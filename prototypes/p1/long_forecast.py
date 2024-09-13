@@ -73,6 +73,25 @@ def load_normalization(task_config):
     return normalization
 
 
+
+def get_empty_targets(t0, lead_times, template):
+    """Creates array of zeros at target lead times, basd on template dataset"""
+
+    lead_times, duration = data_utils._process_target_lead_times_and_get_duration(lead_times)
+    container = xr.concat(
+        list(
+            xr.zeros_like(
+                template.isel(time=0, drop=True).expand_dims(
+                    {"time": [pd.Timestamp(t0) + t]}
+                )
+            )
+            for t in lead_times
+        ),
+        dim="time",
+    )
+    return container
+
+
 def load_sample_initial_conditions(t0, lead_times, task_config, sample_idx=0):
     """This pulls two sample timesteps from the Replay dataset on GCS
     and puts it in the form needed to make a forecast with GraphCast
@@ -84,7 +103,7 @@ def load_sample_initial_conditions(t0, lead_times, task_config, sample_idx=0):
     # select t0 and t-1
     time_slice = slice(
         pd.Timestamp(t0) - pd.Timedelta(task_config.input_duration) + pd.Timedelta("1s"),
-        pd.Timestamp(t0) + pd.Timedelta(lead_times[-1]),
+        pd.Timestamp(t0),
     )
     xds = xds.sel(time=time_slice)
 
@@ -97,6 +116,13 @@ def load_sample_initial_conditions(t0, lead_times, task_config, sample_idx=0):
     # drop these
     xds = xds.drop_vars(["cftime", "ftime"])
 
+    # Load into memory
+    xds = xds.load()
+
+    # append template for the target lead times
+    targets_template = get_empty_targets(t0, lead_times, xds)
+    xds = xr.concat([xds, targets_template], dim="time")
+
     # rename
     xds = xds.rename({
         "time": "datetime",
@@ -106,7 +132,7 @@ def load_sample_initial_conditions(t0, lead_times, task_config, sample_idx=0):
     })
 
     # re-create time dimension as relative to t-1
-    xds["time"] = xds["datetime"] - xds["datetime"][1]
+    xds["time"] = xds["datetime"] - xds["datetime"][0]
     xds = xds.swap_dims({"datetime":"time"}).reset_coords()
     xds = xds.set_coords(["datetime"])
     xds.attrs["t0"] = t0
@@ -127,7 +153,6 @@ def load_sample_initial_conditions(t0, lead_times, task_config, sample_idx=0):
         input_duration=task_config.input_duration,
         target_lead_times=lead_times,
     )
-
     inputs = inputs.expand_dims({"batch": [sample_idx]})
     targets_template = targets_template.expand_dims({"batch": [sample_idx]})
     forcings = forcings.expand_dims({"batch": [sample_idx]})
@@ -180,7 +205,7 @@ if __name__ == "__main__":
 
     t0 = "2019-01-01T00"
     tf = "2019-12-31T18"
-    time = pd.date_range(t0, tf, freq="3h")
+    time = pd.date_range(t0, tf, freq="6h")
     delta_t = time - pd.Timestamp(t0)
     delta_t = delta_t.days*24 + delta_t.seconds /3600
     lead_times = [f"{int(dt)}h" for dt in delta_t[1:]]
@@ -189,9 +214,6 @@ if __name__ == "__main__":
         lead_times=lead_times,
         task_config=task_config,
     )
-
-    inputs.load()
-    forcings.load()
 
     prediction = predict(
         params=params,
@@ -206,7 +228,6 @@ if __name__ == "__main__":
     prediction = swap_batch_time_dims(prediction, [pd.Timestamp(t0)])
     prediction = prediction.rename({"time": "t0"})
     prediction["time"] = pd.Timestamp(t0) + prediction["lead_time"]
-    prediction = prediction.swap_dims({"lead_time": "time"})
 
     duration = lead_times[-1]
     prediction.to_zarr(f"/p1-evaluation/v1/long-forecasts/graphufs.{t0}.{duration}.zarr", mode="w")

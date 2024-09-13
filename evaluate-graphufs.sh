@@ -22,8 +22,7 @@ rename_variables='{"pressfc":"surface_pressure","ugrd10m":"10m_u_component_of_wi
 
 
 # Standard WB2 deterministic evaluation
-#for dataset in "graphufs" "replay" "replay_targets"
-for dataset in "replay_targets"
+for dataset in "graphufs" "replay"
 do
 
     forecast_path=${output_dir}/${dataset}.${forecast_duration}.postprocessed.zarr
@@ -59,23 +58,20 @@ do
 
     done
 
-    if [[ ${dataset} == "graphufs" || ${dataset} == "replay_targets" ]]; then
-        echo "Computing spectra for ${dataset} ..."
-        python weatherbench2/scripts/compute_zonal_energy_spectrum.py \
-          --input_path=${native_forecast_path} \
-          --output_path=${output_dir}/${dataset}.${forecast_duration}.spectra.zarr \
-          --base_variables=${surface_variables} \
-          --time_dim="time" \
-          --time_start=${time_start} \
-          --time_stop=${time_stop} \
-          --levels=${native_levels} \
-          --averaging_dims="time" \
-          --rename_variables=${rename_variables}
-    fi
+    echo "Computing spectra for ${dataset} ..."
+    python weatherbench2/scripts/compute_zonal_energy_spectrum.py \
+      --input_path=${native_forecast_path} \
+      --output_path=${output_dir}/${dataset}.${forecast_duration}.spectra.zarr \
+      --base_variables=${surface_variables} \
+      --time_dim="time" \
+      --time_start=${time_start} \
+      --time_stop=${time_stop} \
+      --levels=${native_levels} \
+      --averaging_dims="time" \
+      --rename_variables=${rename_variables}
 done
 
 # evaluate native against replay
-echo "Comparing GraphUFS vs Replay"
 python weatherbench2/scripts/evaluate.py \
   --forecast_path=${output_dir}/graphufs.${forecast_duration}.zarr \
   --obs_path=${output_dir}/replay.${forecast_duration}.zarr \
@@ -90,3 +86,23 @@ python weatherbench2/scripts/evaluate.py \
   --variables=${all_variables} \
   --rename_variables=${rename_variables} \
   --levels=${native_levels}
+
+## evaluate derived delz native against replay
+#for dataset in "graphufs" "replay"
+#do 
+#    echo "Evaluating ${dataset} derived delz against replay"
+#    python weatherbench2/scripts/evaluate.py \
+#      --forecast_path=${output_dir}/${dataset}.${forecast_duration}.diagdelz.zarr \
+#      --obs_path=${output_dir}/replay.${forecast_duration}.zarr \
+#      --by_init=True \
+#      --output_dir=${output_dir} \
+#      --output_file_prefix=${dataset}_vs_replay_${forecast_duration}_diagdelz_ \
+#      --eval_configs=deterministic,deterministic_temporal,deterministic_spatial \
+#      --time_start=${time_start} \
+#      --time_stop=${time_stop} \
+#      --evaluate_climatology=False \
+#      --evaluate_persistence=False \
+#      --variables="layer_thickness" \
+#      --rename_variables='{"delz":"layer_thickness","lat":"latitude","lon":"longitude"}' \
+#      --levels=${native_levels}
+#done
