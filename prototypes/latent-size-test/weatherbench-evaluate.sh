@@ -14,35 +14,34 @@ rename_variables='{"pressfc":"surface_pressure","lat":"latitude","lon":"longitud
 
 
 # Standard WB2 deterministic evaluation
-#for suffix in "" "-064" "-128"
-for suffix in "-128"
+for suffix in "-016" "-064" "-128" ""
 do
 
     output_dir=/testlfs/latent-size-test${suffix}/evaluation/validation
     native_forecast_path=${output_dir}/graphufs.${forecast_duration}.zarr
 
-    # evaluate native against replay
-    echo "Evaluating standard metrics for suffix=${suffix} ..."
-    python ../../weatherbench2/scripts/evaluate.py \
-      --forecast_path=${output_dir}/graphufs.${forecast_duration}.zarr \
-      --obs_path=${output_dir}/replay.${forecast_duration}.zarr \
-      --by_init=True \
-      --output_dir=${output_dir} \
-      --output_file_prefix=graphufs_vs_replay_${forecast_duration}_ \
-      --eval_configs=deterministic,deterministic_spatial,deterministic_temporal \
-      --time_start=${time_start} \
-      --time_stop=${time_stop} \
-      --evaluate_climatology=False \
-      --evaluate_persistence=False \
-      --variables=${all_variables} \
-      --rename_variables=${rename_variables} \
-      --levels=${native_levels}
+#    # evaluate native against replay
+#    echo "Evaluating standard metrics for suffix=${suffix} ..."
+#    python ../../weatherbench2/scripts/evaluate.py \
+#      --forecast_path=${output_dir}/graphufs.${forecast_duration}.zarr \
+#      --obs_path=${output_dir}/replay.${forecast_duration}.zarr \
+#      --by_init=True \
+#      --output_dir=${output_dir} \
+#      --output_file_prefix=graphufs_vs_replay_${forecast_duration}_ \
+#      --eval_configs=deterministic,deterministic_spatial,deterministic_temporal \
+#      --time_start=${time_start} \
+#      --time_stop=${time_stop} \
+#      --evaluate_climatology=False \
+#      --evaluate_persistence=False \
+#      --variables=${all_variables} \
+#      --rename_variables=${rename_variables} \
+#      --levels=${native_levels}
 
     echo "Computing spectra for suffix=${suffix} ..."
     python ../../weatherbench2/scripts/compute_zonal_energy_spectrum.py \
       --input_path=${native_forecast_path} \
       --output_path=${output_dir}/graphufs.${forecast_duration}.spectra.zarr \
-      --base_variables=${surface_variables} \
+      --base_variables=${all_variables} \
       --time_dim="time" \
       --time_start=${time_start} \
       --time_stop=${time_stop} \

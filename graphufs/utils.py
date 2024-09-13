@@ -10,6 +10,24 @@ import concurrent.futures
 import jax
 from graphcast import graphcast, checkpoint
 
+def open_zarr(*args, **kwargs):
+    xds = xr.open_zarr(*args, **kwargs)
+    return swap_dims(xds)
+
+def open_dataset(*args, **kwargs):
+    xds = xr.open_dataset(*args, **kwargs)
+    return swap_dims(xds)
+
+def swap_dims(xds):
+
+    if "prediction_timedelta" in xds.coords and "lead_time" not in xds.coords:
+        xds = xds.rename({"prediction_timedelta": "lead_time"})
+
+    if "lead_time" in xds.dims:
+        xds["fhr"] = (xds.lead_time.astype(int) / 3600 / 1e9).astype(int)
+        xds = xds.swap_dims({"lead_time": "fhr"})
+    return xds
+
 def get_network_shape(ckpt):
     """Get the shape of all layers in the network
 
