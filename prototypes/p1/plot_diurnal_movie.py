@@ -54,7 +54,7 @@ def movie_func(xds, fig, frame_index, *args, **kwargs):
     ax.set(
         xlabel="",
         ylabel="",
-        title=f"truthname, {str(vtime)[:13]}",
+        title=f"{truthname}, {str(vtime)[:13]}",
     )
 
     # now the colorbar

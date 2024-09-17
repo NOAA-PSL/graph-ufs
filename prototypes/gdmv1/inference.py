@@ -105,6 +105,7 @@ def predict(
         )
 
         predictions = predictions.isel(time=slice(1, None, 2))
+#        targets = targets.isel(time=slice(1, None, 2))
 
         # Add t0 as new variable, and swap out for logical sample/batch index
         predictions = swap_batch_time_dims(predictions, inittimes)

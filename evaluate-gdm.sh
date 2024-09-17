@@ -2,7 +2,7 @@
 
 export PYTHONPATH=$PYTHONPATH:$PWD/weatherbench2:$PWD/weatherbench2/weatherbench2:$PWD/weatherbench2/scripts
 
-output_dir=/gdm-eval/v2/validation
+output_dir=/gdm-eval/v1/validation
 forecast_duration="240h"
 time_start="2022-01-01T00"
 time_stop="2023-10-13T03"

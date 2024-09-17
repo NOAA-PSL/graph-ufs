@@ -22,8 +22,7 @@ rename_variables='{"pressfc":"surface_pressure","ugrd10m":"10m_u_component_of_wi
 
 
 # Standard WB2 deterministic evaluation
-#for dataset in "graphufs" "replay" "replay_targets"
-for dataset in "replay_targets"
+for dataset in "graphufs" "replay" "replay_targets"
 do
 
     forecast_path=${output_dir}/${dataset}.${forecast_duration}.postprocessed.zarr
