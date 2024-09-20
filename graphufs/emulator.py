@@ -224,6 +224,7 @@ class ReplayEmulator:
     def extract_kwargs(self):
         kw = {k: v for k, v in dataclasses.asdict(self.task_config).items() if k not in ("latitude", "longitude")}
         kw["target_lead_times"] = self.target_lead_time
+        kw["integration_period"] = self.delta_t
         return kw
 
     @property
