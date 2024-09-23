@@ -1,17 +1,19 @@
-from jax import tree_util, numpy as jnp
+import xarray as xr
+from jax import tree_util
+import numpy as np
 
 from graphufs import ReplayEmulator
 
-def log(array):
-    result = jnp.log(array)
-    result = jnp.where(jnp.isnan(result), 0., result)
-    return jnp.where(jnp.isinf(result), 0., result)
+def log(xda):
+    cond = xda > 0
+    return xr.where(
+        cond,
+        np.log(xda.where(cond)),
+        0.,
+    )
 
-def exp(array):
-    result = jnp.exp(array)
-    result = jnp.where(jnp.isnan(result), 0., result)
-    return jnp.where(jnp.isinf(result), 0., result)
-
+def exp(xda):
+    return np.exp(xda)
 
 class TP0Emulator(ReplayEmulator):
 
@@ -104,10 +106,6 @@ class TP0Emulator(ReplayEmulator):
         "spfh": 1.0,
     }
     input_transforms = {
-        "spfh": log,
-        "spfh2m": log,
-    }
-    target_transforms = {
         "spfh": log,
         "spfh2m": log,
     }

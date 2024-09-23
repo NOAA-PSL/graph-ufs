@@ -147,6 +147,7 @@ class Dataset():
             "grid_xt": "lon",
         })
         xds = xds.drop_vars(["cftime", "ftime"])
+        xds = self.transform_variables(xds)
         return xds
 
     def _preprocess(self, xds: xr.Dataset) -> xr.Dataset:
@@ -163,6 +164,16 @@ class Dataset():
         xds = xds.swap_dims({"datetime": "time"}).reset_coords()
         xds = xds.set_coords(["datetime"])
         return xds
+
+    def transform_variables(self, xds):
+        """e.g. transform spfh -> log(spfh), but keep the name the same for ease with GraphCast code"""
+        if self.emulator.input_transforms is not None:
+            for key, mapping in self.emulator.input_transforms.items():
+                with xr.set_options(keep_attrs=True):
+                    xds[key] = mapping(xds[key])
+                xds[key].attrs["transformation"] = f"this variable shows {mapping.__name__}({key})"
+        return xds
+
 
     def get_xds(self, idx: int) -> xr.Dataset:
         """
