@@ -38,6 +38,7 @@ from graphcast.stacked_graphcast import StackedGraphCast
 from graphcast.stacked_casting import StackedBfloat16Cast
 from graphcast.xarray_tree import map_structure
 from graphcast.stacked_normalization import StackedInputsAndResiduals
+from graphcast.transformed_stacked_normalization import TransformedStackedInputsAndResiduals
 from graphcast.xarray_jax import unwrap_data
 from graphcast import rollout
 
@@ -50,7 +51,7 @@ except:
     warnings.warn("Import failed for either mpi4py or mpi4jax.")
 
 
-def construct_wrapped_graphcast(emulator, last_input_channel_mapping):
+def construct_wrapped_graphcast(emulator, last_input_channel_mapping, input_transforms=None, output_transforms=None, target_transforms=None):
     """Constructs and wraps the GraphCast Predictor object"""
 
     predictor = StackedGraphCast(emulator.model_config, emulator.task_config)
@@ -59,24 +60,42 @@ def construct_wrapped_graphcast(emulator, last_input_channel_mapping):
     # ... and so that this happens after applying
     # normalization to inputs & targets
     predictor = StackedBfloat16Cast(predictor)
-    predictor = StackedInputsAndResiduals(
-        predictor,
-        diffs_stddev_by_level=emulator.stacked_norm["stddiff"],
-        mean_by_level=emulator.stacked_norm["mean"],
-        stddev_by_level=emulator.stacked_norm["std"],
-        last_input_channel_mapping=last_input_channel_mapping,
-    )
+    if emulator.input_transforms is not None and emulator.output_transforms is not None:
+        predictor = TransformedStackedInputsAndResiduals(
+            predictor,
+            diffs_stddev_by_level=emulator.stacked_norm["stddiff"],
+            mean_by_level=emulator.stacked_norm["mean"],
+            stddev_by_level=emulator.stacked_norm["std"],
+            last_input_channel_mapping=last_input_channel_mapping,
+            input_transforms=input_transforms,
+            output_transforms=output_transforms,
+            target_transforms=target_transforms,
+        )
+    else:
+        predictor = StackedInputsAndResiduals(
+            predictor,
+            diffs_stddev_by_level=emulator.stacked_norm["stddiff"],
+            mean_by_level=emulator.stacked_norm["mean"],
+            stddev_by_level=emulator.stacked_norm["std"],
+            last_input_channel_mapping=last_input_channel_mapping,
+        )
     # multi step rollout is not implemented yet
     return predictor
 
 
-def init_model(emulator, inputs, last_input_channel_mapping):
+def init_model(emulator, inputs, last_input_channel_mapping, input_transforms=None, output_transforms=None, target_transforms=None):
     """Initialize model with random weights.
     """
 
     @hk.transform_with_state
     def run_forward(inputs):
-        predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping)
+        predictor = construct_wrapped_graphcast(
+            emulator=emulator,
+            last_input_channel_mapping=last_input_channel_mapping,
+            input_transforms=input_transforms,
+            output_transforms=output_transforms,
+            target_transforms=target_transforms,
+        )
         return predictor(inputs)
 
     devices = jax.devices()
@@ -101,7 +120,7 @@ def add_trees(tree1, tree2):
     return tree1
 
 def optimize(
-    params, state, optimizer, emulator, trainer, validator, weights, last_input_channel_mapping, opt_state=None
+    params, state, optimizer, emulator, trainer, validator, weights, last_input_channel_mapping, input_transforms=None, output_transforms=None, target_transforms=None, opt_state=None
 ):
     """Optimize the model parameters by running through all optim_steps in data
 
@@ -133,7 +152,7 @@ def optimize(
 
     @hk.transform_with_state
     def loss_fn(inputs, targets):
-        predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping)
+        predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping, input_transforms, output_transforms, target_transforms)
         loss, diagnostics = predictor.loss(inputs, targets, weights=weights)
         return loss.mean(), diagnostics.mean(axis=0)
 

@@ -114,6 +114,9 @@ class ReplayEmulator:
         "pressfc"       : 0.1,
         "prateb_ave"    : 0.1,
     }
+    input_transforms = None
+    output_transforms = None
+    target_transforms = None
 
     # this is used for initializing the state in the gradient computation
     grad_rng_seed = None
@@ -662,7 +665,22 @@ class ReplayEmulator:
                 # keep attributes in order to distinguish static from time varying components
                 with xr.set_options(keep_attrs=True):
                     myvars = list(x for x in self.all_variables if x in xds)
+                    if self.input_transforms is not None:
+                        for key, transform_function in self.input_transforms.items():
+                            idx = myvars.index(key)
+                            transformed_key = f"{transform_function.__name__}_{key}" # e.g. log_spfh
+                            assert transformed_key in xds, \
+                                f"Emulator.set_normalization: couldn't find {transformed_key} in {component} normalization dataset"
+                            myvars[idx] = transformed_key
                     xds = xds[myvars]
+                    if self.input_transforms is not None:
+                        for key, transform_function in self.input_transforms.items():
+                            transformed_key = f"{transform_function.__name__}_{key}" # e.g. log_spfh
+                            idx = myvars.index(transformed_key)
+                            myvars[idx] = key
+
+                            # necessary for graphcast.dataset to stacked operations
+                            xds = xds.rename({transformed_key: key})
                     xds = xds.sel(pfull=self.levels)
                     xds = xds.load()
                     xds = xds.rename({"pfull": "level"})
@@ -793,6 +811,45 @@ class ReplayEmulator:
         # do we need to put this on the device(s)?
         return weights
 
+
+    def get_stacked_transforms(self, gds):
+        # check if transforms exist
+        if self.input_transforms is not None:
+            assert self.output_transforms is not None
+            for key in self.input_transforms.keys():
+                assert key in self.output_transforms
+        if self.output_transforms is not None:
+            assert self.input_transforms is not None
+            for key in self.output_transforms.keys():
+                assert key in self.input_transforms
+
+
+        if self.input_transforms is not None:
+
+            stacked_input_transforms = dict()
+            stacked_output_transforms = dict()
+            stacked_target_transforms = dict()
+
+            xinputs, xtargets, _ = gds.get_xarrays(0)
+            inputs_info = get_channel_index(xinputs)
+            targets_info = get_channel_index(xtargets)
+            for channel in inputs_info.keys():
+                varname = inputs_info[channel]["varname"]
+                if varname in self.input_transforms.keys():
+                    stacked_input_transforms[channel] = self.input_transforms[varname]
+
+            for channel in targets_info.keys():
+                varname = targets_info[channel]["varname"]
+                if varname in self.output_transforms.keys():
+                    stacked_output_transforms[channel] = self.output_transforms[varname]
+                if varname in self.target_transforms.keys():
+                    stacked_target_transforms[channel] = self.target_transforms[varname]
+        else:
+            stacked_input_transforms = None
+            stacked_output_transforms = None
+            stacked_target_transforms = None
+
+        return stacked_input_transforms, stacked_output_transforms, stacked_target_transforms
 
 
     @staticmethod
