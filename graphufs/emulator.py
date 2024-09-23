@@ -279,9 +279,6 @@ class ReplayEmulator:
             newds (xarray.Dataset): subsampled/subset that we care about
         """
 
-        # select our vertical levels
-        xds = xds.sel(pfull=self.levels)
-
         # only grab variables we care about
         myvars = list(x for x in self.all_variables if x in xds)
         xds = xds[myvars]
@@ -289,7 +286,24 @@ class ReplayEmulator:
         if new_time is not None:
             xds = xds.sel(time=new_time)
 
+        # select our vertical levels
+        xds = xds.sel(pfull=self.levels)
+
+        # if we have any transforms to apply, do it here
+        xds = self.transform_variables(xds)
         return xds
+
+
+    def transform_variables(self, xds):
+        """e.g. transform spfh -> log(spfh), but keep the name the same for ease with GraphCast code"""
+        if self.input_transforms is not None:
+            for key, mapping in self.input_transforms.items():
+                logging.info(f"ReplayEmulator: transforming {key} -> {mapping.__name__}({key})")
+                with xr.set_options(keep_attrs=True):
+                    xds[key] = mapping(xds[key])
+                xds[key].attrs["transformation"] = f"this variable shows {mapping.__name__}({key})"
+        return xds
+
 
     def check_for_ints(self, xds):
         """Turn data variable integers into floats, because otherwise the normalization in GraphCast goes haywire

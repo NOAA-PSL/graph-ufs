@@ -2,7 +2,7 @@ import xarray as xr
 from jax import tree_util
 import numpy as np
 
-from graphufs import ReplayEmulator
+from graphufs import FVEmulator
 
 def log(xda):
     cond = xda > 0
@@ -15,7 +15,7 @@ def log(xda):
 def exp(xda):
     return np.exp(xda)
 
-class TP0Emulator(ReplayEmulator):
+class TP0Emulator(FVEmulator):
 
     data_url = "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.zarr"
     norm_urls = {
@@ -56,12 +56,7 @@ class TP0Emulator(ReplayEmulator):
         "day_progress_sin",
         "day_progress_cos",
     )
-    all_variables = tuple() # this is created in __init__
-    pressure_levels = (
-        200,
-        500,
-        1000,
-    )
+    interfaces = (100, 300, 800, 1000)
 
     # time related
     delta_t = "3h"              # the model time step
