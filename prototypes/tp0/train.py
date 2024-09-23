@@ -64,19 +64,10 @@ if __name__ == "__main__":
     # so better to just explicitly pass it around
     last_input_channel_mapping = get_last_input_mapping(training_data)
 
-    stacked_input_transforms, stacked_output_transforms, stacked_target_transforms = gufs.get_stacked_transforms(training_data)
-
     # load weights or initialize a random model
     logging.info("Initializing Optimizer and Parameters")
     inputs, _ = trainer.get_data()
-    params, state = init_model(
-        gufs,
-        inputs,
-        last_input_channel_mapping,
-        stacked_input_transforms,
-        stacked_output_transforms,
-        stacked_target_transforms,
-    )
+    params, state = init_model(gufs, inputs, last_input_channel_mapping)
 
     loss_name = f"{gufs.local_store_path}/loss.nc"
     if os.path.exists(loss_name):
@@ -102,9 +93,6 @@ if __name__ == "__main__":
             validator=validator,
             weights=weights,
             last_input_channel_mapping=last_input_channel_mapping,
-            input_transforms=stacked_input_transforms,
-            output_transforms=stacked_output_transforms,
-            target_transforms=stacked_target_transforms,
             opt_state=opt_state,
         )
 

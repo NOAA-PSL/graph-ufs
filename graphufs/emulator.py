@@ -116,7 +116,6 @@ class ReplayEmulator:
     }
     input_transforms = None
     output_transforms = None
-    target_transforms = None
 
     # this is used for initializing the state in the gradient computation
     grad_rng_seed = None
@@ -811,45 +810,6 @@ class ReplayEmulator:
         # do we need to put this on the device(s)?
         return weights
 
-
-    def get_stacked_transforms(self, gds):
-        # check if transforms exist
-        if self.input_transforms is not None:
-            assert self.output_transforms is not None
-            for key in self.input_transforms.keys():
-                assert key in self.output_transforms
-        if self.output_transforms is not None:
-            assert self.input_transforms is not None
-            for key in self.output_transforms.keys():
-                assert key in self.input_transforms
-
-
-        if self.input_transforms is not None:
-
-            stacked_input_transforms = dict()
-            stacked_output_transforms = dict()
-            stacked_target_transforms = dict()
-
-            xinputs, xtargets, _ = gds.get_xarrays(0)
-            inputs_info = get_channel_index(xinputs)
-            targets_info = get_channel_index(xtargets)
-            for channel in inputs_info.keys():
-                varname = inputs_info[channel]["varname"]
-                if varname in self.input_transforms.keys():
-                    stacked_input_transforms[channel] = self.input_transforms[varname]
-
-            for channel in targets_info.keys():
-                varname = targets_info[channel]["varname"]
-                if varname in self.output_transforms.keys():
-                    stacked_output_transforms[channel] = self.output_transforms[varname]
-                if varname in self.target_transforms.keys():
-                    stacked_target_transforms[channel] = self.target_transforms[varname]
-        else:
-            stacked_input_transforms = None
-            stacked_output_transforms = None
-            stacked_target_transforms = None
-
-        return stacked_input_transforms, stacked_output_transforms, stacked_target_transforms
 
 
     @staticmethod
