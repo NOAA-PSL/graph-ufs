@@ -3,6 +3,7 @@ Implementations of Torch Dataset and DataLoader
 """
 from os.path import join
 from typing import Optional
+import logging
 import numpy as np
 import xarray as xr
 import dask.array
@@ -169,6 +170,7 @@ class Dataset():
         """e.g. transform spfh -> log(spfh), but keep the name the same for ease with GraphCast code"""
         if self.emulator.input_transforms is not None:
             for key, mapping in self.emulator.input_transforms.items():
+                logging.info(f"{self.mode.capitalize()} Dataset: transforming {key} -> {mapping.__name__}({key})")
                 with xr.set_options(keep_attrs=True):
                     xds[key] = mapping(xds[key])
                 xds[key].attrs["transformation"] = f"this variable shows {mapping.__name__}({key})"
