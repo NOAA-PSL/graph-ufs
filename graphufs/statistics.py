@@ -24,6 +24,10 @@ class StatisticsComputer:
 
     dims = ("time", "grid_yt", "grid_xt")
 
+    @property
+    def name(self):
+        return str(type(self).__name__)
+
     def __init__(
         self,
         path_in: str,
@@ -220,9 +224,9 @@ class StatisticsComputer:
             for key, mapping in self.transforms.items():
                 transformed_key = f"{mapping.__name__}_{key}"
                 if key not in data_vars:
-                    logging.warn(f"{type(self).__name__}: '{transformed_key}' listed in transforms, but '{key}' stats not being stored")
+                    logging.warn(f"{self.name}: '{transformed_key}' listed in transforms, but '{key}' stats not being stored")
                 if transformed_key not in data_vars:
-                    logging.warn(f"{type(self).__name__}: '{transformed_key}' listed in transforms, but '{transformed_key}' stats not being stored")
+                    logging.warn(f"{self.name}: '{transformed_key}' listed in transforms, but '{transformed_key}' stats not being stored")
 
     @staticmethod
     def _time2str(xval):

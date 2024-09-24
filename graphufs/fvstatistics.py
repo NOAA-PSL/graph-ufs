@@ -74,10 +74,10 @@ class FVStatisticsComputer(StatisticsComputer):
             if "delz" not in data_vars:
                 data_vars.append("delz")
 
-            logging.info(f"type(self).__name__: computing statistics for {data_vars}")
+            logging.info(f"{self.name}: computing statistics for {data_vars}")
             xds = xds[data_vars]
 
         # regrid in the vertical
-        logging.info(f"type(self).__name__: starting vertical regridding")
+        logging.info(f"{self.name}: starting vertical regridding")
         xds = fv_vertical_regrid(xds, interfaces=list(self.interfaces))
         return xds

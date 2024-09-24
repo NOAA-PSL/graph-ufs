@@ -202,6 +202,9 @@ class ReplayEmulator:
         self.set_normalization()
         self.set_stacked_normalization()
 
+    @property
+    def name(self):
+        return str(type(self).__name__)
 
     @property
     def time_per_forecast(self):
