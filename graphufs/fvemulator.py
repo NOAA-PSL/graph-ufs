@@ -193,4 +193,7 @@ def fv_vertical_regrid(xds, interfaces):
         nds[key].attrs["regridding"] = "delz weighted average in vertical, new coordinate bounds represented by 'pfull_bins'"
     for v in vars2d:
         nds[v] = xds[v]
+
+    # unfortunately, cannot store the pfull_bins due to this issue: https://github.com/pydata/xarray/issues/2847
+    nds = nds.drop_vars("pfull_bins")
     return nds

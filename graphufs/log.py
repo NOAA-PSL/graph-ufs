@@ -1,3 +1,4 @@
+import sys
 import logging
 
 class SimpleFormatter(logging.Formatter):
