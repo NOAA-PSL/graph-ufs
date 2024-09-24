@@ -40,8 +40,11 @@ if __name__ == "__main__":
     training_data = Dataset(gufs, mode="training")
     validation_data = Dataset(gufs, mode="validation")
     # this loads the data in ... suboptimal I know
+    logging.info("starting dataset loading")
     training_data.xds.load();
     validation_data.xds.load();
+    logging.info("done")
+
     trainer = BatchLoader(
         training_data,
         batch_size=gufs.batch_size,

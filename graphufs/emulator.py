@@ -298,7 +298,7 @@ class ReplayEmulator:
         """e.g. transform spfh -> log(spfh), but keep the name the same for ease with GraphCast code"""
         if self.input_transforms is not None:
             for key, mapping in self.input_transforms.items():
-                logging.info(f"ReplayEmulator: transforming {key} -> {mapping.__name__}({key})")
+                logging.info(f"{type(self).__name__}: transforming {key} -> {mapping.__name__}({key})")
                 with xr.set_options(keep_attrs=True):
                     xds[key] = mapping(xds[key])
                 xds[key].attrs["transformation"] = f"this variable shows {mapping.__name__}({key})"

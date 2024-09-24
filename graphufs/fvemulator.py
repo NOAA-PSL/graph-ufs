@@ -1,7 +1,13 @@
 import logging
+import warnings
 import numpy as np
 import xarray as xr
 import pandas as pd
+try:
+    import flox
+    _has_flox = True
+except ImportError:
+    _has_flox = False
 
 from ufs2arco import Layers2Pressure
 from graphcast.graphcast import ModelConfig, TaskConfig
@@ -20,6 +26,9 @@ class FVEmulator(ReplayEmulator):
 
 
     def __init__(self, mpi_rank=None, mpi_size=None):
+
+        if not _has_flox:
+            warnings.warn("Could not import flox, install with 'conda install -c conda-forge flox' for faster volume averaging (i.e. groupby operations)")
 
         if self.local_store_path is None:
             warnings.warn("FVEmulator.__init__: no local_store_path set, data will always be accessed remotely. Proceed with patience.")

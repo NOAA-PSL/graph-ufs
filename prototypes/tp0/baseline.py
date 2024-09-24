@@ -1,21 +1,8 @@
-import xarray as xr
 from jax import tree_util
-import numpy as np
 
-from graphufs import FVEmulator
+from graphufs import ReplayEmulator
 
-def log(xda):
-    cond = xda > 0
-    return xr.where(
-        cond,
-        np.log(xda.where(cond)),
-        0.,
-    )
-
-def exp(xda):
-    return np.exp(xda)
-
-class TP0Emulator(FVEmulator):
+class P0Emulator(ReplayEmulator):
 
     data_url = "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.zarr"
     norm_urls = {
@@ -25,15 +12,15 @@ class TP0Emulator(FVEmulator):
     }
     wb2_obs_url = "gs://weatherbench2/datasets/era5/1959-2022-6h-64x32_equiangular_conservative.zarr"
 
-    local_store_path = "./local-output"
+    local_store_path = "./local-output-baseline"
     cache_data = True
 
     # these could be moved to a yaml file later
     # task config options
     input_variables = (
         "pressfc",
-        "tmp2m",
-        "spfh2m",
+        "ugrd10m",
+        "vgrd10m",
         "tmp",
         "spfh",
         "land_static",
@@ -46,8 +33,8 @@ class TP0Emulator(FVEmulator):
     )
     target_variables = (
         "pressfc",
-        "tmp2m",
-        "spfh2m",
+        "ugrd10m",
+        "vgrd10m",
         "tmp",
         "spfh",
     )
@@ -58,7 +45,12 @@ class TP0Emulator(FVEmulator):
         "day_progress_sin",
         "day_progress_cos",
     )
-    interfaces = (100, 300, 800, 1000)
+    all_variables = tuple() # this is created in __init__
+    pressure_levels = (
+        100,
+        500,
+        1000,
+    )
 
     # time related
     delta_t = "3h"              # the model time step
@@ -70,7 +62,7 @@ class TP0Emulator(FVEmulator):
     )
     testing_dates = (           # bounds of testing data (inclusive)
         "1995-01-01T00",        # start
-        "1995-01-31T18"         # stop
+        "1995-12-31T18"         # stop
     )
     validation_dates = (        # bounds of validation data (inclusive)
         "1996-01-01T00",        # start
@@ -89,28 +81,18 @@ class TP0Emulator(FVEmulator):
     gnn_msg_steps = 4
     hidden_layers = 1
     radius_query_fraction_edge_length = 0.6
+    mesh2grid_edge_normalization_factor = 0.6180338738074472
 
     # loss weighting, defaults to GraphCast implementation
     weight_loss_per_latitude = True
     weight_loss_per_level = True
     loss_weights_per_variable = {
-        "pressfc": 1.0,
-        "ugrd10m": 1.0,
-        "vgrd10m": 1.0,
-        "tmp2m": 1.0,
-        "spfh2m": 1.0,
-        "tmp": 1.0,
-        "spfh": 1.0,
+        "tmp2m"         : 1.0,
+        "ugrd10m"       : 0.1,
+        "vgrd10m"       : 0.1,
+        "pressfc"       : 0.1,
+        "prateb_ave"    : 0.1,
     }
-    input_transforms = {
-        "spfh": log,
-        "spfh2m": log,
-    }
-    output_transforms = {
-        "spfh": exp,
-        "spfh2m": exp,
-    }
-
 
     # this is used for initializing the state in the gradient computation
     grad_rng_seed = 0
@@ -135,7 +117,7 @@ class TP0Emulator(FVEmulator):
     dask_threads = 8
 
 tree_util.register_pytree_node(
-    TP0Emulator,
-    TP0Emulator._tree_flatten,
-    TP0Emulator._tree_unflatten
+    P0Emulator,
+    P0Emulator._tree_flatten,
+    P0Emulator._tree_unflatten
 )
