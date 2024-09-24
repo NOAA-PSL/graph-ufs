@@ -229,7 +229,7 @@ class StatisticsComputer:
             elif opstr == "diffs_stddev":
                 result = xda.diff("time").std(dims)
 
-        result.attrs["stats_description"] = description+str(dims)
+        result.attrs["description"] = description+str(dims)
         if "time" in xda.dims:
             result.attrs["stats_start_date"] = self._time2str(xda["time"][0])
             result.attrs["stats_end_date"] = self._time2str(xda["time"][-1])

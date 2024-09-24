@@ -768,7 +768,7 @@ class ReplayEmulator:
             norms = xds[[x for x in varnames if x in xds]]
             # replicate time varying variables
             for key in norms.data_vars:
-                if "time" in xds[key].attrs["stats_description"]:
+                if "time" in xds[key].attrs["description"]:
                     norms[key] = xr.concat(
                         [norms[key].copy() for _ in range(n_time)],
                         dim="time",
