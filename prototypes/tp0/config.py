@@ -58,7 +58,7 @@ class TP0Emulator(FVEmulator):
         "day_progress_sin",
         "day_progress_cos",
     )
-    interfaces = (100, 300, 800, 1000)
+    interfaces = (400, 600, 800, 1000)
 
     # time related
     delta_t = "3h"              # the model time step
@@ -94,13 +94,11 @@ class TP0Emulator(FVEmulator):
     weight_loss_per_latitude = True
     weight_loss_per_level = True
     loss_weights_per_variable = {
-        "pressfc": 1.0,
-        "ugrd10m": 1.0,
-        "vgrd10m": 1.0,
-        "tmp2m": 1.0,
-        "spfh2m": 1.0,
-        "tmp": 1.0,
-        "spfh": 1.0,
+        "pressfc"   : 1.0,
+        "tmp2m"     : 1.0,
+        "spfh2m"    : 1.0,
+        "tmp"       : 1.0,
+        "spfh"      : 1.0,
     }
     input_transforms = {
         "spfh": log,
@@ -110,7 +108,6 @@ class TP0Emulator(FVEmulator):
         "spfh": exp,
         "spfh2m": exp,
     }
-
 
     # this is used for initializing the state in the gradient computation
     grad_rng_seed = 0

@@ -45,12 +45,7 @@ class P0Emulator(ReplayEmulator):
         "day_progress_sin",
         "day_progress_cos",
     )
-    all_variables = tuple() # this is created in __init__
-    pressure_levels = (
-        100,
-        500,
-        1000,
-    )
+    pressure_levels = (497, 704, 925)
 
     # time related
     delta_t = "3h"              # the model time step
@@ -62,7 +57,7 @@ class P0Emulator(ReplayEmulator):
     )
     testing_dates = (           # bounds of testing data (inclusive)
         "1995-01-01T00",        # start
-        "1995-12-31T18"         # stop
+        "1995-01-31T18"         # stop
     )
     validation_dates = (        # bounds of validation data (inclusive)
         "1996-01-01T00",        # start
@@ -81,17 +76,16 @@ class P0Emulator(ReplayEmulator):
     gnn_msg_steps = 4
     hidden_layers = 1
     radius_query_fraction_edge_length = 0.6
-    mesh2grid_edge_normalization_factor = 0.6180338738074472
 
     # loss weighting, defaults to GraphCast implementation
     weight_loss_per_latitude = True
     weight_loss_per_level = True
     loss_weights_per_variable = {
-        "tmp2m"         : 1.0,
-        "ugrd10m"       : 0.1,
-        "vgrd10m"       : 0.1,
-        "pressfc"       : 0.1,
-        "prateb_ave"    : 0.1,
+        "pressfc"   : 1.0,
+        "tmp2m"     : 1.0,
+        "spfh2m"    : 1.0,
+        "tmp"       : 1.0,
+        "spfh"      : 1.0,
     }
 
     # this is used for initializing the state in the gradient computation
