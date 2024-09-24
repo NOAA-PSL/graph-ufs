@@ -15,12 +15,6 @@ from graphcast import data_utils
 
 from .emulator import ReplayEmulator
 
-"""
-- Deal with normalization ... right now set_normalization grabs pfull=self.levels..
-- Do we want to compute avg(log( or log(avg(?
-  * currently computing avg(log(
-"""
-
 class FVEmulator(ReplayEmulator):
     interfaces = None # Note the these values can be approximate, we'll grab nearest neighbors to Replay dataset
 
@@ -114,15 +108,16 @@ class FVEmulator(ReplayEmulator):
         if new_time is not None:
             xds = xds.sel(time=new_time)
 
-        # for this one, lets vertically average after doing the transform... for now?
-        xds = self.transform_variables(xds)
-
         xds = fv_vertical_regrid(
             xds,
             interfaces=list(self.interfaces),
         )
+
         # if we didn't want delz and just kept it for regridding, remove it here
         xds = xds[[x for x in self.all_variables if x in xds]]
+
+        # perform transform after vertical averaging, less subsceptible to noisy results
+        xds = self.transform_variables(xds)
         return xds
 
 def get_new_vertical_grid(interfaces):
