@@ -6,6 +6,7 @@ import shutil
 from functools import partial
 
 import numpy as np
+import pandas as pd
 import optax
 from graphufs.stacked_training import (
     optimize,
@@ -14,7 +15,9 @@ from graphufs.stacked_training import (
 from graphufs.datasets import Dataset
 from graphufs.batchloader import BatchLoader
 
+from graphufs.log import setup_simple_log
 from graphufs.utils import get_last_input_mapping
+from graphufs.fvstatistics import FVStatisticsComputer
 from graphufs import (
     init_devices,
 )
@@ -25,13 +28,35 @@ from config import TP0Emulator
 if __name__ == "__main__":
 
     # logging isn't working for me on PSL, no idea why
-    logging.basicConfig(
-        stream=sys.stdout,
-        level=logging.INFO,
-    )
+    setup_simple_log()
 
-    # parse arguments
-    gufs, args = TP0Emulator.from_parser()
+    # This is a bit of a hack to enable testing, for real
+    # cases, we want to compute statistics during preprocessing
+    # Note we want to do this before initializing emulator object
+    # since it tries to pull the statistics there.
+    stats_path = os.path.dirname(TP0Emulator.norm_urls["mean"])
+    if not os.path.isdir(stats_path):
+        logging.info(f"Could not find {stats_path}, computing statistics...")
+        fvstats = FVStatisticsComputer(
+            path_in=TP0Emulator.data_url,
+            path_out=stats_path,
+            interfaces=TP0Emulator.interfaces,
+            start_date=None,
+            end_date=TP0Emulator.training_dates[-1],
+            time_skip=None,
+            load_full_dataset=True,
+            transforms=TP0Emulator.input_transforms,
+        )
+        all_variables = list(set(
+            TP0Emulator.input_variables + TP0Emulator.forcing_variables + TP0Emulator.target_variables
+        ))
+        all_variables.append("log_spfh")
+        all_variables.append("log_spfh2m")
+        fvstats(all_variables, integration_period=pd.Timedelta(hours=3))
+
+    # We don't parse arguments since we can't be inconsistent with stats
+    # computed above
+    gufs = TP0Emulator()
 
     # for multi-gpu training
     init_devices(gufs)
@@ -40,10 +65,10 @@ if __name__ == "__main__":
     training_data = Dataset(gufs, mode="training")
     validation_data = Dataset(gufs, mode="validation")
     # this loads the data in ... suboptimal I know
-    logging.info("starting dataset loading")
+    logging.info("Loading Training and Validation Datasets")
     training_data.xds.load();
     validation_data.xds.load();
-    logging.info("done")
+    logging.info("... done loading")
 
     trainer = BatchLoader(
         training_data,

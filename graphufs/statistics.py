@@ -147,15 +147,15 @@ class StatisticsComputer:
         Returns:
             xarray.Dataset: Result dataset with standard deviation of differences by vertical level.
         """
-        with xr.set_options(keep_attrs=True):
-            result = xds.diff("time")
-            dims = list(d for d in self.dims if d in result.dims)
-            result = result.std(dims)
 
-        for key in result.data_vars:
-            result[key].attrs["description"] = f"standard deviation of temporal {self.delta_t} difference over lat, lon, time"
-            result[key].attrs["stats_start_date"] = self._time2str(xds["time"][0])
-            result[key].attrs["stats_end_date"] = self._time2str(xds["time"][-1])
+        result = xr.Dataset()
+        time_varying_vars = [key for key in xds.data_vars if "time" in xds[key].dims]
+        for key in time_varying_vars:
+            result[key] = self._local_op(
+                xds[key],
+                opstr="diffs_stddev",
+                description=f"standard deviation of temporal {self.delta_t} difference over ",
+            )
 
         this_path_out = os.path.join(
             self.path_out,
@@ -174,15 +174,14 @@ class StatisticsComputer:
         Returns:
             xarray.Dataset: Result dataset with standard deviation by vertical level.
         """
-        with xr.set_options(keep_attrs=True):
-            dims = list(d for d in self.dims if d in xds.dims)
-            result = xds.std(dims)
 
-        for key in result.data_vars:
-            result[key].attrs["description"] = f"standard deviation over {str(dims)}"
-            if "time" in xds[key].dims:
-                result[key].attrs["stats_start_date"] = self._time2str(xds["time"][0])
-                result[key].attrs["stats_end_date"] = self._time2str(xds["time"][-1])
+        result = xr.Dataset()
+        for key in xds.data_vars:
+            result[key] = self._local_op(
+                xds[key],
+                opstr="stddev",
+                description=f"standard deviation over ",
+            )
 
         this_path_out = os.path.join(
             self.path_out,
@@ -201,15 +200,13 @@ class StatisticsComputer:
         Returns:
             xarray.Dataset: Result dataset with mean by vertical level.
         """
-        with xr.set_options(keep_attrs=True):
-            dims = list(d for d in self.dims if d in xds.dims)
-            result = xds.mean(dims)
-
-        for key in result.data_vars:
-            result[key].attrs["description"] = f"average over {str(dims)}"
-            if "time" in xds[key].dims:
-                result[key].attrs["stats_start_date"] = self._time2str(xds["time"][0])
-                result[key].attrs["stats_end_date"] = self._time2str(xds["time"][-1])
+        result = xr.Dataset()
+        for key in xds.data_vars:
+            result[key] = self._local_op(
+                xds[key],
+                opstr="mean",
+                description=f"average over ",
+            )
 
         this_path_out = os.path.join(
             self.path_out,
@@ -219,14 +216,33 @@ class StatisticsComputer:
         logging.info(f"Stored result: {this_path_out}")
         return result
 
+    def _local_op(self, xda, opstr, description):
+
+        # get appropriate dims, e.g. maybe not time varying
+        dims = list(d for d in self.dims if d in xda.dims)
+
+        with xr.set_options(keep_attrs=True):
+            if opstr == "mean":
+                result = xda.mean(dims)
+            elif opstr == "stddev":
+                result = xda.std(dims)
+            elif opstr == "diffs_stddev":
+                result = xda.diff("time").std(dims)
+
+        result.attrs["stats_description"] = description+str(dims)
+        if "time" in xda.dims:
+            result.attrs["stats_start_date"] = self._time2str(xda["time"][0])
+            result.attrs["stats_end_date"] = self._time2str(xda["time"][-1])
+        return result
+
     def _transforms_warning(self, data_vars):
         if self.transforms is not None:
             for key, mapping in self.transforms.items():
                 transformed_key = f"{mapping.__name__}_{key}"
                 if key not in data_vars:
-                    logging.warn(f"{self.name}: '{transformed_key}' listed in transforms, but '{key}' stats not being stored")
+                    logging.warn(f"{self.name}: '{transformed_key}' listed in transforms, but '{key}' stats not being stored. Make sure this gets computed.")
                 if transformed_key not in data_vars:
-                    logging.warn(f"{self.name}: '{transformed_key}' listed in transforms, but '{transformed_key}' stats not being stored")
+                    logging.warn(f"{self.name}: '{transformed_key}' listed in transforms, but '{transformed_key}' stats not being stored. Make sure this gets computed.")
 
     @staticmethod
     def _time2str(xval):

@@ -671,23 +671,34 @@ class ReplayEmulator:
                 os.path.basename(self.norm_urls[component]),
             )
 
+
+
             if os.path.isdir(local_path):
                 xds = xr.open_zarr(local_path)
+                myvars = list(x for x in self.all_variables if x in xds)
+                xds = xds[myvars]
                 xds = xds.load()
                 foundit = True
 
             else:
-                xds = xr.open_zarr(self.norm_urls[component], storage_options={"token":"anon"})
+                kwargs = {"storage_options": {"token": "anon"}} if any(x in self.norm_urls[component] for x in ["gs://", "gcs://"]) else {}
+                xds = xr.open_zarr(self.norm_urls[component], **kwargs)
+                myvars = list(x for x in self.all_variables if x in xds)
                 # keep attributes in order to distinguish static from time varying components
                 with xr.set_options(keep_attrs=True):
-                    myvars = list(x for x in self.all_variables if x in xds)
+
                     if self.input_transforms is not None:
                         for key, transform_function in self.input_transforms.items():
-                            idx = myvars.index(key)
+
+                            # make sure e.g. log_spfh is in the dataset
                             transformed_key = f"{transform_function.__name__}_{key}" # e.g. log_spfh
                             assert transformed_key in xds, \
                                 f"Emulator.set_normalization: couldn't find {transformed_key} in {component} normalization dataset"
-                            myvars[idx] = transformed_key
+                            # there's a chance the original, e.g. spfh, is not in the dataset
+                            # if it is, replace it with e.g. log_spfh
+                            if key in myvars:
+                                idx = myvars.index(key)
+                                myvars[idx] = transformed_key
                     xds = xds[myvars]
                     if self.input_transforms is not None:
                         for key, transform_function in self.input_transforms.items():
@@ -757,7 +768,7 @@ class ReplayEmulator:
             norms = xds[[x for x in varnames if x in xds]]
             # replicate time varying variables
             for key in norms.data_vars:
-                if "time" in xds[key].attrs["description"]:
+                if "time" in xds[key].attrs["stats_description"]:
                     norms[key] = xr.concat(
                         [norms[key].copy() for _ in range(n_time)],
                         dim="time",
