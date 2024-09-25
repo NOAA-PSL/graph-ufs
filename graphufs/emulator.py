@@ -57,7 +57,8 @@ class ReplayEmulator:
     tisr_integration_period = None  # TOA Incident Solar Radiation, integration period used in the function:
                                     # graphcast.solar_radiation.get_toa_incident_solar_radiation_for_xarray
                                     # default = self.delta_t, i.e. the ML model time step
-                                    # Note: has no effect unless "toa_incident_solar_radiation" is listed in "forcing_variables"
+                                    # Note: the value provided here has no effect unless "toa_incident_solar_radiation" is listed in "forcing_variables",
+                                    # which indicates to graphcast that TISR needs to be computed.
 
     # time related
     delta_t = None              # the model time step
