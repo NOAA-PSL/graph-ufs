@@ -769,7 +769,20 @@ class ReplayEmulator:
 
         # 1. compute latitude weighting
         if self.weight_loss_per_latitude:
-            lat_weights = normalized_latitude_weights(xtargets)
+            # for the subsampled case, we want to compute weights
+            # on the parent 0.25 degree grid, and subsample it
+            # because the pole points in the subsampled version
+            # are not equidistant between their neighbor and the pole
+            if "0.25-degree-subsampled" in self.data_url:
+                lat = xr.open_zarr(
+                    self.data_url.replace("-subsampled",""),
+                    storage_options={"token":"anon"}
+                )["grid_yt"]
+                lat_weights = normalized_latitude_weights(lat)
+                lat_weights = lat_weights.isel(lat=slice(None, None, 4))
+            else:
+                lat_weights = normalized_latitude_weights(xtargets)
+
             lat_weights = lat_weights.data[...,None][...,None]
 
             weights *= lat_weights
