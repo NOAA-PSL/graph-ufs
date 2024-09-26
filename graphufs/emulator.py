@@ -54,6 +54,11 @@ class ReplayEmulator:
     levels = list()             # created in __init__, has exact pfull level values
     latitude = tuple()
     longitude = tuple()
+    tisr_integration_period = None  # TOA Incident Solar Radiation, integration period used in the function:
+                                    # graphcast.solar_radiation.get_toa_incident_solar_radiation_for_xarray
+                                    # default = self.delta_t, i.e. the ML model time step
+                                    # Note: the value provided here has no effect unless "toa_incident_solar_radiation" is listed in "forcing_variables",
+                                    # which indicates to graphcast that TISR needs to be computed.
 
     # time related
     delta_t = None              # the model time step
@@ -206,6 +211,10 @@ class ReplayEmulator:
         self.set_normalization()
         self.set_stacked_normalization()
 
+        # TOA Incident Solar Radiation integration period
+        if self.tisr_integration_period is None:
+            self.tisr_integration_period = self.delta_t
+
     @property
     def name(self):
         return str(type(self).__name__)
@@ -233,6 +242,7 @@ class ReplayEmulator:
     def extract_kwargs(self):
         kw = {k: v for k, v in dataclasses.asdict(self.task_config).items() if k not in ("latitude", "longitude")}
         kw["target_lead_times"] = self.target_lead_time
+        kw["integration_period"] = self.tisr_integration_period
         return kw
 
     @property
