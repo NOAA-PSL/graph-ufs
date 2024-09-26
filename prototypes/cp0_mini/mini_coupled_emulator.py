@@ -17,8 +17,21 @@ class CP0Emulator(ReplayCoupledEmulator):
         "std": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/mom6.statistics.1993-1997/stddev_by_level.zarr",
         "stddiff": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/mom6.statistics.1993-1997/diffs_stddev_by_level.zarr",
     }
-    wb2_obs_url = "gs://weatherbench2/datasets/era5/1959-2022-6h-64x32_equiangular_conservative.zarr"
     
+    ice_data_url = "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/03h-freq/zarr/fv3.zarr"
+    ice_norm_urls = {
+        "mean": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/fv3.statistics.1993-1997/mean_by_level.zarr",
+        "std": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/fv3.statistics.1993-1997/stddev_by_level.zarr",
+        "stddiff": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/fv3.statistics.1993-1997/diffs_stddev_by_level.zarr",
+    }
+    land_data_url = "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/03h-freq/zarr/fv3.zarr"
+    land_norm_urls = {
+        "mean": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/fv3.statistics.1993-1997/mean_by_level.zarr",
+        "std": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/fv3.statistics.1993-1997/stddev_by_level.zarr",
+        "stddiff": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/fv3.statistics.1993-1997/diffs_stddev_by_level.zarr",
+    }
+
+    wb2_obs_url = "gs://weatherbench2/datasets/era5/1959-2022-6h-64x32_equiangular_conservative.zarr"
 
     local_store_path = "./zarr-stores"
     no_cache_data = False
@@ -31,6 +44,7 @@ class CP0Emulator(ReplayCoupledEmulator):
         "ugrd10m",
         "vgrd10m",
         "tmp",
+        "land",
         "year_progress_sin",
         "year_progress_cos",
         "day_progress_sin",
@@ -40,27 +54,44 @@ class CP0Emulator(ReplayCoupledEmulator):
         "SSH",
         "so",
         "temp",
-        "landsea_mask"
+        "landsea_mask",
+    )
+    ice_input_variables = (
+        "icec",
+        "icetk",
+    )
+    land_input_variables = (
+        "soilm",
     )
     atm_target_variables = (
         "pressfc",
         "ugrd10m",
         "vgrd10m",
         "tmp",
+        "land",
     )
     ocn_target_variables = (
         "SSH",
         "so",
         "temp",
     )
+    ice_target_variables = (
+        "icec",
+        "icetk",
+    )
+    land_target_variables = (
+        "soilm",
+    )
     atm_forcing_variables = (
-        "land",
+        "dswrf_avetoa",
         "year_progress_sin",
         "year_progress_cos",
         "day_progress_sin",
         "day_progress_cos",
     )
     ocn_forcing_variables = ()
+    ice_forcing_variables = ()
+    land_forcing_variables = ()
 
     all_variables = tuple() # this is created in __init__
     atm_pressure_levels = (
@@ -120,6 +151,13 @@ class CP0Emulator(ReplayCoupledEmulator):
         "SSH"           : 0.1,
         "so"            : 1.0,
         "temp"          : 1.0,
+    }
+    ice_loss_weights_per_variable = {
+        "icec"          : 1.0,
+        "icetk"         : 0.1,
+    }
+    land_loss_weights_per_variable = {
+        "soilm"         : 0.1,
     }
 
     # this is used for initializing the state in the gradient computation
