@@ -19,8 +19,8 @@ class P0Emulator(ReplayEmulator):
     # task config options
     input_variables = (
         "pressfc",
-        "ugrd10m",
-        "vgrd10m",
+        "tmp2m",
+        "spfh2m",
         "tmp",
         "spfh",
         "land_static",
@@ -33,8 +33,8 @@ class P0Emulator(ReplayEmulator):
     )
     target_variables = (
         "pressfc",
-        "ugrd10m",
-        "vgrd10m",
+        "tmp2m",
+        "spfh2m",
         "tmp",
         "spfh",
     )
@@ -45,7 +45,7 @@ class P0Emulator(ReplayEmulator):
         "day_progress_sin",
         "day_progress_cos",
     )
-    pressure_levels = (497, 704, 925)
+    pressure_levels = (498, 698, 899)
 
     # time related
     delta_t = "3h"              # the model time step
@@ -53,7 +53,7 @@ class P0Emulator(ReplayEmulator):
     target_lead_time = "3h"     # how long is the forecast ... at what point do we compare model to targets
     training_dates = (          # bounds of training data (inclusive)
         "1994-01-01T00",        # start
-        "1994-01-31T18"         # stop
+        "1994-03-31T18"         # stop
     )
     testing_dates = (           # bounds of testing data (inclusive)
         "1995-01-01T00",        # start
@@ -61,13 +61,13 @@ class P0Emulator(ReplayEmulator):
     )
     validation_dates = (        # bounds of validation data (inclusive)
         "1996-01-01T00",        # start
-        "1996-01-15T18"         # stop
+        "1996-01-31T18"         # stop
     )
 
     # training protocol
     batch_size = 16
     num_batch_splits = 1
-    num_epochs = 2
+    num_epochs = 50
 
     # model config options
     resolution = 1.0
