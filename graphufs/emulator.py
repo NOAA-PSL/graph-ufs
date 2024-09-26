@@ -199,6 +199,10 @@ class ReplayEmulator:
         logging.debug(f"self.n_target: {self.n_target}")
 
         # set normalization here so that we can jit compile with this class
+        # a bit annoying, have to copy datatypes here to avoid the Ghost Bus problem
+        self.norm_urls = self.norm_urls.copy()
+        self.norm = dict()
+        self.stacked_norm = dict()
         self.set_normalization()
         self.set_stacked_normalization()
 
