@@ -79,7 +79,7 @@ class P0Emulator(ReplayEmulator):
 
     # loss weighting, defaults to GraphCast implementation
     weight_loss_per_latitude = True
-    weight_loss_per_level = True
+    weight_loss_per_level = False
     loss_weights_per_variable = {
         "pressfc"   : 1.0,
         "tmp2m"     : 1.0,
