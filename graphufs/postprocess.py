@@ -112,7 +112,7 @@ def regrid_and_rename(xds, truth):
 def interp2pressure(xds, plevels):
     """Assume plevels is in hPa"""
 
-    lp = Layers2Pressure()
+    lp = Layers2Pressure(level_name="level")
     if "delz" not in xds:
         xds["delz"] = lp.calc_delz(xds["pressfc"], xds["tmp"], xds["spfh"])
     prsl = lp.calc_layer_mean_pressure(xds["pressfc"], xds["tmp"], xds["spfh"], xds["delz"])
