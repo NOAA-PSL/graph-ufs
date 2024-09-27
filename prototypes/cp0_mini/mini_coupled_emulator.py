@@ -141,7 +141,7 @@ class CP0Emulator(ReplayCoupledEmulator):
     weight_loss_per_latitude = True
     weight_loss_per_level = True
     atm_loss_weights_per_variable = {
-        "tmp2m"         : 1.0,
+        "tmp"           : 1.0,
         "ugrd10m"       : 0.1,
         "vgrd10m"       : 0.1,
         "pressfc"       : 0.1,

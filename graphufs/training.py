@@ -141,6 +141,7 @@ def optimize(
     emulator,
     training_data,
     validation_data,
+    weights,
     opt_state=None,
 ):
     """Optimize the model parameters by running through all optim_steps in data
@@ -165,7 +166,7 @@ def optimize(
     @hk.transform_with_state
     def loss_fn(emulator, inputs, targets, forcings):
         predictor = construct_wrapped_graphcast(emulator)
-        loss, diagnostics = predictor.loss(inputs, targets, forcings)
+        loss, diagnostics = predictor.loss(inputs, targets, forcings, weights)
         return map_structure(
             lambda x: unwrap_data(x.mean(), require_jax=True), (loss, diagnostics)
         )

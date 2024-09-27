@@ -74,7 +74,14 @@ if __name__ == "__main__":
         loss_name = f"{gufs.local_store_path}/loss.nc"
         if os.path.exists(loss_name):
             os.remove(loss_name)
-
+    
+    # Loss weights per variable
+    loss_weights_per_var = {}
+    loss_weights_per_var.update(gufs.atm_loss_weights_per_variable)
+    loss_weights_per_var.update(gufs.ocn_loss_weights_per_variable)
+    loss_weights_per_var.update(gufs.ice_loss_weights_per_variable)
+    loss_weights_per_var.update(gufs.land_loss_weights_per_variable)
+    
     # training
     opt_state = None
     if not args.test:
@@ -100,6 +107,7 @@ if __name__ == "__main__":
                     emulator=gufs,
                     training_data=data_train,
                     validation_data=data_valid,
+                    weights=loss_weights_per_var,
                     opt_state=opt_state,
                 )
 

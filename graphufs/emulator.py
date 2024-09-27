@@ -129,13 +129,18 @@ class ReplayCoupledEmulator:
     land_loss_weights_per_variable = {
         "soilm"         : 0.1,
     }
+    loss_weights_per_variable = {}
+    loss_weights_per_variable.update(atm_loss_weights_per_variable) 
+    loss_weights_per_variable.update(ocn_loss_weights_per_variable) 
+    loss_weights_per_variable.update(ice_loss_weights_per_variable)
+    loss_weights_per_variable.update(land_loss_weights_per_variable)
+
     # this is used for initializing the state in the gradient computation
     grad_rng_seed = None
     init_rng_seed = None
     training_batch_rng_seed = None # used to randomize the training batches
 
     # data chunking options
-
 
     # for stacked graphcast
     last_input_channel_mapping = None
@@ -781,7 +786,6 @@ class ReplayCoupledEmulator:
 
         # do we need to put this on the device(s)?
         return weights
-
 
 
     @staticmethod
