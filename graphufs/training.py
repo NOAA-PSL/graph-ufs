@@ -581,7 +581,8 @@ def predict(
             targets_template=target_batches.isel(optim_step=k),
             forcings=forcing_batches.isel(optim_step=k),
         )
-
+        # round off the land mask values to their nearest integer
+        predictions["land"] = predictions["land"].round()
         all_predictions.append(predictions)
 
         progress_bar.update(1)

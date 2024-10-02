@@ -44,7 +44,7 @@ class CP0Emulator(ReplayCoupledEmulator):
         "ugrd10m",
         "vgrd10m",
         "tmp",
-        "land",
+        #"land",
         "year_progress_sin",
         "year_progress_cos",
         "day_progress_sin",
@@ -68,7 +68,7 @@ class CP0Emulator(ReplayCoupledEmulator):
         "ugrd10m",
         "vgrd10m",
         "tmp",
-        "land",
+        #"land",
     )
     ocn_target_variables = (
         "SSH",
