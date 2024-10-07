@@ -347,7 +347,7 @@ class ReplayCoupledEmulator:
         
         # mask nans in ocean target variables
         if es_comp.lower() == "ocn".lower() or es_comp.lower() == "ice" or es_comp.lower() == "land":
-            xds = xds.fillna(9999)
+            xds = xds.fillna(0)
         
         return xds
 

@@ -581,10 +581,43 @@ def predict(
             targets_template=target_batches.isel(optim_step=k),
             forcings=forcing_batches.isel(optim_step=k),
         )
-        # round off the land mask values to their nearest integer
-        predictions["land"] = predictions["land"].round()
-        all_predictions.append(predictions)
+        
+        # postprocess predictions the same way as done during training
+        for var in predictions:
+            if "landsea_mask" in input_batches:
+                landseamask = input_batches["landsea_mask"].isel(optim_step=k)
+                if "z_l" in predictions[var].dims:
+                    predictions[var] = predictions[var]*landseamask
 
+                elif var.lower() == "SSH".lower():
+                    predictions[var] = predictions[var]*landseamask.isel(z_l=0)
+
+                elif var.lower() == "land".lower():
+                    predictions[var]= predictions[var].round()
+
+                elif var.startswith("ice"):
+                    if "land" in predictions:
+                        mask = predictions["land"].round()
+                        icemask = xarray.where(mask==2, 1, 0) # ice=2 in the mask
+                        predictions[var] = predictions[var]*icemask
+                    else:
+                        predictions[var] = predictions[var]*landseamask.isel(z_l=0)
+
+                elif var.startswith("soil"):
+                    if "land" in predictions:
+                        mask = predictions["land"].round()
+                        landmask = xarray.where(mask==1, 1, 0) # land=1 in the mask
+                        predictions[var] = predictions[var]*landmask
+                    # Below is supposed to work, but the static landsea mask omits a few land 
+                    # locations and treats them as ocean. This leads to huge errors in the soilm
+                    # which has significantly high values in those locations. It is therefore wiser
+                    # to not exclude anything at all rather than excluding a few but important locs. 
+                    #else:
+                    #    landmask = 1 - landseamask.isel(z_l=0)
+                    #    predictions[var] = predictions[var]*landmask  
+        
+        all_predictions.append(predictions)
+        
         progress_bar.update(1)
 
     progress_bar.close()

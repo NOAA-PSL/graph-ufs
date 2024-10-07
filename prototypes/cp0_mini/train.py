@@ -140,7 +140,12 @@ if __name__ == "__main__":
 
             # get chunk of data in parallel with inference
             data = generator.get_data()
-            print('Testing Data:', data)
+            print('Testing data:', data)
+
+            # fill nans with zero
+            data["inputs"] = data["inputs"].fillna(0)
+            data["targets"] = data["targets"].fillna(0)
+            data["forcings"] = data["forcings"].fillna(0)
 
             # run predictions
             predictions = predict(
@@ -151,6 +156,7 @@ if __name__ == "__main__":
                 target_batches=data["targets"],
                 forcing_batches=data["forcings"],
             )
+
             inputs = data["inputs"]
             targets = data["targets"]
             inittimes = data["inittimes"]

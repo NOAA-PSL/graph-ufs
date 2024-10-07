@@ -110,7 +110,8 @@ class CP0Emulator(ReplayCoupledEmulator):
                                 # A more complicated case of diffential time steps and grid size will be 
                                 # developed in the future
     input_duration = "12h"      # time covered by initial condition(s) + delta_t (necessary for GraphCast code)
-    target_lead_time = "6h"     # how long is the forecast ... at what point do we compare model to targets
+    #target_lead_time = "6h"     # how long is the forecast ... at what point do we compare model to targets
+    target_lead_time = [f"{n}h" for n in range(6, 6*4*1+1, 6)]
     training_dates = (          # bounds of training data (inclusive)
         "1994-01-01T00",        # start
         "1994-01-31T18"         # stop
