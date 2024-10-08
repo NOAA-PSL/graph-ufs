@@ -1,0 +1,311 @@
+/contrib2/Tim.Smith/graph-ufs/graphufs/training.py:59: UserWarning: Import failed for either mpi4py or mpi4jax.
+  warnings.warn("Import failed for either mpi4py or mpi4jax.")
+/contrib2/Tim.Smith/graph-ufs/graphufs/stacked_training.py:50: UserWarning: Import failed for either mpi4py or mpi4jax.
+  warnings.warn("Import failed for either mpi4py or mpi4jax.")
+[27 s] [Rank 0] [INFO] Unable to initialize backend 'rocm': NOT_FOUND: Could not find registered platform with name: "rocm". Available platform names are: CUDA
+[27 s] [Rank 0] [INFO] Unable to initialize backend 'tpu': INTERNAL: Failed to open libtpu.so: libtpu.so: cannot open shared object file: No such file or directory
+[27 s] [Rank 0] [INFO] Using 1 GPUs.
+[28 s] [Rank 0] [INFO]
+jax:    0.4.27
+jaxlib: 0.4.23.dev20240503
+numpy:  1.26.4
+python: 3.11.9 | packaged by conda-forge | (main, Apr 19 2024, 18:36:13) [GCC 12.3.0]
+jax.devices (1 total, 1 local): [cuda(id=0)]
+process_count: 1
+platform: uname_result(system='Linux', node='timsmith-p1rocky2-00003-1-0001', release='4.18.0-513.18.1.el8_9.x86_64', version='#1 SMP Wed Feb 21 21:34:36 UTC 2024', machine='x86_64')
+
+
+$ nvidia-smi
+Fri Sep  6 15:19:26 2024
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 550.54.15              Driver Version: 550.54.15      CUDA Version: 12.4     |
+|-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA A100 80GB PCIe          On  |   00000001:00:00.0 Off |                    0 |
+| N/A   41C    P0             68W /  300W |     428MiB /  81920MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI        PID   Type   Process name                              GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A    644889      C   python                                        416MiB |
++-----------------------------------------------------------------------------------------+
+
+[28 s] [Rank 0] [INFO] Local devices: 1 [cuda(id=0)]
+[28 s] [Rank 0] [INFO] Global devices: 1 [cuda(id=0)]
+[40 s] [Rank 0] [INFO] Initializing Loss Function Weights and Stacked Mappings
+[41 s] [Rank 0] [INFO] Initializing Optimizer and Parameters
+[101 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_0.npz
+[101 s] [Rank 0] [INFO] Starting Training with:
+[101 s] [Rank 0] [INFO]          batch_size = 16
+[101 s] [Rank 0] [INFO]          1000 linearly increasing LR steps
+[101 s] [Rank 0] [INFO]          302872 cosine decay LR steps
+[101 s] [Rank 0] [INFO]          303872 total training steps
+[101 s] [Rank 0] [INFO]          325 validation steps
+[101 s] [Rank 0] [INFO] Training on epoch 0
+[102 s] [Rank 0] [INFO] Started jitting optim_step
+[309 s] [Rank 0] [INFO] Finished jitting optim_step
+[309 s] [Rank 0] [INFO] Started jitting validation loss
+[322 s] [Rank 0] [INFO] Finished jitting validation loss
+loss = 4.27296, LR = 1.00e-03: 100%|██████████████████████████| 4748/4748 [1:06:01<00:00,  1.20it/s]
+validation loss = 4.80452: 100%|██████████████████████████████████| 325/325 [04:07<00:00,  1.31it/s]
+[4532 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_1.npz
+[4532 s] [Rank 0] [INFO] Training on epoch 1
+loss = 3.82408, LR = 9.98e-04: 100%|██████████████████████████| 4748/4748 [1:00:14<00:00,  1.31it/s]
+validation loss = 3.98366: 100%|██████████████████████████████████| 325/325 [04:08<00:00,  1.31it/s]
+[8397 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_2.npz
+[8397 s] [Rank 0] [INFO] Training on epoch 2
+loss = 2.29336, LR = 9.95e-04: 100%|██████████████████████████| 4748/4748 [1:00:16<00:00,  1.31it/s]
+validation loss = 2.18797: 100%|██████████████████████████████████| 325/325 [04:07<00:00,  1.31it/s]
+[12265 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_3.npz
+[12265 s] [Rank 0] [INFO] Training on epoch 3
+loss = 2.10455, LR = 9.91e-04: 100%|██████████████████████████| 4748/4748 [1:00:18<00:00,  1.31it/s]
+validation loss = 2.07264: 100%|██████████████████████████████████| 325/325 [04:07<00:00,  1.31it/s]
+[16135 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_4.npz
+[16135 s] [Rank 0] [INFO] Training on epoch 4
+loss = 2.05310, LR = 9.86e-04: 100%|██████████████████████████| 4748/4748 [1:00:14<00:00,  1.31it/s]
+validation loss = 1.98762: 100%|██████████████████████████████████| 325/325 [04:07<00:00,  1.31it/s]
+[20002 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_5.npz
+[20002 s] [Rank 0] [INFO] Training on epoch 5
+loss = 1.95280, LR = 9.80e-04: 100%|██████████████████████████| 4748/4748 [1:00:17<00:00,  1.31it/s]
+validation loss = 1.95935: 100%|██████████████████████████████████| 325/325 [04:08<00:00,  1.31it/s]
+[23873 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_6.npz
+[23873 s] [Rank 0] [INFO] Training on epoch 6
+loss = 1.79325, LR = 9.72e-04: 100%|██████████████████████████| 4748/4748 [1:00:24<00:00,  1.31it/s]
+validation loss = 1.96558: 100%|██████████████████████████████████| 325/325 [04:07<00:00,  1.31it/s]
+[27752 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_7.npz
+[27752 s] [Rank 0] [INFO] Training on epoch 7
+loss = 1.71961, LR = 9.64e-04: 100%|██████████████████████████| 4748/4748 [1:00:17<00:00,  1.31it/s]
+validation loss = 1.97211: 100%|██████████████████████████████████| 325/325 [04:06<00:00,  1.32it/s]
+[31622 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_8.npz
+[31622 s] [Rank 0] [INFO] Training on epoch 8
+loss = 1.82102, LR = 9.54e-04: 100%|██████████████████████████| 4748/4748 [1:00:08<00:00,  1.32it/s]
+validation loss = 1.76595: 100%|██████████████████████████████████| 325/325 [04:07<00:00,  1.31it/s]
+[35485 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_9.npz
+[35485 s] [Rank 0] [INFO] Training on epoch 9
+loss = 1.74002, LR = 9.43e-04: 100%|██████████████████████████| 4748/4748 [1:00:18<00:00,  1.31it/s]
+validation loss = 1.76350: 100%|██████████████████████████████████| 325/325 [04:07<00:00,  1.31it/s]
+[39358 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_10.npz
+[39358 s] [Rank 0] [INFO] Training on epoch 10
+loss = 1.97859, LR = 9.31e-04: 100%|██████████████████████████| 4748/4748 [1:00:09<00:00,  1.32it/s]
+validation loss = 1.89883: 100%|██████████████████████████████████| 325/325 [04:08<00:00,  1.31it/s]
+[43223 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_11.npz
+[43223 s] [Rank 0] [INFO] Training on epoch 11
+loss = 1.62236, LR = 9.18e-04: 100%|██████████████████████████| 4748/4748 [1:00:11<00:00,  1.31it/s]
+validation loss = 1.64823: 100%|██████████████████████████████████| 325/325 [04:06<00:00,  1.32it/s]
+[47091 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_12.npz
+[47091 s] [Rank 0] [INFO] Training on epoch 12
+loss = 1.68110, LR = 9.04e-04: 100%|██████████████████████████| 4748/4748 [1:00:17<00:00,  1.31it/s]
+validation loss = 1.59489: 100%|██████████████████████████████████| 325/325 [04:07<00:00,  1.32it/s]
+[50965 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_13.npz
+[50965 s] [Rank 0] [INFO] Training on epoch 13
+loss = 1.85343, LR = 8.89e-04: 100%|██████████████████████████| 4748/4748 [1:00:11<00:00,  1.31it/s]
+validation loss = 1.76534: 100%|██████████████████████████████████| 325/325 [04:07<00:00,  1.31it/s]
+[54834 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_14.npz
+[54834 s] [Rank 0] [INFO] Training on epoch 14
+loss = 1.68109, LR = 8.73e-04: 100%|██████████████████████████| 4748/4748 [1:00:17<00:00,  1.31it/s]
+validation loss = 1.73714: 100%|██████████████████████████████████| 325/325 [04:07<00:00,  1.31it/s]
+[58710 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_15.npz
+[58710 s] [Rank 0] [INFO] Training on epoch 15
+loss = 1.70053, LR = 8.56e-04: 100%|██████████████████████████| 4748/4748 [1:00:09<00:00,  1.32it/s]
+validation loss = 1.64497: 100%|██████████████████████████████████| 325/325 [04:06<00:00,  1.32it/s]
+[62578 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_16.npz
+[62578 s] [Rank 0] [INFO] Training on epoch 16
+loss = 1.70298, LR = 8.39e-04: 100%|██████████████████████████| 4748/4748 [1:00:09<00:00,  1.32it/s]
+validation loss = 1.63939: 100%|██████████████████████████████████| 325/325 [04:06<00:00,  1.32it/s]
+[66446 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_17.npz
+[66446 s] [Rank 0] [INFO] Training on epoch 17
+loss = 1.53100, LR = 8.20e-04: 100%|██████████████████████████| 4748/4748 [1:00:13<00:00,  1.31it/s]
+validation loss = 1.61396: 100%|██████████████████████████████████| 325/325 [04:08<00:00,  1.31it/s]
+[70321 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_18.npz
+[70321 s] [Rank 0] [INFO] Training on epoch 18
+loss = 1.56032, LR = 8.01e-04: 100%|██████████████████████████| 4748/4748 [1:00:05<00:00,  1.32it/s]
+validation loss = 1.72552: 100%|██████████████████████████████████| 325/325 [04:07<00:00,  1.31it/s]
+[74189 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_19.npz
+[74189 s] [Rank 0] [INFO] Training on epoch 19
+loss = 1.56997, LR = 7.81e-04: 100%|██████████████████████████| 4748/4748 [1:00:09<00:00,  1.32it/s]
+validation loss = 1.76909: 100%|██████████████████████████████████| 325/325 [04:07<00:00,  1.31it/s]
+[78060 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_20.npz
+[78060 s] [Rank 0] [INFO] Training on epoch 20
+loss = 1.61278, LR = 7.60e-04: 100%|██████████████████████████| 4748/4748 [1:00:11<00:00,  1.31it/s]
+validation loss = 1.50821: 100%|██████████████████████████████████| 325/325 [04:06<00:00,  1.32it/s]
+[81934 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_21.npz
+[81934 s] [Rank 0] [INFO] Training on epoch 21
+loss = 1.43968, LR = 7.39e-04: 100%|██████████████████████████| 4748/4748 [1:00:07<00:00,  1.32it/s]
+validation loss = 1.47645: 100%|██████████████████████████████████| 325/325 [04:07<00:00,  1.32it/s]
+[85804 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_22.npz
+[85804 s] [Rank 0] [INFO] Training on epoch 22
+loss = 1.50400, LR = 7.17e-04: 100%|██████████████████████████| 4748/4748 [1:00:04<00:00,  1.32it/s]
+validation loss = 1.52945: 100%|██████████████████████████████████| 325/325 [04:07<00:00,  1.31it/s]
+[89672 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_23.npz
+[89672 s] [Rank 0] [INFO] Training on epoch 23
+loss = 1.52437, LR = 6.94e-04: 100%|██████████████████████████| 4748/4748 [1:00:08<00:00,  1.32it/s]
+validation loss = 1.66444: 100%|██████████████████████████████████| 325/325 [04:05<00:00,  1.32it/s]
+[93543 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_24.npz
+[93543 s] [Rank 0] [INFO] Training on epoch 24
+loss = 1.50396, LR = 6.71e-04: 100%|██████████████████████████| 4748/4748 [1:00:03<00:00,  1.32it/s]
+validation loss = 1.42118: 100%|██████████████████████████████████| 325/325 [04:06<00:00,  1.32it/s]
+[97410 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_25.npz
+[97410 s] [Rank 0] [INFO] Training on epoch 25
+loss = 1.49106, LR = 6.48e-04: 100%|██████████████████████████| 4748/4748 [1:00:13<00:00,  1.31it/s]
+validation loss = 1.50612: 100%|██████████████████████████████████| 325/325 [04:07<00:00,  1.32it/s]
+[101289 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_26.npz
+[101289 s] [Rank 0] [INFO] Training on epoch 26
+loss = 1.51903, LR = 6.24e-04: 100%|██████████████████████████| 4748/4748 [1:00:15<00:00,  1.31it/s]
+validation loss = 1.86680: 100%|██████████████████████████████████| 325/325 [04:06<00:00,  1.32it/s]
+[105170 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_27.npz
+[105170 s] [Rank 0] [INFO] Training on epoch 27
+loss = 1.47245, LR = 6.00e-04: 100%|██████████████████████████| 4748/4748 [1:00:13<00:00,  1.31it/s]
+validation loss = 1.41146: 100%|██████████████████████████████████| 325/325 [04:07<00:00,  1.31it/s]
+[109051 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_28.npz
+[109051 s] [Rank 0] [INFO] Training on epoch 28
+loss = 1.50513, LR = 5.76e-04: 100%|██████████████████████████| 4748/4748 [1:00:11<00:00,  1.31it/s]
+validation loss = 1.45452: 100%|██████████████████████████████████| 325/325 [04:06<00:00,  1.32it/s]
+[112928 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_29.npz
+[112928 s] [Rank 0] [INFO] Training on epoch 29
+loss = 1.50490, LR = 5.52e-04: 100%|██████████████████████████| 4748/4748 [1:00:11<00:00,  1.31it/s]
+validation loss = 1.47234: 100%|██████████████████████████████████| 325/325 [04:07<00:00,  1.31it/s]
+[116807 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_30.npz
+[116807 s] [Rank 0] [INFO] Training on epoch 30
+loss = 1.50267, LR = 5.27e-04: 100%|██████████████████████████| 4748/4748 [1:00:15<00:00,  1.31it/s]
+validation loss = 1.44677: 100%|██████████████████████████████████| 325/325 [04:06<00:00,  1.32it/s]
+[120692 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_31.npz
+[120692 s] [Rank 0] [INFO] Training on epoch 31
+loss = 1.42169, LR = 5.03e-04: 100%|██████████████████████████| 4748/4748 [1:00:23<00:00,  1.31it/s]
+validation loss = 1.46001: 100%|██████████████████████████████████| 325/325 [04:08<00:00,  1.31it/s]
+[124583 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_32.npz
+[124583 s] [Rank 0] [INFO] Training on epoch 32
+loss = 1.45837, LR = 4.78e-04: 100%|████████████████████████████| 4748/4748 [59:26<00:00,  1.33it/s]
+validation loss = 1.43529: 100%|██████████████████████████████████| 325/325 [04:01<00:00,  1.35it/s]
+[128410 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_33.npz
+[128410 s] [Rank 0] [INFO] Training on epoch 33
+loss = 1.57786, LR = 4.53e-04: 100%|████████████████████████████| 4748/4748 [58:40<00:00,  1.35it/s]
+validation loss = 1.45199: 100%|██████████████████████████████████| 325/325 [04:01<00:00,  1.35it/s]
+[132193 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_34.npz
+[132193 s] [Rank 0] [INFO] Training on epoch 34
+loss = 1.26170, LR = 4.29e-04: 100%|████████████████████████████| 4748/4748 [58:48<00:00,  1.35it/s]
+validation loss = 1.38402: 100%|██████████████████████████████████| 325/325 [04:02<00:00,  1.34it/s]
+[135984 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_35.npz
+[135984 s] [Rank 0] [INFO] Training on epoch 35
+loss = 1.33524, LR = 4.05e-04: 100%|████████████████████████████| 4748/4748 [58:44<00:00,  1.35it/s]
+validation loss = 1.30332: 100%|██████████████████████████████████| 325/325 [04:01<00:00,  1.34it/s]
+[139771 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_36.npz
+[139771 s] [Rank 0] [INFO] Training on epoch 36
+loss = 1.35760, LR = 3.81e-04: 100%|████████████████████████████| 4748/4748 [59:49<00:00,  1.32it/s]
+validation loss = 1.33673: 100%|██████████████████████████████████| 325/325 [04:06<00:00,  1.32it/s]
+[143630 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_37.npz
+[143630 s] [Rank 0] [INFO] Training on epoch 37
+loss = 1.31998, LR = 3.57e-04: 100%|██████████████████████████| 4748/4748 [1:00:05<00:00,  1.32it/s]
+validation loss = 1.39476: 100%|██████████████████████████████████| 325/325 [04:06<00:00,  1.32it/s]
+[147507 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_38.npz
+[147507 s] [Rank 0] [INFO] Training on epoch 38
+loss = 1.32807, LR = 3.33e-04: 100%|██████████████████████████| 4748/4748 [1:00:02<00:00,  1.32it/s]
+validation loss = 1.31827: 100%|██████████████████████████████████| 325/325 [04:06<00:00,  1.32it/s]
+[151381 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_39.npz
+[151381 s] [Rank 0] [INFO] Training on epoch 39
+loss = 1.33331, LR = 3.10e-04: 100%|████████████████████████████| 4748/4748 [59:51<00:00,  1.32it/s]
+validation loss = 1.23640: 100%|██████████████████████████████████| 325/325 [04:02<00:00,  1.34it/s]
+[155238 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_40.npz
+[155238 s] [Rank 0] [INFO] Training on epoch 40
+loss = 1.26356, LR = 2.88e-04: 100%|████████████████████████████| 4748/4748 [58:39<00:00,  1.35it/s]
+validation loss = 1.24896: 100%|██████████████████████████████████| 325/325 [04:01<00:00,  1.34it/s]
+[159022 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_41.npz
+[159022 s] [Rank 0] [INFO] Training on epoch 41
+loss = 1.24226, LR = 2.66e-04: 100%|████████████████████████████| 4748/4748 [58:44<00:00,  1.35it/s]
+validation loss = 1.27141: 100%|██████████████████████████████████| 325/325 [04:00<00:00,  1.35it/s]
+[162812 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_42.npz
+[162812 s] [Rank 0] [INFO] Training on epoch 42
+loss = 1.22930, LR = 2.44e-04: 100%|████████████████████████████| 4748/4748 [59:22<00:00,  1.33it/s]
+validation loss = 1.31857: 100%|██████████████████████████████████| 325/325 [04:07<00:00,  1.31it/s]
+[166650 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_43.npz
+[166650 s] [Rank 0] [INFO] Training on epoch 43
+loss = 1.29985, LR = 2.24e-04: 100%|██████████████████████████| 4748/4748 [1:00:18<00:00,  1.31it/s]
+validation loss = 1.25085: 100%|██████████████████████████████████| 325/325 [04:07<00:00,  1.31it/s]
+[170543 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_44.npz
+[170543 s] [Rank 0] [INFO] Training on epoch 44
+loss = 1.21797, LR = 2.03e-04: 100%|██████████████████████████| 4748/4748 [1:00:08<00:00,  1.32it/s]
+validation loss = 1.18985: 100%|██████████████████████████████████| 325/325 [04:07<00:00,  1.31it/s]
+[174428 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_45.npz
+[174428 s] [Rank 0] [INFO] Training on epoch 45
+loss = 1.14783, LR = 1.84e-04: 100%|██████████████████████████| 4748/4748 [1:00:06<00:00,  1.32it/s]
+validation loss = 1.18147: 100%|██████████████████████████████████| 325/325 [04:08<00:00,  1.31it/s]
+[178312 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_46.npz
+[178312 s] [Rank 0] [INFO] Training on epoch 46
+loss = 1.26567, LR = 1.65e-04: 100%|██████████████████████████| 4748/4748 [1:00:05<00:00,  1.32it/s]
+validation loss = 1.19956: 100%|██████████████████████████████████| 325/325 [04:07<00:00,  1.31it/s]
+[182195 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_47.npz
+[182195 s] [Rank 0] [INFO] Training on epoch 47
+loss = 1.16003, LR = 1.47e-04: 100%|██████████████████████████| 4748/4748 [1:00:35<00:00,  1.31it/s]
+validation loss = 1.16773: 100%|██████████████████████████████████| 325/325 [04:08<00:00,  1.31it/s]
+[186113 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_48.npz
+[186113 s] [Rank 0] [INFO] Training on epoch 48
+loss = 1.11601, LR = 1.30e-04: 100%|██████████████████████████| 4748/4748 [1:00:08<00:00,  1.32it/s]
+validation loss = 1.13867: 100%|██████████████████████████████████| 325/325 [04:07<00:00,  1.31it/s]
+[189999 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_49.npz
+[189999 s] [Rank 0] [INFO] Training on epoch 49
+loss = 1.15660, LR = 1.14e-04: 100%|██████████████████████████| 4748/4748 [1:00:33<00:00,  1.31it/s]
+validation loss = 1.17087: 100%|██████████████████████████████████| 325/325 [04:07<00:00,  1.31it/s]
+[193911 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_50.npz
+[193911 s] [Rank 0] [INFO] Training on epoch 50
+loss = 1.10567, LR = 9.90e-05: 100%|██████████████████████████| 4748/4748 [1:00:21<00:00,  1.31it/s]
+validation loss = 1.16408: 100%|██████████████████████████████████| 325/325 [04:06<00:00,  1.32it/s]
+[197812 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_51.npz
+[197812 s] [Rank 0] [INFO] Training on epoch 51
+loss = 1.11212, LR = 8.48e-05: 100%|██████████████████████████| 4748/4748 [1:00:13<00:00,  1.31it/s]
+validation loss = 1.03656: 100%|██████████████████████████████████| 325/325 [04:07<00:00,  1.31it/s]
+[201710 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_52.npz
+[201710 s] [Rank 0] [INFO] Training on epoch 52
+loss = 1.06851, LR = 7.16e-05: 100%|██████████████████████████| 4748/4748 [1:00:21<00:00,  1.31it/s]
+validation loss = 1.13482: 100%|██████████████████████████████████| 325/325 [04:08<00:00,  1.31it/s]
+[205615 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_53.npz
+[205615 s] [Rank 0] [INFO] Training on epoch 53
+loss = 1.08898, LR = 5.94e-05: 100%|██████████████████████████| 4748/4748 [1:00:14<00:00,  1.31it/s]
+validation loss = 1.11638: 100%|██████████████████████████████████| 325/325 [04:08<00:00,  1.31it/s]
+[209512 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_54.npz
+[209512 s] [Rank 0] [INFO] Training on epoch 54
+loss = 1.04185, LR = 4.83e-05: 100%|██████████████████████████| 4748/4748 [1:00:08<00:00,  1.32it/s]
+validation loss = 1.10198: 100%|██████████████████████████████████| 325/325 [04:07<00:00,  1.32it/s]
+[213402 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_55.npz
+[213402 s] [Rank 0] [INFO] Training on epoch 55
+loss = 1.07101, LR = 3.83e-05: 100%|██████████████████████████| 4748/4748 [1:00:25<00:00,  1.31it/s]
+validation loss = 1.09890: 100%|██████████████████████████████████| 325/325 [04:08<00:00,  1.31it/s]
+[217312 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_56.npz
+[217312 s] [Rank 0] [INFO] Training on epoch 56
+loss = 1.02274, LR = 2.94e-05: 100%|██████████████████████████| 4748/4748 [1:00:28<00:00,  1.31it/s]
+validation loss = 1.02996: 100%|██████████████████████████████████| 325/325 [04:09<00:00,  1.30it/s]
+[221225 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_57.npz
+[221225 s] [Rank 0] [INFO] Training on epoch 57
+loss = 0.96958, LR = 2.17e-05: 100%|██████████████████████████| 4748/4748 [1:00:13<00:00,  1.31it/s]
+validation loss = 1.00538: 100%|██████████████████████████████████| 325/325 [04:08<00:00,  1.31it/s]
+[225123 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_58.npz
+[225123 s] [Rank 0] [INFO] Training on epoch 58
+loss = 1.00464, LR = 1.51e-05: 100%|██████████████████████████| 4748/4748 [1:00:29<00:00,  1.31it/s]
+validation loss = 1.01095: 100%|██████████████████████████████████| 325/325 [04:09<00:00,  1.30it/s]
+[229040 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_59.npz
+[229040 s] [Rank 0] [INFO] Training on epoch 59
+loss = 0.96066, LR = 9.67e-06: 100%|██████████████████████████| 4748/4748 [1:00:15<00:00,  1.31it/s]
+validation loss = 1.00127: 100%|██████████████████████████████████| 325/325 [04:07<00:00,  1.31it/s]
+[232940 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_60.npz
+[232940 s] [Rank 0] [INFO] Training on epoch 60
+loss = 0.96957, LR = 5.45e-06: 100%|██████████████████████████| 4748/4748 [1:00:01<00:00,  1.32it/s]
+validation loss = 0.95342: 100%|██████████████████████████████████| 325/325 [04:06<00:00,  1.32it/s]
+[236827 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_61.npz
+[236827 s] [Rank 0] [INFO] Training on epoch 61
+loss = 0.99793, LR = 2.42e-06: 100%|██████████████████████████| 4748/4748 [1:00:18<00:00,  1.31it/s]
+validation loss = 0.97133: 100%|██████████████████████████████████| 325/325 [04:08<00:00,  1.31it/s]
+[240732 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_62.npz
+[240732 s] [Rank 0] [INFO] Training on epoch 62
+loss = 0.97553, LR = 6.07e-07: 100%|██████████████████████████| 4748/4748 [1:00:06<00:00,  1.32it/s]
+validation loss = 0.93591: 100%|██████████████████████████████████| 325/325 [04:08<00:00,  1.31it/s]
+[244625 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_63.npz
+[244625 s] [Rank 0] [INFO] Training on epoch 63
+loss = 0.89248, LR = 0.00e+00: 100%|██████████████████████████| 4748/4748 [1:00:17<00:00,  1.31it/s]
+validation loss = 0.96619: 100%|██████████████████████████████████| 325/325 [04:07<00:00,  1.32it/s]
+[248530 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test-016/models/model_64.npz
+[248530 s] [Rank 0] [INFO] Done Training

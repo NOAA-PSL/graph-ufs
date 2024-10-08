@@ -10,6 +10,7 @@ import dask
 from graphufs import init_devices
 from graphufs.utils import get_last_input_mapping
 from graphufs.datasets import Dataset, PackedDataset
+from graphufs.tensorstore import PackedDataset as TSPackedDataset, BatchLoader as TSBatchLoader
 from graphufs.batchloader import BatchLoader
 from graphufs.stacked_training import init_model, optimize
 
@@ -31,22 +32,22 @@ if __name__ == "__main__":
     # parse arguments
     p1, args = P1Emulator.from_parser()
     init_devices(p1)
-    dask.config.set(scheduler="threads", num_workers=16)
+    dask.config.set(scheduler="threads", num_workers=p1.dask_threads)
 
     tds = Dataset(
         p1,
         mode="training",
-        preload_batch=True,
+        preload_batch=False,
     )
-    training_data = PackedDataset(
+    training_data = TSPackedDataset(
         p1,
         mode="training",
     )
-    valid_data = PackedDataset(
+    valid_data = TSPackedDataset(
         p1,
         mode="validation",
     )
-    trainer = BatchLoader(
+    trainer = TSBatchLoader(
         training_data,
         batch_size=p1.batch_size,
         shuffle=True,
@@ -54,7 +55,7 @@ if __name__ == "__main__":
         num_workers=p1.num_workers,
         max_queue_size=p1.max_queue_size,
     )
-    validator = BatchLoader(
+    validator = TSBatchLoader(
         valid_data,
         batch_size=p1.batch_size,
         shuffle=False,
@@ -70,6 +71,7 @@ if __name__ == "__main__":
 
     inputs, _ = trainer.get_data()
     params, state = init_model(p1, inputs, last_input_channel_mapping)
+    p1.save_checkpoint(params, id=0)
 
     loss_name = f"{p1.local_store_path}/loss.nc"
     if os.path.exists(loss_name):
@@ -78,7 +80,7 @@ if __name__ == "__main__":
     # setup optimizer
     steps_in_epoch = len(trainer)
     n_total = p1.num_epochs * steps_in_epoch
-    n_linear = max( n_total // 100, steps_in_epoch )
+    n_linear = 1_000
     n_cosine = n_total - n_linear
     optimizer = graphufs_optimizer(
         n_linear=n_linear,
@@ -114,6 +116,6 @@ if __name__ == "__main__":
         p1.save_checkpoint(params, id=e+1)
         timer1.stop(f"Done with epoch {e+1}")
 
-    trainer.shutdown()
-    validator.shutdown()
     logging.info("Done Training")
+    trainer.shutdown(cancel=True)
+    validator.shutdown(cancel=True)

@@ -35,10 +35,15 @@ Note that
 - `shuffle`=True is a better test because presumably some values are
   stored in some sort of cache. I was getting that reading `batch_size=16` with 1 thread was the fastest,
   but this was right after running the `batch_size=4` tests.
-- rechunking `x = x.chunk({"channels": -1})` right before loading hinders
-  performance
+- opening with `xr.open_zarr(..., chunks={"sample": 1, "lat": -1, "lon": -1, "channels:-1"})`
+  is a bit faster, makes a big difference for the full dataset
+- For some reason it takes a bit longer to read the full dataset vs the 1 year
+  dataset. This could be related to the fact that no compression was used, and
+  should be tested. For this case `xarray-tensorstore` was faster, since it had
+  no difference in read speeds
 
 ### Using custom loader, but with `xarray-tensorstore`
+
 
 On gpu4, when we do not specify `.compute(num_threads=...)` when converting to
 numpy

@@ -6,7 +6,6 @@ import dask
 
 from graphufs.datasets import PackedDataset
 from graphufs.batchloader import BatchLoader
-from graphufs.torch import Dataset as TorchDataset, DataLoader as TorchDataLoader
 
 from ufs2arco import Timer
 
@@ -22,9 +21,21 @@ class Formatter(logging.Formatter):
 
 def test_local_generator(p1, max_iters=30):
 
+    logging.info(f"Configuring dask with:\ndask.config.set(\n\tscheduler='threads',\n\tnum_workers={p1.dask_threads}\n)")
+    dask.config.set(
+        scheduler="threads",
+        num_workers=p1.dask_threads,
+    )
+
     training_data = PackedDataset(
         p1,
         mode="training",
+        chunks={
+            "sample": 1,
+            "lat": -1,
+            "lon": -1,
+            "channels": -1,
+        },
     )
     trainer = BatchLoader(
         training_data,
@@ -60,7 +71,51 @@ def test_local_generator(p1, max_iters=30):
 
     trainer.shutdown()
 
+def test_local_tensorstore(p1, max_iters=30):
+
+    from graphufs.tensorstore import PackedDataset as TSPackedDataset, BatchLoader as TSBatchLoader
+
+    training_data = TSPackedDataset(
+        p1,
+        mode="training",
+    )
+    trainer = TSBatchLoader(
+        training_data,
+        batch_size=p1.batch_size,
+        shuffle=True,
+        drop_last=True,
+        num_workers=p1.num_workers,
+        max_queue_size=p1.max_queue_size,
+    )
+
+    setup_time = 3 if p1.batch_size > 4 else 1
+    setup_time *= p1.max_queue_size
+    setup_time += 5
+    logging.info(f"Initial Setup Time = {setup_time} sec")
+    time.sleep(setup_time)
+    logging.info(f"... done, starting the loop with qsize = {trainer.data_queue.qsize()}")
+
+    qsize = []
+    alltimes = []
+    n_iter = min(max_iters, len(trainer))
+    timer1.start()
+    for k, (x,y) in zip(range(n_iter), iter(trainer)):
+        time.sleep(1.0)
+        elapsed = timer1.stop(f"{k} / {n_iter}, qsize = {trainer.data_queue.qsize()}")
+
+        alltimes.append(elapsed)
+        qsize.append(trainer.data_queue.qsize())
+        timer1.start()
+
+    logging.info(f"num_workers = {p1.num_workers}, max_queue_size = {p1.max_queue_size}")
+    logging.info(f"Avg Time per iteration = {np.mean(alltimes)} seconds")
+    logging.info(f"First empty queue iteration = {qsize.index(0)}")
+
+    trainer.shutdown()
+
 def test_local_torchloader(p1, prefetch_factor, num_workers, max_iters=30):
+
+    from graphufs.torch import Dataset as TorchDataset, DataLoader as TorchDataLoader
 
     training_data = TorchDataset(
         p1,
@@ -95,11 +150,6 @@ def test_local_torchloader(p1, prefetch_factor, num_workers, max_iters=30):
 
 if __name__ == "__main__":
 
-    dask.config.set(
-        scheduler="threads",
-        num_workers=16,
-    )
-
     timer1 = Timer()
 
     logging.basicConfig(
@@ -114,4 +164,5 @@ if __name__ == "__main__":
     # parse arguments
     p1, args = P1Emulator.from_parser()
 
+    #test_local_tensorstore(p1)
     test_local_generator(p1)

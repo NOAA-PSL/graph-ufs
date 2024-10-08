@@ -16,6 +16,7 @@ from ufs2arco.regrid.ufsregridder import UFSRegridder
 from graphcast import checkpoint
 from graphcast.graphcast import ModelConfig, TaskConfig, CheckPoint
 from graphcast.data_utils import extract_inputs_targets_forcings_coupled
+from graphcast import data_utils
 from graphcast.model_utils import dataset_to_stacked
 from graphcast.losses import normalized_level_weights, normalized_latitude_weights
 
@@ -43,7 +44,7 @@ class ReplayCoupledEmulator:
     stacked_norm = dict()
     wb2_obs_url = ""
     local_store_path = None     # directory where zarr file, model weights etc are stored
-    no_cache_data = None        # don't cache or use zarr dataset downloaded from GCS on disk
+    cache_data = None           # cache or use zarr dataset downloaded from GCS on disk
 
     # these could be moved to a yaml file later
     # task config options
@@ -65,24 +66,37 @@ class ReplayCoupledEmulator:
     levels = list()             # created in __init__, has exact pfull level values
     latitude = tuple()
     longitude = tuple()
+    tisr_integration_period = None  # TOA Incident Solar Radiation, integration period used in the function:
+                                    # graphcast.solar_radiation.get_toa_incident_solar_radiation_for_xarray
+                                    # default = self.delta_t, i.e. the ML model time step
+                                    # Note: the value provided here has no effect unless "toa_incident_solar_radiation" is listed in "forcing_variables",
+                                    # which indicates to graphcast that TISR needs to be computed.
 
     # time related
     delta_t = None              # the model time step, same for both ocean and atmosphere
     input_duration = None       # time covered by initial condition(s)
-    target_lead_time = None     # how long the forecast is, i.e., when we compare to data
+    target_lead_time = None     # when we compare to data, e.g. singular "3h", or many ["3h", "12h", "24h"]
+    forecast_duration = None    # Created in __init__, total forecast time
     training_dates = tuple()    # bounds of training data (inclusive)
     testing_dates = tuple()     # bounds of testing data (inclusive)
     validation_dates = tuple()  # bounds of validation data (inclusive)
 
     # training protocol
     batch_size = None               # number of forecasts averaged over in loss per optim_step
+    num_batch_splits = None         # number of batch splits
+    num_epochs = None               # number of epochs
     chunks_per_epoch = None         # number of chunks per epoch
     steps_per_chunk = None          # number of steps to train for in each chunk
     checkpoint_chunks = None        # save model after this many chunks are processed
     max_queue_size = None           # number of chunks in queue of data generators
     num_workers = None              # number of worker threads for data generators
-    no_load_chunk = None            # don't load chunk into RAM, has the lowest memory usage if true
+    load_chunk = None               # load chunk into RAM, has the lowest memory usage if false
     store_loss = None               # store loss in a netcdf file
+    use_preprocessed = None         # use pre-processed dataset
+
+    # evaluation
+    sample_stride = 1               # skip over initial conditions during evaluation by this stride
+    evaluation_checkpoint_id = None # checkpoint used in evaluation scripts
 
     # others
     num_gpus = None                 # number of GPUs to use for training
@@ -235,14 +249,28 @@ class ReplayCoupledEmulator:
         # convert some types
         self.delta_t = pd.Timedelta(self.delta_t)
         self.input_duration = pd.Timedelta(self.input_duration)
+        lead_times, duration = data_utils._process_target_lead_times_and_get_duration(self.target_lead_time)
+        self.forecast_duration = duration
+
+        logging.debug(f"target_lead_time: {self.target_lead_time}")
+        logging.debug(f"lead_times: {lead_times}")
+        logging.debug(f"self.forecast_duration: {self.forecast_duration}")
+        logging.debug(f"self.time_per_forecast: {self.time_per_forecast}")
+        logging.debug(f"self.n_input: {self.n_input}")
+        logging.debug(f"self.n_forecast: {self.n_forecast}")
+        logging.debug(f"self.n_target: {self.n_target}")
 
         # set normalization here so that we can jit compile with this class
         self.set_normalization()
         self.set_stacked_normalization()
 
+        # TOA Incident Solar Radiation integration period
+        if self.tisr_integration_period is None:
+            self.tisr_integration_period = self.delta_t
+
 
     def time_per_forecast(self):
-        return self.target_lead_time + self.input_duration
+        return self.forecast_duration + self.input_duration
 
     @property
     def n_input(self):
@@ -257,12 +285,13 @@ class ReplayCoupledEmulator:
     @property
     def n_target(self):
         """Number of steps in the target, doesn't include initial condition(s)"""
-        return self.target_lead_time // self.delta_t
+        return self.forecast_duration // self.delta_t
 
     @property
     def extract_kwargs(self):
         kw = {k: v for k, v in dataclasses.asdict(self.task_config).items() if k not in ("latitude", "longitude")}
         kw["target_lead_times"] = self.target_lead_time
+        kw["integration_period"] = self.tisr_integration_period
         return kw
 
     @property
@@ -351,6 +380,16 @@ class ReplayCoupledEmulator:
         
         return xds
 
+    def check_for_ints(self, xds):
+        """Turn data variable integers into floats, because otherwise the normalization in GraphCast goes haywire
+        """
+
+        for key in xds.data_vars:
+            if "int" in str(xds[key].dtype):
+                logging.debug(f"Converting {key} from {xds[key].dtype} to float32")
+                xds[key] = xds[key].astype(np.float32)
+        return xds
+
 
     def preprocess(self, xds, batch_index=None):
         """Prepare a single batch for GraphCast
@@ -430,14 +469,55 @@ class ReplayCoupledEmulator:
             else:
                 all_xds = xds_on_disk
 
+        all_xds = self.check_for_ints(all_xds)
         return all_xds
+
+    @staticmethod
+    def divide_into_slices(N, K):
+        """
+        Divide N items into K groups and return an array of slice objects.
+
+        Args:
+            N (int): Total number of items.
+            K (int): Number of groups.
+        Returns:
+           list of slice: A list containing slice objects for each group.
+        """
+        base_size = N // K
+        extra_items = N % K
+
+        slices = []
+        start = 0
+        for i in range(K):
+            if i < extra_items:
+                end = start + base_size + 1
+                slices.append(slice(start, end))
+            else:
+                end = start + base_size
+                slices.append(slice(start - (1 if extra_items else 0), end))
+            start = end
+
+        return slices
+
+    @staticmethod
+    def rechunk(xds):
+        chunksize = {
+            "optim_step": 1,
+            "batch": -1,
+            "time": -1,
+            "level": -1,
+            "lat": -1,
+            "lon": -1,
+        }
+        chunksize = {k:v for k,v in chunksize.items() if k in xds}
+        xds = xds.chunk(chunksize)
+        return xds
 
     def get_batches(
         self,
         n_optim_steps=None,
         drop_cftime=True,
         mode="training",
-        allow_overlapped_chunks=None,
     ):
         """Get a dataset with all the batches of data necessary for training
 
@@ -448,7 +528,6 @@ class ReplayCoupledEmulator:
             n_optim_steps (int, optional): number of training batches to grab ... number of times we will update the parameters during optimization. If not specified, use as many as are available based on the available training data.
             drop_cftime (bool, optional): may be useful for debugging
             mode (str, optional): can be either "training", "validation" or "testing"
-            allow_overlapped_chunks (bool, optional): overlapp chunks
         Returns:
             inputs, targets, forcings (xarray.Dataset): with new dimension "batch"
                 and appropriate fields for each dataset, based on the variables in :attr:`task_config`
@@ -470,50 +549,101 @@ class ReplayCoupledEmulator:
         #print("all_xds:", all_xds)
         # split dataset into chunks
         n_chunks = self.chunks_per_epoch
-        chunk_size = len(all_new_time) // n_chunks
-        all_new_time_chunks = []
+        has_preprocessed = False
+        if self.use_preprocessed:
 
-        # overlap chunks by lead time + input duration
-        overlap_step = (self.target_lead_time + self.input_duration) // delta_t if allow_overlapped_chunks else 0
-        for i in range(n_chunks):
-            if i == n_chunks - 1:
-                all_new_time_chunks.append(all_new_time[i * chunk_size:len(all_new_time)])
-            else:
-                all_new_time_chunks.append(all_new_time[i * chunk_size:(i + 1) * chunk_size + overlap_step])
+            # chunks zarr datasets
+            xds_chunks = {
+                "inputs": [None] * n_chunks,
+                "targets": [None] * n_chunks,
+                "forcings": [None] * n_chunks,
+                "inittimes": [None] * n_chunks,
+            }
 
-        # print chunk boundaries
-        message = f"Chunks for {mode}: {len(all_new_time_chunks)}"
-        for chunk_id, new_time in enumerate(all_new_time_chunks):
-            message += f"\nChunk {chunk_id+1}: {new_time[0]} to {new_time[-1]} : {len(new_time)} time stamps"
-        logging.info(message)
+            # open chunk files if they exist
+            try:
+                message = f"Chunks for {mode}: {n_chunks}"
+                for chunk_id in range(n_chunks):
+                    base_name = f"{self.local_store_path}/extracted/{mode}-chunk-{chunk_id:04d}-of-{n_chunks:04d}-rank-{self.mpi_rank:03d}-of-{self.mpi_size:03d}-bs-{self.batch_size}-"
+                    xds_chunks["inputs"][chunk_id] = xr.open_zarr(f"{base_name}inputs.zarr")
+                    xds_chunks["targets"][chunk_id] = xr.open_zarr(f"{base_name}targets.zarr")
+                    xds_chunks["forcings"][chunk_id] = xr.open_zarr(f"{base_name}forcings.zarr")
+                    if mode == "testing":
+                        xds_chunks["inittimes"][chunk_id] = xr.open_zarr(f"{base_name}inittimes.zarr")
+                n_steps = len(xds_chunks["inputs"][0]["optim_step"])
+                message += f" each with {n_steps} steps"
+                logging.info(message)
+                has_preprocessed = True
+            except:
+                has_preprocessed = False
 
-        # warnings before we get started
-        if pd.Timedelta(self.target_lead_time) > self.delta_t:
-            warnings.warn("ReplayEmulator.get_training_batches: need to rework this to pull targets for all steps at delta_t intervals between initial conditions and target_lead times, at least in part because we need the forcings at each delta_t time step, and the data extraction code only pulls this at each specified target_lead_time")
+        # raw dataset
+        if not has_preprocessed:
+            all_new_time = self.get_time(mode=mode)
+
+            # split the dataset _equally_ across nodes to prevent hangs
+            # Note: The possible overlaps maybe a problem if/when testing is parallelized
+            if self.mpi_size > 1:
+                slices = self.divide_into_slices(len(all_new_time), self.mpi_size)
+                all_new_time = all_new_time[slices[self.mpi_rank]]
+                logging.info(f"Data for {mode} MPI rank {self.mpi_rank}: {all_new_time[0]} to {all_new_time[-1]} : {len(all_new_time)} time stamps.")
+
+            # download the data
+            all_xds = self.get_the_data(all_new_time=all_new_time, mode=mode)
+
+            # split dataset into chunks
+            slices = self.divide_into_slices(len(all_new_time), n_chunks)
+            all_new_time_chunks = []
+            for sl in slices:
+                all_new_time_chunks.append(all_new_time[sl])
+
+            # print chunk boundaries
+            message = f"Chunks for {mode}: {len(all_new_time_chunks)} each with {len(all_new_time_chunks[0])} time stamps"
+            logging.info(message)
+
+        # list of chunk ids
+        chunk_ids = [i for i in range(n_chunks)]
+        n_optim_steps_arg = n_optim_steps
 
         # loop forever
         while True:
 
             # shuffle chunks
             if mode != "testing":
-                random.shuffle(all_new_time_chunks)
+                random.shuffle(chunk_ids)
 
             # iterate over all chunks
-            for chunk_id, new_time in enumerate(all_new_time_chunks):
+            for chunk_id in chunk_ids:
+
+                # check for pre-processed inputs
+                if self.use_preprocessed:
+                    if xds_chunks["inputs"][chunk_id] is not None:
+                        logging.debug(f"\nReusing {mode} chunk {chunk_id}.")
+                        inputs = xds_chunks["inputs"][chunk_id]
+                        targets = xds_chunks["targets"][chunk_id]
+                        forcings = xds_chunks["forcings"][chunk_id]
+                        inittimes = None
+                        if mode == "testing":
+                            inittimes = xds_chunks["inittimes"][chunk_id]
+                        yield inputs, targets, forcings, inittimes
+                        continue
+                    else:
+                        logging.debug(f"\nOpening {mode} chunk {chunk_id} from scratch.")
 
                 # chunk start and end times
+                new_time = all_new_time_chunks[chunk_id]
                 start = new_time[0]
                 end = new_time[-1]
 
                 # figure out duration of IC(s), forecast, all of training
                 data_duration = end - start
 
-                n_max_forecasts = (data_duration - self.input_duration) // self.delta_t
+                n_max_forecasts = (data_duration - self.time_per_forecast) // self.delta_t + 1
                 if n_max_forecasts <= 0:
                     raise ValueError(f"n_max_forecasts for {mode} is {n_max_forecasts}")
 
                 n_max_optim_steps = math.ceil(n_max_forecasts / self.batch_size)
-                n_optim_steps = n_max_optim_steps if n_optim_steps is None else n_optim_steps
+                n_optim_steps = n_max_optim_steps if n_optim_steps_arg is None else n_optim_steps_arg
                 n_forecasts = n_optim_steps * self.batch_size
                 n_forecasts = min(n_forecasts, n_max_forecasts)
 
@@ -522,9 +652,6 @@ class ReplayCoupledEmulator:
                 if n_optim_steps > n_max_optim_steps:
                     n_optim_steps = n_max_optim_steps
                     warnings.warn(f"There's less data than the number of batches requested, reducing n_optim_steps to {n_optim_steps}")
-
-                if self.steps_per_chunk is None and mode != "validation":
-                    self.steps_per_chunk = n_optim_steps
 
                 # create a new time vector with desired delta_t
                 # this has to end such that we can pull an entire forecast from the training data
@@ -556,6 +683,7 @@ class ReplayCoupledEmulator:
                     })
                 xds = xds.drop(["cftime", "ftime"])
                 xds.load()
+                
                 # iterate through batches
                 inputs = []
                 targets = []
@@ -608,19 +736,34 @@ class ReplayCoupledEmulator:
 
                     if mode == "testing":
                         # fix this later for batch_size != 1
-                        this_inittimes = batch.datetime.isel(time=0)
+                        this_inittimes = batch.datetime.isel(time=self.n_input-1)
                         this_inittimes = this_inittimes.to_dataset(name="inittimes")
                         inittimes.append(this_inittimes.expand_dims({"optim_step": [k]}))
 
-                del xds
-                inputs = xr.combine_by_coords(inputs)
-                targets = xr.combine_by_coords(targets)
-                forcings = xr.combine_by_coords(forcings)
+                # write chunks to disk
+                base_name = f"{self.local_store_path}/extracted/{mode}-chunk-{chunk_id:04d}-of-{n_chunks:04d}-rank-{self.mpi_rank:03d}-of-{self.mpi_size:03d}-bs-{self.batch_size}-"
+                def combine_chunk_save(xds, name):
+                    xds = xr.combine_by_coords(xds)
+                    if name != "inittimes":
+                        xds = self.rechunk(xds)
+                    if self.use_preprocessed:
+                        file_name = f"{base_name}{name}.zarr"
+                        xds.to_zarr(file_name)
+                        xds.close()
+                        xds = xr.open_zarr(file_name)
+                        xds_chunks[name][chunk_id] = xds
+                    return xds
+
+                inputs = combine_chunk_save(inputs, "inputs")
+                targets = combine_chunk_save(targets, "targets")
+                forcings = combine_chunk_save(forcings, "forcings")
                 if mode == "testing":
-                    inittimes = xr.combine_by_coords(inittimes)
+                    inittimes = combine_chunk_save(inittimes, "inittimes")
                 else:
                     inittimes = None
+
                 yield inputs, targets, forcings, inittimes
+
 
 
     def set_normalization(self, **kwargs):
@@ -630,7 +773,7 @@ class ReplayCoupledEmulator:
             mean_by_level, stddev_by_level, diffs_stddev_by_level (xarray.Dataset): with normalization fields
         """
 
-        def open_normalization(component, **kwargs):
+        def open_normalization(component):
 
             # try to read locally first
             local_path = os.path.join(
@@ -717,11 +860,13 @@ class ReplayCoupledEmulator:
 
         def stackit(xds, varnames, n_time, **kwargs):
             norms = xds[[x for x in varnames if x in xds]]
-            # do this to replicate across time dimension
-            norms = xr.concat(
-                [norms.copy() for _ in range(n_time)],
-                dim="time",
-            )
+            # replicate time varying variables
+            for key in norms.data_vars:
+                if "time" in xds[key].attrs["description"]:
+                    norms[key] = xr.concat(
+                        [norms[key].copy() for _ in range(n_time)],
+                        dim="time",
+                    )
             dimorder = ("batch", "time", "level", "z_l", "lat", "lon")
             dimorder = tuple(x for x in dimorder if x in norms.dims)
             norms = norms.transpose(*dimorder)
@@ -753,7 +898,20 @@ class ReplayCoupledEmulator:
 
         # 1. compute latitude weighting
         if self.weight_loss_per_latitude:
-            lat_weights = normalized_latitude_weights(xtargets)
+            # for the subsampled case, we want to compute weights
+            # on the parent 0.25 degree grid, and subsample it
+            # because the pole points in the subsampled version
+            # are not equidistant between their neighbor and the pole
+            if "0.25-degree-subsampled" in self.data_url:
+                lat = xr.open_zarr(
+                    self.data_url.replace("-subsampled",""),
+                    storage_options={"token":"anon"}
+                )["grid_yt"]
+                lat_weights = normalized_latitude_weights(lat)
+                lat_weights = lat_weights.isel(lat=slice(None, None, 4))
+            else:
+                lat_weights = normalized_latitude_weights(xtargets)
+
             lat_weights = lat_weights.data[...,None][...,None]
 
             weights *= lat_weights
@@ -882,6 +1040,8 @@ class ReplayCoupledEmulator:
         
         # Check the total number of trainable parameters in this checkpoint
         print("Total number of trainable parameters:", get_num_params(ckpt))
+
+        logging.info(f"Stored checkpoint: {ckpt_path}")
 
     def checkpoint_exists(self, id):
         ckpt_path = os.path.join(self.checkpoint_dir, f"model_{id}.npz")

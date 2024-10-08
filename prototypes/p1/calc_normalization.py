@@ -1,3 +1,4 @@
+import os
 import xarray as xr
 import subprocess
 
@@ -5,7 +6,7 @@ from graphufs import StatisticsComputer, add_derived_vars
 
 def main(varname):
 
-    path_in = "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/fv3.zarr"
+    path_in = "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.zarr"
     open_zarr_kwargs = {"storage_options": {"token": "anon"}}
     ds = xr.open_zarr(path_in, **open_zarr_kwargs)
     ds = add_derived_vars(ds)
@@ -13,7 +14,7 @@ def main(varname):
 
     normer = StatisticsComputer(
         path_in=path_in,
-        path_out="gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/fv3.statistics.1993-2019",
+        path_out="gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.statistics.1993-2019",
         start_date=None, # original start date
         end_date="2019",
         time_skip=None,
@@ -29,10 +30,16 @@ def main(varname):
 
 def submit_slurm_job(varname, partition="compute"):
 
+    logdir = "slurm/normalization"
+    scriptdir = "job-scripts"
+    for d in [logdir, scriptdir]:
+        if not os.path.isdir(d):
+            os.makedirs(d)
+
     jobscript = f"#!/bin/bash\n\n"+\
         f"#SBATCH -J {varname}_norm\n"+\
-        f"#SBATCH -o slurm/normalization/{varname}.%j.out\n"+\
-        f"#SBATCH -e slurm/normalization/{varname}.%j.err\n"+\
+        f"#SBATCH -o {logdir}/{varname}.%j.out\n"+\
+        f"#SBATCH -e {logdir}/{varname}.%j.err\n"+\
         f"#SBATCH --nodes=1\n"+\
         f"#SBATCH --ntasks=1\n"+\
         f"#SBATCH --cpus-per-task=30\n"+\
@@ -42,7 +49,7 @@ def submit_slurm_job(varname, partition="compute"):
         f"conda activate graphufs-cpu\n"+\
         f"python -c 'from calc_normalization import main ; main(\"{varname}\")'"
 
-    scriptname = f"job-scripts/submit_normalization_{varname}.sh"
+    scriptname = f"{scriptdir}/submit_normalization_{varname}.sh"
     with open(scriptname, "w") as f:
         f.write(jobscript)
 
@@ -50,7 +57,7 @@ def submit_slurm_job(varname, partition="compute"):
 
 if __name__ == "__main__":
 
-    path_in = "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/fv3.zarr"
+    path_in = "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.zarr"
     ds = xr.open_zarr(
         path_in,
         storage_options={"token": "anon"},

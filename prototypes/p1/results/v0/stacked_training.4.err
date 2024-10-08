@@ -1,0 +1,33 @@
+/contrib2/Tim.Smith/graph-ufs/graphufs/training.py:59: UserWarning: Import failed for either mpi4py or mpi4jax.
+  warnings.warn("Import failed for either mpi4py or mpi4jax.")
+/contrib2/Tim.Smith/graph-ufs/graphufs/stacked_training.py:50: UserWarning: Import failed for either mpi4py or mpi4jax.
+  warnings.warn("Import failed for either mpi4py or mpi4jax.")
+2024-06-11 12:26:44.174048: E external/xla/xla/service/slow_operation_alarm.cc:65] Constant folding an instruction is taking > 1s:
+
+  %compare.5788 = pred[221184,1]{1,0} compare(s32[221184,1]{1,0} %constant.857, s32[221184,1]{1,0} %broadcast.5787), direction=LE, metadata={op_name="jit(optim_step)/jit(main)/transpose(jvp(mesh2grid_gnn))/_process/mesh2grid_gnn/_process_step/mesh2grid_gnn/le" source_file="/contrib2/Tim.Smith/graph-ufs/graphcast/graphcast/deep_typed_graph_net.py" source_line=226}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+2024-06-11 12:26:44.302696: E external/xla/xla/service/slow_operation_alarm.cc:133] The operation took 1.128787671s
+Constant folding an instruction is taking > 1s:
+
+  %compare.5788 = pred[221184,1]{1,0} compare(s32[221184,1]{1,0} %constant.857, s32[221184,1]{1,0} %broadcast.5787), direction=LE, metadata={op_name="jit(optim_step)/jit(main)/transpose(jvp(mesh2grid_gnn))/_process/mesh2grid_gnn/_process_step/mesh2grid_gnn/le" source_file="/contrib2/Tim.Smith/graph-ufs/graphcast/graphcast/deep_typed_graph_net.py" source_line=226}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+loss = 3.27540, qsize = 0, LR = 1.00e-03: 100%|███████████████████████████████████████████████████████| 4748/4748 [1:40:09<00:00,  1.27s/it]
+validation loss = 3.48751: 100%|██████████████████████████████████████████████████████████████████████████| 325/325 [06:46<00:00,  1.25s/it]
+loss = 2.44154, qsize = 0, LR = 1.00e-03: 100%|███████████████████████████████████████████████████████| 4748/4748 [1:40:06<00:00,  1.27s/it]
+validation loss = 2.56112: 100%|██████████████████████████████████████████████████████████████████████████| 325/325 [06:48<00:00,  1.26s/it]
+loss = 2.19486, qsize = 0, LR = 1.00e-03: 100%|███████████████████████████████████████████████████████| 4748/4748 [1:36:04<00:00,  1.21s/it]
+validation loss = 2.37284: 100%|██████████████████████████████████████████████████████████████████████████| 325/325 [06:33<00:00,  1.21s/it]
+loss = 2.07330, qsize = 0, LR = 9.99e-04: 100%|███████████████████████████████████████████████████████| 4748/4748 [1:36:50<00:00,  1.22s/it]
+validation loss = 2.24061: 100%|██████████████████████████████████████████████████████████████████████████| 325/325 [06:32<00:00,  1.21s/it]
+loss = 1.99759, qsize = 0, LR = 9.98e-04: 100%|███████████████████████████████████████████████████████| 4748/4748 [1:36:18<00:00,  1.22s/it]
+validation loss = 2.13876: 100%|██████████████████████████████████████████████████████████████████████████| 325/325 [06:33<00:00,  1.21s/it]
+loss = 1.99949, qsize = 0, LR = 9.97e-04: 100%|███████████████████████████████████████████████████████| 4748/4748 [1:36:31<00:00,  1.22s/it]
+validation loss = 2.10837: 100%|██████████████████████████████████████████████████████████████████████████| 325/325 [06:36<00:00,  1.22s/it]
+loss = 2.10222, qsize = 0, LR = 9.97e-04:   8%|████▏                                                   | 360/4748 [07:18<1:28:53,  1.22s/it]slurmstepd: error: *** JOB 4 ON timsmith-p1rocky-00016-3-0001 CANCELLED AT 2024-06-11T23:01:29 ***
+

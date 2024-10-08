@@ -26,21 +26,17 @@ if __name__ == "__main__":
     logging.info("Downloading Validation Data")
     p1.get_the_data(mode="validation")
 
-    # 3. Initialize the model and store
-    logging.info("Initializing Model & Storing Weights")
-    gen = p1.get_batches(
-        n_optim_steps=1,
-        mode="training",
-    )
-    inputs, targets, forcings, inittimes = next(gen)
-    data = {
-        "inputs": inputs.load(),
-        "targets": targets.load(),
-        "forcings": forcings.load(),
-        "inittimes": inittimes.load(),
-    }
-    params, state = init_model(p1, data)
+    # 3. Preprocessing, make sure to pass --chunks-per-epoch arg
+    logging.info("Preprocessing")
 
-    # TODO: make sure "state" is actually empty
-    p1.save_checkpoint(params, id=0)
+    gen_train = p1.get_batches(mode="training")
+    for i in range(p1.chunks_per_epoch):
+        logging.info(f"Processing training chunk {i}")
+        next(gen_train)
+
+    gen_valid = p1.get_batches(mode="validation")
+    for i in range(p1.chunks_per_epoch):
+        logging.info(f"Processing validation chunk {i}")
+        next(gen_valid)
+
     logging.info("Done with preprocessing")

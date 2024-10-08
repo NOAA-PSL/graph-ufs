@@ -1,8 +1,15 @@
+# etc
+.DS_Store
+
+# Untitled Jupyter Notebooks
+Untitled*.ipynb
+
 # Data
 *.zarr
 *.nc
 *.npz
 slurm/
+job-scripts/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

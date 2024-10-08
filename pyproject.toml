@@ -1,0 +1,52 @@
+[project]
+name = "graph-ufs"
+version = "0.1.0"
+description = "GraphCast trained on NOAA UFS Replay Data"
+license = {file = "LICENSE"}
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    #
+    # xarray, dask, zarr, numpy stack
+    "numpy",
+    "scipy",
+    "xarray",
+    "pandas",
+    "matplotlib",
+    "dask[complete]",
+    "zarr",
+    "netCDF4",
+    "bottleneck",
+    "cftime",
+    #
+    # GraphCast installed separately + optimization with optax
+    "optax",
+    "tqdm",
+    "xbatcher",
+    #
+    # Weatherbench2  dependencies
+    "apache-beam>=2.31.0",
+    "xarray-beam",
+    "xesmf",
+    #
+    # For GCS access
+    "fsspec",
+    "gcsfs",
+    "google-api-python-client",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest", "coverage",
+]
+
+[project.urls]
+homepage="https://github.com/NOAA-PSL/graph-ufs"
+source="https://github.com/NOAA-PSL/graph-ufs"
+
+[build-system]
+requires = ["setuptools>=64.0.0", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["graphufs"]

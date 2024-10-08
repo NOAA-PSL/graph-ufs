@@ -12,46 +12,50 @@ class P1Emulator(ReplayEmulator):
     }
     wb2_obs_url = "gs://weatherbench2/datasets/era5/1959-2022-6h-64x32_equiangular_conservative.zarr"
     local_store_path = "/lustre/p1-data"
-    no_cache_data = False        # don't cache or use zarr dataset downloaded from GCS on disk
+    cache_data = True
 
     # task config options
     input_variables = (
+        # 3D Variables
         "delz",
-        "hgtsfc",
-        "land",
-        "tmp2m",
-        "pressfc",
-        "ugrd10m",
-        "vgrd10m",
-        "prateb_ave",
-        "dswrf_avetoa",
         "tmp",
         "ugrd",
         "vgrd",
         "dzdt",
         "spfh",
+        # 2D Surface Variables
+        "tmp2m",
+        "pressfc",
+        "ugrd10m",
+        "vgrd10m",
+        "prateb_ave",
+        # Static inputs
+        "hgtsfc_static",
+        "land_static",
+        # Forcing variables at input time
+        "dswrf_avetoa",
         "year_progress_sin",
         "year_progress_cos",
         "day_progress_sin",
         "day_progress_cos",
     )
     target_variables = (
+        # 3D Variables
         "delz",
-        "tmp2m",
-        "pressfc",
-        "ugrd10m",
-        "vgrd10m",
-        "prateb_ave",
         "tmp",
         "ugrd",
         "vgrd",
         "dzdt",
         "spfh",
+        # 2D Surface Variables
+        "tmp2m",
+        "pressfc",
+        "ugrd10m",
+        "vgrd10m",
+        "prateb_ave",
     )
     forcing_variables = (
         "dswrf_avetoa",
-        "land",
-        "hgtsfc",
         "year_progress_sin",
         "year_progress_cos",
         "day_progress_sin",
@@ -74,7 +78,7 @@ class P1Emulator(ReplayEmulator):
     )
     validation_dates = (
         "2022-01-01T00",
-        "2022-02-01T00"
+        "2023-10-13T03"
     )
     testing_dates = (
         "2020-01-01T00",
@@ -83,21 +87,27 @@ class P1Emulator(ReplayEmulator):
 
     # training protocol
     batch_size = 32
+    num_batch_splits = 1
     num_epochs = 2
     chunks_per_epoch = 48
     steps_per_chunk = None
     checkpoint_chunks = 1
     max_queue_size = 1
     num_workers = 1
-    no_load_chunk = False
+    load_chunk = True
     store_loss = True
+    use_preprocessed = True
+
+    # evaluation
+    sample_stride = 9
+    evaluation_checkpoint_id = 50
 
     # multi GPU and xla options
     num_gpus = 1
     log_only_rank0 = False
     use_jax_distributed = False
     use_xla_flags = False
-    dask_threads = 4
+    dask_threads = None
 
     # model config options
     resolution = 1.0

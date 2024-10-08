@@ -23,7 +23,8 @@ class Dataset():
         emulator: ReplayEmulator,
         mode: str,
         preload_batch: bool = False,
-        chunks: Optional[dict | None] = None,
+        input_chunks: Optional[dict | None] = None,
+        target_chunks: Optional[dict | None] = None,
     ):
         """
         Initializes the Dataset object.
@@ -32,12 +33,13 @@ class Dataset():
             emulator (ReplayEmulator): The emulator object.
             mode (str): "training", "validation", or "testing"
             preload_batch (bool, optional): If True, preload a sample before doing any processing, usually a good idea
-            chunks (dict, optional): chunks used to store a local dataset
+            input_chunks, target_chunks (dict, optional): chunks used to store a local dataset
         """
         self.emulator = emulator
         self.mode = mode
         self.preload_batch = preload_batch
-        self.chunks = chunks
+        self.input_chunks = input_chunks
+        self.target_chunks = target_chunks
         xds = self._open_dataset()
         self.sample_generator = BatchGenerator(
             ds=xds,
@@ -48,7 +50,7 @@ class Dataset():
                 "level": len(xds["level"]),
             },
             input_overlap={
-                "datetime": emulator.n_input,
+                "datetime": emulator.n_forecast-1,
             },
             preload_batch=preload_batch,
         )
@@ -100,6 +102,11 @@ class Dataset():
     def local_targets_path(self) -> str:
         return join(self.emulator.local_store_path, self.mode, "targets.zarr")
 
+    @property
+    def initial_times(self) -> list[np.datetime64]:
+        """Returns dates of all initial conditions"""
+        return [self.xds["datetime"].values[i + self.emulator.n_input - 1] for i in range(len(self))]
+
 
     @staticmethod
     def _stack(a: xr.DataArray, b: Optional[xr.DataArray] = None) -> xr.DataArray:
@@ -132,6 +139,7 @@ class Dataset():
         xds = self.emulator.open_dataset()
         time = self.emulator.get_time(mode=self.mode)
         xds = self.emulator.subsample_dataset(xds, new_time=time)
+        xds = self.emulator.check_for_ints(xds)
         xds = xds.rename({
             "time": "datetime",
             "pfull": "level",
@@ -184,6 +192,7 @@ class Dataset():
 
         xinput, xtarget, xforcing = extract_inputs_targets_forcings(
             sample,
+            drop_datetime=False,
             **self.emulator.extract_kwargs,
         )
         xinput = xinput.expand_dims({"batch": [idx]})
@@ -218,17 +227,29 @@ class Dataset():
 
     def store_sample(self, idx: int) -> None:
         x,y = self[idx]
+
+        x = x.load()
+        y = y.load()
         x = x.expand_dims("batch").rename({"batch": "sample"})
         y = y.expand_dims("batch").rename({"batch": "sample"})
 
-        x = x.chunk(self.chunks)
-        y = y.chunk(self.chunks)
+        x = x.chunk(self.input_chunks)
+        y = y.chunk(self.target_chunks)
         spatial_region = {k : slice(None, None) for k in x.dims if k != "sample"}
         region = {"sample": slice(idx, idx+1), **spatial_region}
-        x.to_dataset(name="inputs").to_zarr(self.local_inputs_path, region=region)
-        y.to_dataset(name="targets").to_zarr(self.local_targets_path, region=region)
+        for name, array, path in zip(
+            ["inputs", "targets"],
+            [x, y],
+            [self.local_inputs_path, self.local_targets_path],
+        ):
+            if "batch" in array.coords:
+                array = array.drop_vars("batch")
+            array.to_dataset(name=name).to_zarr(
+                path,
+                region=region,
+            )
 
-    def get_container(self, template: xr.Dataset, name: str):
+    def get_container(self, template: xr.Dataset, name: str, chunks: dict):
 
         if "batch" in template.dims:
             template = template.isel(batch=0, drop=True)
@@ -243,7 +264,7 @@ class Dataset():
         xds[name] = xr.DataArray(
             data=dask.array.zeros(
                 shape=shape,
-                chunks=tuple(self.chunks[k] for k in dims),
+                chunks=tuple(chunks[k] for k in dims),
                 dtype=template.dtype,
             ),
             dims=dims,
@@ -254,13 +275,16 @@ class Dataset():
 
         # get templates
         x, y = self[0]
-        for name, template, path in zip(
+        for name, template, chunks, path in zip(
             ["inputs", "targets"],
             [x, y],
+            [self.input_chunks, self.target_chunks],
             [self.local_inputs_path, self.local_targets_path],
         ):
-            xds = self.get_container(template=template, name=name)
-            xds.to_zarr(path, compute=False, mode="w")
+            xds = self.get_container(template=template, name=name, chunks=chunks)
+            if "batch" in xds:
+                xds = xds.drop_vars("batch")
+            xds.to_zarr(path, compute=False, mode="w", consolidated=True)
 
 
 class PackedDataset():
@@ -271,11 +295,11 @@ class PackedDataset():
     that BatchLoader can pull a full batch in a single dask/zarr call
     """
 
-    def __init__(self, emulator, mode):
+    def __init__(self, emulator, mode, **kwargs):
         self.emulator = emulator
         self.mode = mode
-        self.inputs = xr.open_zarr(self.local_inputs_path)
-        self.targets = xr.open_zarr(self.local_targets_path)
+        self.inputs = xr.open_zarr(self.local_inputs_path, **kwargs)
+        self.targets = xr.open_zarr(self.local_targets_path, **kwargs)
 
     def __len__(self):
         return len(self.inputs["sample"])

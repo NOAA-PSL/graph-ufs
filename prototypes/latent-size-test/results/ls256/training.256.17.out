@@ -1,0 +1,179 @@
+[28 s] [Rank 0] [INFO] Unable to initialize backend 'rocm': NOT_FOUND: Could not find registered platform with name: "rocm". Available platform names are: CUDA
+[28 s] [Rank 0] [INFO] Unable to initialize backend 'tpu': INTERNAL: Failed to open libtpu.so: libtpu.so: cannot open shared object file: No such file or directory
+[28 s] [Rank 0] [INFO] Using 1 GPUs.
+[28 s] [Rank 0] [INFO] 
+jax:    0.4.27
+jaxlib: 0.4.23.dev20240503
+numpy:  1.26.4
+python: 3.11.9 | packaged by conda-forge | (main, Apr 19 2024, 18:36:13) [GCC 12.3.0]
+jax.devices (1 total, 1 local): [cuda(id=0)]
+process_count: 1
+platform: uname_result(system='Linux', node='timsmith-p1rocky-00034-1-0001', release='4.18.0-513.18.1.el8_9.x86_64', version='#1 SMP Wed Feb 21 21:34:36 UTC 2024', machine='x86_64')
+
+
+$ nvidia-smi
+Sat Aug 24 01:38:03 2024       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 550.54.15              Driver Version: 550.54.15      CUDA Version: 12.4     |
+|-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA A100 80GB PCIe          On  |   00000001:00:00.0 Off |                    0 |
+| N/A   45C    P0             71W /  300W |     428MiB /  81920MiB |      2%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+                                                                                         
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI        PID   Type   Process name                              GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A    169360      C   python                                        416MiB |
++-----------------------------------------------------------------------------------------+
+
+[28 s] [Rank 0] [INFO] Local devices: 1 [cuda(id=0)]
+[28 s] [Rank 0] [INFO] Global devices: 1 [cuda(id=0)]
+[40 s] [Rank 0] [INFO] Initializing Loss Function Weights and Stacked Mappings
+[41 s] [Rank 0] [INFO] Initializing Optimizer and Parameters
+[90 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_0.npz
+[90 s] [Rank 0] [INFO] Starting Training with:
+[90 s] [Rank 0] [INFO] 	 batch_size = 16
+[90 s] [Rank 0] [INFO] 	 1000 linearly increasing LR steps
+[90 s] [Rank 0] [INFO] 	 302872 cosine decay LR steps
+[90 s] [Rank 0] [INFO] 	 303872 total training steps
+[90 s] [Rank 0] [INFO] 	 325 validation steps
+[90 s] [Rank 0] [INFO] Training on epoch 0
+[91 s] [Rank 0] [INFO] Started jitting optim_step
+[296 s] [Rank 0] [INFO] Finished jitting optim_step
+[297 s] [Rank 0] [INFO] Started jitting validation loss
+[319 s] [Rank 0] [INFO] Finished jitting validation loss
+[3748 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_1.npz
+[3748 s] [Rank 0] [INFO] Training on epoch 1
+[7170 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_2.npz
+[7170 s] [Rank 0] [INFO] Training on epoch 2
+[10609 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_3.npz
+[10609 s] [Rank 0] [INFO] Training on epoch 3
+[14047 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_4.npz
+[14047 s] [Rank 0] [INFO] Training on epoch 4
+[17490 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_5.npz
+[17490 s] [Rank 0] [INFO] Training on epoch 5
+[20936 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_6.npz
+[20936 s] [Rank 0] [INFO] Training on epoch 6
+[24388 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_7.npz
+[24388 s] [Rank 0] [INFO] Training on epoch 7
+[27853 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_8.npz
+[27853 s] [Rank 0] [INFO] Training on epoch 8
+[31313 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_9.npz
+[31313 s] [Rank 0] [INFO] Training on epoch 9
+[34766 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_10.npz
+[34766 s] [Rank 0] [INFO] Training on epoch 10
+[38222 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_11.npz
+[38222 s] [Rank 0] [INFO] Training on epoch 11
+[41685 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_12.npz
+[41685 s] [Rank 0] [INFO] Training on epoch 12
+[45148 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_13.npz
+[45148 s] [Rank 0] [INFO] Training on epoch 13
+[48612 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_14.npz
+[48612 s] [Rank 0] [INFO] Training on epoch 14
+[52083 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_15.npz
+[52083 s] [Rank 0] [INFO] Training on epoch 15
+[55549 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_16.npz
+[55549 s] [Rank 0] [INFO] Training on epoch 16
+[59030 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_17.npz
+[59030 s] [Rank 0] [INFO] Training on epoch 17
+[62507 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_18.npz
+[62507 s] [Rank 0] [INFO] Training on epoch 18
+[65982 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_19.npz
+[65982 s] [Rank 0] [INFO] Training on epoch 19
+[69453 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_20.npz
+[69453 s] [Rank 0] [INFO] Training on epoch 20
+[72930 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_21.npz
+[72930 s] [Rank 0] [INFO] Training on epoch 21
+[76409 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_22.npz
+[76409 s] [Rank 0] [INFO] Training on epoch 22
+[79885 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_23.npz
+[79885 s] [Rank 0] [INFO] Training on epoch 23
+[83362 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_24.npz
+[83362 s] [Rank 0] [INFO] Training on epoch 24
+[86835 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_25.npz
+[86835 s] [Rank 0] [INFO] Training on epoch 25
+[90316 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_26.npz
+[90316 s] [Rank 0] [INFO] Training on epoch 26
+[93794 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_27.npz
+[93794 s] [Rank 0] [INFO] Training on epoch 27
+[97279 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_28.npz
+[97279 s] [Rank 0] [INFO] Training on epoch 28
+[100760 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_29.npz
+[100760 s] [Rank 0] [INFO] Training on epoch 29
+[104240 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_30.npz
+[104240 s] [Rank 0] [INFO] Training on epoch 30
+[107723 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_31.npz
+[107723 s] [Rank 0] [INFO] Training on epoch 31
+[111200 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_32.npz
+[111200 s] [Rank 0] [INFO] Training on epoch 32
+[114690 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_33.npz
+[114690 s] [Rank 0] [INFO] Training on epoch 33
+[118181 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_34.npz
+[118181 s] [Rank 0] [INFO] Training on epoch 34
+[121661 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_35.npz
+[121661 s] [Rank 0] [INFO] Training on epoch 35
+[125155 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_36.npz
+[125155 s] [Rank 0] [INFO] Training on epoch 36
+[128641 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_37.npz
+[128641 s] [Rank 0] [INFO] Training on epoch 37
+[132141 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_38.npz
+[132141 s] [Rank 0] [INFO] Training on epoch 38
+[135644 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_39.npz
+[135644 s] [Rank 0] [INFO] Training on epoch 39
+[139133 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_40.npz
+[139133 s] [Rank 0] [INFO] Training on epoch 40
+[142631 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_41.npz
+[142631 s] [Rank 0] [INFO] Training on epoch 41
+[146133 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_42.npz
+[146133 s] [Rank 0] [INFO] Training on epoch 42
+[149632 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_43.npz
+[149632 s] [Rank 0] [INFO] Training on epoch 43
+[153135 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_44.npz
+[153135 s] [Rank 0] [INFO] Training on epoch 44
+[156626 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_45.npz
+[156626 s] [Rank 0] [INFO] Training on epoch 45
+[160125 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_46.npz
+[160125 s] [Rank 0] [INFO] Training on epoch 46
+[163634 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_47.npz
+[163634 s] [Rank 0] [INFO] Training on epoch 47
+[167142 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_48.npz
+[167142 s] [Rank 0] [INFO] Training on epoch 48
+[170645 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_49.npz
+[170645 s] [Rank 0] [INFO] Training on epoch 49
+[174152 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_50.npz
+[174152 s] [Rank 0] [INFO] Training on epoch 50
+[177659 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_51.npz
+[177659 s] [Rank 0] [INFO] Training on epoch 51
+[181171 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_52.npz
+[181171 s] [Rank 0] [INFO] Training on epoch 52
+[184677 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_53.npz
+[184677 s] [Rank 0] [INFO] Training on epoch 53
+[188191 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_54.npz
+[188191 s] [Rank 0] [INFO] Training on epoch 54
+[191699 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_55.npz
+[191699 s] [Rank 0] [INFO] Training on epoch 55
+[195216 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_56.npz
+[195216 s] [Rank 0] [INFO] Training on epoch 56
+[198726 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_57.npz
+[198726 s] [Rank 0] [INFO] Training on epoch 57
+[202238 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_58.npz
+[202238 s] [Rank 0] [INFO] Training on epoch 58
+[205736 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_59.npz
+[205736 s] [Rank 0] [INFO] Training on epoch 59
+[209246 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_60.npz
+[209246 s] [Rank 0] [INFO] Training on epoch 60
+[212756 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_61.npz
+[212756 s] [Rank 0] [INFO] Training on epoch 61
+[216271 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_62.npz
+[216271 s] [Rank 0] [INFO] Training on epoch 62
+[219785 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_63.npz
+[219785 s] [Rank 0] [INFO] Training on epoch 63
+[223300 s] [Rank 0] [INFO] Stored checkpoint: /testlfs/latent-size-test/models/model_64.npz
+[223300 s] [Rank 0] [INFO] Done Training

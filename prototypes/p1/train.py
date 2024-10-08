@@ -55,7 +55,8 @@ if __name__ == "__main__":
     init_devices(p1)
 
     # configuring dask
-    dask.config.set(scheduler="threads", num_workers=p1.dask_threads)
+    if p1.dask_threads is not None:
+        dask.config.set(scheduler="threads", num_workers=p1.dask_threads)
 
     # data generators
     logging.info("Loading first chunk of training and validation")
@@ -83,7 +84,7 @@ if __name__ == "__main__":
 
     # compute approximate RAM usage and warn the user
     mem_usage = get_approximate_memory_usage(
-        [data_train, data_valid], p1.max_queue_size, p1.num_workers, p1.no_load_chunk
+        [data_train, data_valid], p1.max_queue_size, p1.num_workers, p1.load_chunk
     )
     logging.info("*****************************************************")
     logging.info(f"**     Total approximate memory usage {mem_usage:.0f} Gbs     ***")
@@ -99,8 +100,8 @@ if __name__ == "__main__":
 
     # have to divide steps by num gpus so that LR progresses
     # with the number of parallel optimization steps
-    steps_in_epoch = p1.chunks_per_epoch * p1.steps_per_chunk
-    n_total = p1.num_epochs * steps_in_epoch
+    steps_in_epoch = p1.chunks_per_epoch * len(data_train["inputs"]["optim_step"])
+    n_total = (p1.num_epochs + 1) * steps_in_epoch
     # use maximum of 1% of total steps or one epoch as warmup
     # Note that: graphcast uses 1/299 = 0.33% for warmup
     n_linear = max(n_total // 100, steps_in_epoch)

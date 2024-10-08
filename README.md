@@ -11,21 +11,18 @@ To install from source in development mode:
 git clone --recursive git@github.com:NOAA-PSL/graph-ufs.git -b develop
 cd graph-ufs
 conda env create -f conda/gpu.yaml
-```
-
-Using conda to install dependencies will make sure that packages work on the
-GPU.
-
-Please note that you will need to replace the correct paths below and run this command for your python environment to work correctly:
-```bash
-export PYTHONPATH=$PYTHONPATH:/path/to/graph-ufs:/path/to/graph-ufs/graphcast:/path/to/ufs2arco
+conda activate graphufs
+pip install -e .
+pip install ./graphcast --no-deps
+pip install ./weatherbench2 --no-deps
+pip install ./ufs2arco --no-deps
 ```
 
 ### Submodules
 Currently the following repositories are pulled in as submodules if you do a recursive clone of the repository (as suggested in [Installation](#installation) above):
 - [`graphcast`](https://github.com/google-deepmind/graphcast) from Google DeepMind
 - [`weatherbench2`](https://github.com/google-research/weatherbench2) from Google Research
-- [`ufs2arco`](https://github.com/NOAA-PSL/ufs2arco) from NOAA Physical Sciences Laboratory 
+- [`ufs2arco`](https://github.com/NOAA-PSL/ufs2arco) from NOAA Physical Sciences Laboratory
 
 If you do not use the `--recursive` flag when you clone the repo, then you will need to do a `git submodule --init` later to be able to use the submodules.
 If you already have an existing installation of one of these that you would prefer to use, you can just create a symlink between the top
