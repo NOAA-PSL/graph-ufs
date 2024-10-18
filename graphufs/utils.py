@@ -188,7 +188,7 @@ class DataGenerator:
         self.gen_lock = threading.Lock()
 
         # initialize batch generator
-        self.no_load_chunk = emulator.no_load_chunk
+        #self.no_load_chunk = emulator.no_load_chunks
         print(f"Starting to get {mode} batches")
         
         self.load_chunk = emulator.load_chunk

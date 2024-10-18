@@ -51,7 +51,7 @@ if __name__ == "__main__":
         mode="testing" if args.test else "training",
     )
     data_train = generator.get_data()
-    
+    print('Training Data:', data_train) 
 
     # validation
     if not args.test:
@@ -63,6 +63,7 @@ if __name__ == "__main__":
             mode="validation",
         )
         data_valid = validator.get_data()
+        print('Validation Data:', data_valid)
 
     # load weights or initialize a random model
     if gufs.checkpoint_exists(args.id) and args.id >= 0:
@@ -152,9 +153,7 @@ if __name__ == "__main__":
                 params=params,
                 state=state,
                 emulator=gufs,
-                input_batches=data["inputs"],
-                target_batches=data["targets"],
-                forcing_batches=data["forcings"],
+                testing_data=data,
             )
 
             inputs = data["inputs"]

@@ -267,8 +267,12 @@ class ReplayCoupledEmulator:
         # TOA Incident Solar Radiation integration period
         if self.tisr_integration_period is None:
             self.tisr_integration_period = self.delta_t
+    
+    @property
+    def name(self):
+        return str(type(self).__name__)
 
-
+    @property
     def time_per_forecast(self):
         return self.forecast_duration + self.input_duration
 
@@ -546,12 +550,13 @@ class ReplayCoupledEmulator:
 
 
         all_xds = self.get_the_data(all_new_time=all_new_time, mode=mode)
-        #print("all_xds:", all_xds)
+        # print("all_xds:", all_xds)
+
         # split dataset into chunks
         n_chunks = self.chunks_per_epoch
         has_preprocessed = False
+        
         if self.use_preprocessed:
-
             # chunks zarr datasets
             xds_chunks = {
                 "inputs": [None] * n_chunks,
@@ -590,7 +595,6 @@ class ReplayCoupledEmulator:
 
             # download the data
             all_xds = self.get_the_data(all_new_time=all_new_time, mode=mode)
-
             # split dataset into chunks
             slices = self.divide_into_slices(len(all_new_time), n_chunks)
             all_new_time_chunks = []
@@ -614,7 +618,6 @@ class ReplayCoupledEmulator:
 
             # iterate over all chunks
             for chunk_id in chunk_ids:
-
                 # check for pre-processed inputs
                 if self.use_preprocessed:
                     if xds_chunks["inputs"][chunk_id] is not None:
@@ -629,7 +632,7 @@ class ReplayCoupledEmulator:
                         continue
                     else:
                         logging.debug(f"\nOpening {mode} chunk {chunk_id} from scratch.")
-
+                
                 # chunk start and end times
                 new_time = all_new_time_chunks[chunk_id]
                 start = new_time[0]
@@ -657,7 +660,7 @@ class ReplayCoupledEmulator:
                 # this has to end such that we can pull an entire forecast from the training data
                 all_initial_times = pd.date_range(
                     start=start,
-                    end=end - self.time_per_forecast(),
+                    end=end - self.time_per_forecast,
                     freq=self.delta_t,
                     inclusive="both",
                 )
@@ -675,6 +678,7 @@ class ReplayCoupledEmulator:
 
                 # subsample in time, grab variables and vertical levels we want
                 xds = self.subsample_dataset(all_xds, es_comp="coupled", new_time=new_time)
+                #print('xds subsampled:', xds)
                 xds = xds.rename({
                     "pfull": "level",
                     "grid_xt": "lon",
@@ -683,7 +687,7 @@ class ReplayCoupledEmulator:
                     })
                 xds = xds.drop(["cftime", "ftime"])
                 xds.load()
-                
+
                 # iterate through batches
                 inputs = []
                 targets = []
@@ -715,11 +719,10 @@ class ReplayCoupledEmulator:
 
                     timestamps_in_this_forecast = pd.date_range(
                         start=forecast_initial_times[i],
-                        end=forecast_initial_times[i]+self.time_per_forecast(),
+                        end=forecast_initial_times[i]+self.time_per_forecast,
                         freq=self.delta_t,
                         inclusive="both",
                     )
-                    
                     batch = self.preprocess(
                         xds.sel(datetime=timestamps_in_this_forecast),
                         batch_index=b,
@@ -862,7 +865,7 @@ class ReplayCoupledEmulator:
             norms = xds[[x for x in varnames if x in xds]]
             # replicate time varying variables
             for key in norms.data_vars:
-                if "time" in xds[key].attrs["description"]:
+                if "description" in xds[key].attrs and "time" in xds[key].attrs["description"]:
                     norms[key] = xr.concat(
                         [norms[key].copy() for _ in range(n_time)],
                         dim="time",
@@ -872,6 +875,7 @@ class ReplayCoupledEmulator:
             norms = norms.transpose(*dimorder)
             return dataset_to_stacked(norms, **kwargs)
 
+        print('Dataset:', xds)
         input_norms = stackit(xds, self.input_variables, n_time=self.n_input, **kwargs)
         forcing_norms = stackit(xds, self.forcing_variables, n_time=self.n_target, **kwargs)
         target_norms = stackit(xds, self.target_variables, n_time=self.n_target, **kwargs)

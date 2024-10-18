@@ -635,8 +635,8 @@ def predict(
         
         # postprocess predictions the same way as done during training
         for var in predictions:
-            if "landsea_mask" in input_batches:
-                landseamask = input_batches["landsea_mask"].isel(optim_step=k)
+            if "landsea_mask" in i_batches:
+                landseamask = i_batches["landsea_mask"]
                 if "z_l" in predictions[var].dims:
                     predictions[var] = predictions[var]*landseamask
 
