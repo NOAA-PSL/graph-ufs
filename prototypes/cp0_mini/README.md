@@ -1,28 +1,44 @@
-# Prototype 0
+# Coupled Prototype 0
 
-The purpose of this prototype is to establish a very simple weather emulator
+The purpose of this prototype is to establish a very simple coupled emulator
 pipeline that we can further refine and scale up.
-Compared to GraphCast, this has:
-- Reduced variable set
-    * Inputs: surface pressure, 10m zonal/meridional winds, 3D temperature,
+Although it has variables from atmosphere, ocean, sea ice and land components, which 
+we also intend to have in a larger prototype, the set of variables considered from each
+of these components is relatively much smaller. Below are the specifications of this 
+prototype: 
+- Atmosphere
+    * Inputs: surface pressure, 10m zonal/meridional winds, 2m Temp, 3D temperature,
       year/day progress
-    * Targets: surface pressure, 10m zonal/meridional winds, 3D temperature,
-    * Forcings: land, year/day progress
-- 3 vertical levels: approximately 1000 hPa, 500 hPa, 100 hPa, but on the native
-  FV3 vertical grid
-- 6 hour time step and make 1 step ahead predictions
+    * Targets: surface pressure, 10m zonal/meridional winds, 2m Temp, 3D temperature,
+    * Forcings: year/day progress
+    * Vertical Levels: approximately 1000 hPa, 500 hPa, 100 hPa, but on the native model 
+      vertical grid
+- Ocean
+    * Inputs: SSH, 3D temperature, 3D salinity, landsea_mask
+    * Targets: SSH, 3D temperature, 3D salinity
+    * Forcings: ()
+    * Vertical Levels: approx. 0.5m, 50m, 200m 
+- Sea Ice
+    * Inputs: ice concentration, ice thickness
+    * Targets: ice concentration, ice thickness
+    * Forcings: ()
+- Land
+    * Inputs: soil moisture
+    * Targets: soild moisture
+    * Forcings: ()
+- 6 hour time step and make up to 10 days ahead forecasts
 - 1 degree horizontal resolution (C384)
 - 1 year of training data
-- 1 year of evaluation data
-- Evaluate on and with WeatherBench2
-- Simple data normalization just to get moving: data normalized based on avg/std taken over 1994-1997
+- 1 year of validation data
+- Possible to evaluate on and with WeatherBench2
+- Simple data normalization to get moving: data normalized based on avg/std taken over 1993-1997
 
-The configuration is defined in [simple_emulator.py](simple_emulator.py).
+The configuration is defined in [mini_coupled_emulator.py](mini_coupled_emulator.py).
 
 ## Training
 
 Before training, clear any existing zarr stores or data, specified by the
-`local_store_path` in [simple_emulator.py](simple_emulator.py).
+`local_store_path` in [mini_coupled_emulator.py](mini_coupled_emulator.py).
 For example:
 
 ```
@@ -32,127 +48,81 @@ $ rm -rf zarr-stores/loss.nc zarr-stores/data.zarr/ zarr-stores/models/
 Then training can be executed with [train.py](train.py) as
 
 ```bash
-$ python -W ignore train.py --num-epochs 2 --chunks-per-epoch 2 --latent-size 32 --training-dates "1994-01-01T00" "1994-01-31T18"
+$ python -W ignore train.py --num-epochs 2 --chunks-per-epoch 1 --latent-size 32 --training-dates "1994-01-01T00" "1994-01-31T18"
 ```
 
 which shows a quick example of executing two epochs over 1 month of data, where
-the month of data is split into two chunks.
-The first epoch caches the data on disk for the second epoch onwards so training should be faster from 2nd+ epochs.
+the month of data is contained in a single chunk. Change this value in order to 
+distribute the data over multiple chunks.The first epoch caches the data on disk 
+for the second epoch onwards so training should be faster from 2nd+ epochs. If 
+you wish to use the values defined in the config file, you do not need to set 
+these flags again here.
+Caution: make sure that the "target_lead_time" hyperparameter is single valued for
+training else you would receive crazy jax errors. Right now, graph-ufs is not
+coded to optimize for multiple lead times. 
 
-This should produce 4 networks, 2 per epoch, at `zarr-stores/models`
+This should produce 2 networks, 1 per epoch, at `zarr-stores/models`. The number
+of models is equal to epochs times the number of chunks per epoch.
 
 ```
 $ ls zarr-stores/models/
-model_0.npz  model_1.npz  model_2.npz  model_3.npz
+model_0.npz  model_1.npz
 ```
-
-Since we are doing 3 steps per chunk, a total of 4 x 3 = 12 losses should be accumulated
-
 ```
 $ ncdump -v loss zarr-stores/loss.nc
 netcdf loss {
 dimensions:
-	optim_step = 12 ;
-	var_index = 4 ;
-	var_names = 4 ;
+	optim_step = 16 ;
+	var_index = 11 ;
+	var_names = 11 ;
 variables:
-	int64 optim_step(optim_step) ;
-	int64 var_index(var_index) ;
-	string var_names(var_names) ;
 	float loss(optim_step) ;
 		loss:_FillValue = NaNf ;
 		loss:long_name = "loss function value" ;
+	float loss_valid(optim_step) ;
+		loss_valid:_FillValue = NaNf ;
+		loss_valid:long_name = "validation loss function value" ;
 	float loss_by_var(var_index, optim_step) ;
 		loss_by_var:_FillValue = NaNf ;
+	double learning_rate(optim_step) ;
+		learning_rate:_FillValue = NaN ;
+	int64 optim_step(optim_step) ;
+	int64 var_index(var_index) ;
+	string var_names(var_names) ;
 
 // global attributes:
 		:batch_size = 16LL ;
 data:
 
- loss = 2.594727, 2.493164, 2.432617, 2.442871, 2.381348, 2.306641, 2.172852,
-    2.123047, 2.07373, 1.853516, 1.772461, 1.742188 ;
+ loss = 4.556444, 4.985181, 4.93081, 4.514584, 4.726346, 4.753759, 4.097644, 
+    4.098628, 3.667516, 4.208126, 4.237391, 3.891592, 4.144828, 4.243155, 
+    3.619147, 3.669657 ;
 }
 ```
 
 ## Evaluation
-
-To test the last model i.e. `model_3.npz`
-
+At this stage, you can change the "target_lead_time" to make it a list instead 
+of a single value. graph-ufs is able to produce forecasts for multiple lead times.
+To test the last model checkpoint i.e. `model_1.npz`
 ```
-$ python -W ignore train.py --chunks-per-epoch 1 --latent-size 32 --test --id 3 --testing-dates  "1995-01-01T00"  "1995-01-31T18"
-Chunks total: 1
-Chunk 0: 1995-01-01 00:00:00 to 1995-01-31 18:00:00
- --- Loading weights: ./zarr-stores/models/model_3.npz ---
-Elapsed time: 0.0196 seconds
-
- --- Starting Testing ---
-Testing on chunk 0
-Processing: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 7/7 [00:50<00:00,  7.21s/it]
---------- Statistiscs ---------
-pressfc                         : RMSE: 274.6962890625 BIAS: -10.097412109375
-tmp                             : RMSE: 1.921684980392456 BIAS: -0.40056389570236206
-ugrd10m                         : RMSE: 2.8340179920196533 BIAS: 0.21854324638843536
-vgrd10m                         : RMSE: 3.079197645187378 BIAS: -1.7278567552566528
-Total Walltime: 55.5004 seconds
+$ python -W ignore train.py --test --id 1 --testing-dates  "1995-01-01T00"  "1995-01-31T18"
+Processing: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 8/8 [00:36<00:00,  4.53s/it]
 ```
-
-Note that we can run this successfully with 2 or more chunks, but the discontinuity created at chunk boundaries is apparently an issue with WeatherBench2 evaluation.
-To evaluate with WeatherBench2 if necessary, make sure the dates in the script match with what you run testing on.
-
-```
-$ cd ../..
-$ ./evaluate-graphufs.sh
-No land_sea_mask found.
-W0328 12:17:50.383941 139759771653952 _metadata.py:139] Compute Engine Metadata server unavailable on attempt 1 of 3. Reason: timed out
-W0328 12:17:50.429847 139759771653952 _metadata.py:139] Compute Engine Metadata server unavailable on attempt 2 of 3. Reason: [Errno 113] No route to host
-W0328 12:17:53.433954 139759771653952 _metadata.py:139] Compute Engine Metadata server unavailable on attempt 3 of 3. Reason: timed out
-W0328 12:17:53.434175 139759771653952 _default.py:338] Authentication failed using Compute Engine authentication due to unavailable metadata server.
-W0328 12:17:53.520377 139759771653952 _metadata.py:205] Compute Engine Metadata server unavailable on attempt 1 of 5. Reason: HTTPConnectionPool(host='metadata.google.internal', port=80): Max retries exceeded with url: /computeMetadata/v1/instance/service-accounts/default/?recursive=true (Caused by NameResolutionError("<urllib3.connection.HTTPConnection object at 0x7f1b3e3e5190>: Failed to resolve 'metadata.google.internal' ([Errno -2] Name or service not known)"))
-W0328 12:17:53.638942 139759771653952 _metadata.py:205] Compute Engine Metadata server unavailable on attempt 2 of 5. Reason: HTTPConnectionPool(host='metadata.google.internal', port=80): Max retries exceeded with url: /computeMetadata/v1/instance/service-accounts/default/?recursive=true (Caused by NameResolutionError("<urllib3.connection.HTTPConnection object at 0x7f1b3d8265d0>: Failed to resolve 'metadata.google.internal' ([Errno -2] Name or service not known)"))
-W0328 12:17:53.708961 139759771653952 _metadata.py:205] Compute Engine Metadata server unavailable on attempt 3 of 5. Reason: HTTPConnectionPool(host='metadata.google.internal', port=80): Max retries exceeded with url: /computeMetadata/v1/instance/service-accounts/default/?recursive=true (Caused by NameResolutionError("<urllib3.connection.HTTPConnection object at 0x7f1b3d826bd0>: Failed to resolve 'metadata.google.internal' ([Errno -2] Name or service not known)"))
-W0328 12:17:53.808346 139759771653952 _metadata.py:205] Compute Engine Metadata server unavailable on attempt 4 of 5. Reason: HTTPConnectionPool(host='metadata.google.internal', port=80): Max retries exceeded with url: /computeMetadata/v1/instance/service-accounts/default/?recursive=true (Caused by NameResolutionError("<urllib3.connection.HTTPConnection object at 0x7f1b3d830590>: Failed to resolve 'metadata.google.internal' ([Errno -2] Name or service not known)"))
-W0328 12:17:53.879918 139759771653952 _metadata.py:205] Compute Engine Metadata server unavailable on attempt 5 of 5. Reason: HTTPConnectionPool(host='metadata.google.internal', port=80): Max retries exceeded with url: /computeMetadata/v1/instance/service-accounts/default/?recursive=true (Caused by NameResolutionError("<urllib3.connection.HTTPConnection object at 0x7f1b3d831b90>: Failed to resolve 'metadata.google.internal' ([Errno -2] Name or service not known)"))
-I0328 12:17:54.102175 139759771653952 evaluation.py:311] Loading data
-I0328 12:17:54.128559 139759771653952 evaluation.py:400] Logging metric: mse
-I0328 12:17:54.185155 139759771653952 evaluation.py:425] Logging metric done: mse
-I0328 12:17:54.185217 139759771653952 evaluation.py:400] Logging metric: acc
-I0328 12:18:05.715586 139759771653952 evaluation.py:425] Logging metric done: acc
-I0328 12:18:05.715660 139759771653952 evaluation.py:400] Logging metric: bias
-I0328 12:18:05.749613 139759771653952 evaluation.py:425] Logging metric done: bias
-I0328 12:18:05.749665 139759771653952 evaluation.py:400] Logging metric: mae
-I0328 12:18:05.784231 139759771653952 evaluation.py:425] Logging metric done: mae
-I0328 12:18:05.945983 139759771653952 evaluation.py:467] Logging Evaluation complete:
-<xarray.Dataset>
-Dimensions:                  (optim_step: 1, level: 3, metric: 4)
-Coordinates:
-  * optim_step               (optim_step) int64 0
-  * level                    (level) float32 100.0 500.0 1e+03
-  * metric                   (metric) object 'acc' 'bias' 'mae' 'mse'
-    lead_time                timedelta64[ns] 00:00:00
-Data variables:
-    surface_pressure         (metric, optim_step) float64 dask.array<chunksize=(4, 1), meta=np.ndarray>
-    temperature              (metric, optim_step, level) float64 dask.array<chunksize=(4, 1, 3), meta=np.ndarray>
-    10m_u_component_of_wind  (metric, optim_step) float64 dask.array<chunksize=(4, 1), meta=np.ndarray>
-    10m_v_component_of_wind  (metric, optim_step) float64 dask.array<chunksize=(4, 1), meta=np.ndarray>
-    10m_wind_vector          (metric, optim_step) float64 dask.array<chunksize=(4, 1), meta=np.ndarray>
-I0328 12:18:06.010518 139759771653952 evaluation.py:471] Logging Saved results to ./graphufs_deterministic.nc
-```
+Note that no statistics is printed here as we are not comparing it with weatherbench2 
+dataset. Doing this throws errors as it doesn't have anything other than atmospheric 
+variables.
 
 ## Loss over 1 year of training
-
-
 Training on 1 year of data will produce the following loss curve, indicating things are going in the
 right direction.
-
+```
 <img src="loss.png" width=500>
-
+```
 See [plot_loss.ipynb](plot_loss.ipynb) for the plot and plots of loss by
 variable.
 
-
-## Notes
-
-## Normalization
+## Notes: 
+- Normalization
 
 The normalization fields were computed using
 [calc_normalization.py](calc_normalization.py), and there
@@ -173,12 +143,10 @@ Some points of generalization include:
 
 
 ## Training Schedule
-
-
-At this stage, it doesn't make sense to add the full learning rate schedule
-that is done in GraphCast.
-However, here is the first stage of their three phases of training as an
-example, including their definition of the AdamW optimizer.
+The learning rate is constant in this prototype. In CP1, we intend to use 
+the same cosine annealing learning rate as used in graph-ufs P1 prototype.
+Below is the first stage of the three phases of training of the original 
+graphcast as an example, including their definition of the AdamW optimizer.
 This could be dropped into [train.py](train.py) in place of the optimizer
 definition as follows
 

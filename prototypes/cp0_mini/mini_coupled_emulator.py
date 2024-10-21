@@ -116,7 +116,7 @@ class CP0Emulator(ReplayCoupledEmulator):
     target_lead_time = [f"{n}h" for n in range(6, 6*4*10+1, 6)]
     training_dates = (          # bounds of training data (inclusive)
         "1994-01-01T00",        # start
-        "1994-01-31T18"         # stop
+        "1994-12-31T18"         # stop
     )
     testing_dates = (           # bounds of testing data (inclusive)
         "1995-01-01T00",        # start
@@ -124,18 +124,18 @@ class CP0Emulator(ReplayCoupledEmulator):
     )
     validation_dates = (        # bounds of validation data (inclusive)
         "1996-01-01T00",        # start
-        "1996-01-31T18"         # stop
+        "1996-12-31T18"         # stop
     )
 
     # training protocol
     batch_size = 16
     num_batch_splits = 1
-    num_epochs = 1
+    num_epochs = 64
 
     # model config options
     resolution = 1.0
     mesh_size = 2
-    latent_size = 256
+    latent_size = 32
     gnn_msg_steps = 4
     hidden_layers = 1
     radius_query_fraction_edge_length = 0.6

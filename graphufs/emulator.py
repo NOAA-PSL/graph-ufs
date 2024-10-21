@@ -875,7 +875,7 @@ class ReplayCoupledEmulator:
             norms = norms.transpose(*dimorder)
             return dataset_to_stacked(norms, **kwargs)
 
-        print('Dataset:', xds)
+        #print('Dataset:', xds)
         input_norms = stackit(xds, self.input_variables, n_time=self.n_input, **kwargs)
         forcing_norms = stackit(xds, self.forcing_variables, n_time=self.n_target, **kwargs)
         target_norms = stackit(xds, self.target_variables, n_time=self.n_target, **kwargs)
