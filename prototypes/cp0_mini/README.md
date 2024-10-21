@@ -109,7 +109,7 @@ $ python -W ignore train.py --test --id 1 --testing-dates  "1995-01-01T00"  "199
 Processing: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 8/8 [00:36<00:00,  4.53s/it]
 ```
 Note that no statistics is printed here as we are not comparing it with weatherbench2 
-dataset. Doing this throws errors as it doesn't have anything other than atmospheric 
+dataset. Doing this throws errors as Weatherbench doesn't have anything other than atmospheric 
 variables.
 
 ## Loss over 1 year of training
@@ -122,23 +122,11 @@ See [plot_loss.ipynb](plot_loss.ipynb) for the plot and plots of loss by
 variable.
 
 ## Notes: 
-- Normalization: the normalization fields were computed using
-[calc_normalization.py](calc_normalization.py), and there
-are many unnecessary hard coded values.
-This code should be generalized in the future, and could probably be more
-efficient, e.g. with a dask cluster rather than brute force slurm job
-submission.
-Some points of generalization include:
-- storage location input/output (which would generalize resolution and model
-  component)
-- time frame and data frequency (timestep) used
-- the averaging may need to take into account a more accurate grid cell volume
-  weighted average
-- the `year_progress` and `day_progress` fields are computed by graphcast, and
-  these calculations should go here so that the correct normalization can be
-  computed. Right now those normalization values are hard coded into
-  `graphufs.ReplayEmulator.load_normalization`
-
+The normalization fields were computed using
+[calc_normalization.py](calc_normalization.py). This code should be generalized 
+in the future, and could probably be more efficient, e.g. with a dask cluster 
+rather than brute force slurm job submission. Additionally, the averaging may 
+need to take into account a more accurate grid cell volume weighted average.
 
 ## Training Schedule
 The learning rate is constant in this prototype. In CP1, we intend to use 
