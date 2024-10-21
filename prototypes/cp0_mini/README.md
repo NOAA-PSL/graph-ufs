@@ -115,9 +115,7 @@ variables.
 ## Loss over 1 year of training
 Training on 1 year of data will produce the following loss curve, indicating things are going in the
 right direction.
-```
 <img src="loss.png" width=500>
-```
 See [plot_loss.ipynb](plot_loss.ipynb) for the plot and plots of loss by
 variable.
 
