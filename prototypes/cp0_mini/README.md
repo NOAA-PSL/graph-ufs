@@ -115,14 +115,14 @@ variables.
 ## Loss over 1 year of training
 Training on 1 year of data will produce the following loss curve, indicating things are going in the
 right direction.
+
 <img src="loss.png" width=500>
+
 See [plot_loss.ipynb](plot_loss.ipynb) for the plot and plots of loss by
 variable.
 
 ## Notes: 
-- Normalization
-
-The normalization fields were computed using
+- Normalization: the normalization fields were computed using
 [calc_normalization.py](calc_normalization.py), and there
 are many unnecessary hard coded values.
 This code should be generalized in the future, and could probably be more
