@@ -50,7 +50,7 @@ if __name__ == "__main__":
         num_workers=gufs.num_workers,
         mode="testing" if args.test else "training",
     )
-    #data_train = generator.get_data()
+    data_train = generator.get_data()
     #print('Training Data:', data_train) 
 
     # validation
@@ -62,7 +62,7 @@ if __name__ == "__main__":
             num_workers=gufs.num_workers,
             mode="validation",
         )
-        #data_valid = validator.get_data()
+        data_valid = validator.get_data()
         #print('Validation Data:', data_valid)
 
     # load weights or initialize a random model

@@ -162,3 +162,5 @@ optimizer = optax.chain(
 On the PSL GPU cluster, we saw no benefit to adding [these flags suggested by
 JAX](https://jax.readthedocs.io/en/latest/gpu_performance_tips.html#xla-performance-flags),
 in fact they slowed things down significantly.
+On Perlmutter, we got errors on using the default/latest version of jax and jaxlib, but 
+downgrading jaxlib to 0.4.26 did the trick.
