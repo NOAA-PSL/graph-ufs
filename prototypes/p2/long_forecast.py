@@ -1,5 +1,6 @@
 import logging
 from functools import partial
+import numpy as np
 import xarray as xr
 import pandas as pd
 import jax
@@ -50,12 +51,37 @@ def load_normalization(task_config):
     """Assumes we want normalization from the 1/4 degree subsampled to ~1 degree data"""
 
     normalization = dict()
-    for key in ["mean", "std", "stddiff"]:
-        this_norm = xr.open_zarr(Emulator.norm_urls[key], storage_options={"token":"anon"})
-        this_norm = this_norm[[x for x in get_all_variables(task_config) if x in this_norm]]
+    for norm_component in ["mean", "std", "stddiff"]:
+        this_norm = xr.open_zarr(Emulator.norm_urls[norm_component], storage_options={"token":"anon"})
+        myvars = list(x for x in get_all_variables(task_config) if x in this_norm)
+        # keep attributes in order to distinguish static from time varying components
+        with xr.set_options(keep_attrs=True):
+
+            if Emulator.input_transforms is not None:
+                for key, transform_function in Emulator.input_transforms.items():
+
+                    # make sure e.g. log_spfh is in the dataset
+                    transformed_key = f"{transform_function.__name__}_{key}" # e.g. log_spfh
+                    assert transformed_key in this_norm, \
+                        f"Emulator.set_normalization: couldn't find {transformed_key} in {component} normalization dataset"
+                    # there's a chance the original, e.g. spfh, is not in the dataset
+                    # if it is, replace it with e.g. log_spfh
+                    if key in myvars:
+                        idx = myvars.index(key)
+                        myvars[idx] = transformed_key
+            this_norm = this_norm[myvars]
+            if Emulator.input_transforms is not None:
+                for key, transform_function in Emulator.input_transforms.items():
+                    transformed_key = f"{transform_function.__name__}_{key}" # e.g. log_spfh
+                    idx = myvars.index(transformed_key)
+                    myvars[idx] = key
+
+                    # necessary for graphcast.dataset to stacked operations
+                    this_norm = this_norm.rename({transformed_key: key})
+
         this_norm = this_norm.sel(pfull=list(task_config.pressure_levels), method="nearest")
         this_norm = this_norm.rename({"pfull": "level"})
-        normalization[key] = this_norm.load()
+        normalization[norm_component] = this_norm.load()
 
     return normalization
 
@@ -125,6 +151,11 @@ def load_sample_initial_conditions(t0, lead_times, task_config, sample_idx=0):
         target_lead_times=lead_times,
     )
 
+    # map the inputs to logspace (or whatever)
+    for key, mapping in Emulator.input_transforms.items():
+        with xr.set_options(keep_attrs=True):
+            inputs[key] = mapping(inputs[key])
+
     inputs = inputs.expand_dims({"batch": [sample_idx]})
     targets_template = targets_template.expand_dims({"batch": [sample_idx]})
     forcings = forcings.expand_dims({"batch": [sample_idx]})
@@ -174,7 +205,7 @@ def predict(
 if __name__ == "__main__":
 
     setup_simple_log()
-    params, model_config, task_config = load_checkpoint("/p2-lustre/p2/models/model_64.npz")
+    params, model_config, task_config = load_checkpoint("/p1-evaluation/p2/models/model_64.npz")
 
     normalization = load_normalization(task_config)
 
@@ -205,12 +236,17 @@ if __name__ == "__main__":
         normalization=normalization,
     )
 
+    # map back from log space
+    for key, mapping in Emulator.output_transforms.items():
+        with xr.set_options(keep_attrs=True):
+            prediction[key] = mapping(prediction[key])
+
     prediction = swap_batch_time_dims(prediction, [pd.Timestamp(t0)])
     prediction = prediction.rename({"time": "t0"})
     prediction["time"] = pd.Timestamp(t0) + prediction["lead_time"]
     prediction = prediction.swap_dims({"lead_time": "time"})
 
-    path = f"/p2-lustre/p2/long-forecasts/graphufs.{t0}.{tf}.zarr"
+    path = f"/p1-evaluation/p2/long-forecasts/graphufs.{t0}.{tf}.zarr"
     logging.info(f"Storing prediction at {path}")
     prediction.to_zarr(path, mode="w")
     logging.info(f"Done.")
