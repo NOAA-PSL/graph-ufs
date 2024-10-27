@@ -23,7 +23,7 @@ Script to train and test graphufs over multiple chunks and epochs
 
 Usage:
 
-    python3 -W ignore train.py --num-epochs 2 --chunks-per-epoch 2 --latent-size 32 --training-dates "1994-01-01T00" "1994-01-31T18"
+    python -W ignore train.py --num-epochs 2 --chunks-per-epoch 2 --latent-size 32 --training-dates "1994-01-01T00" "1994-01-31T18"
 
     This will train networks for 2 epochs with 2 chunks per epoch with training dataset of first month of 1994.
     You should get 4 models (checkpoints) after training completes.
@@ -141,6 +141,7 @@ if __name__ == "__main__":
 
             # get chunk of data in parallel with inference
             data = generator.get_data()
+            #print("Testing data:", data)
 
             # fill nans with zero
             data["inputs"] = data["inputs"].fillna(0)
