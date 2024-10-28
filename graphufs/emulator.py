@@ -131,6 +131,7 @@ class ReplayCoupledEmulator:
         "pressfc"       : 0.1,
         "prateb_ave"    : 0.1,
     }
+
     ocn_loss_weights_per_variable = {
         "SSH"           : 1.0,
         "so"            : 0.1,
@@ -148,6 +149,8 @@ class ReplayCoupledEmulator:
     loss_weights_per_variable.update(ocn_loss_weights_per_variable) 
     loss_weights_per_variable.update(ice_loss_weights_per_variable)
     loss_weights_per_variable.update(land_loss_weights_per_variable)
+    input_transforms = None
+    output_transforms = None
 
     # this is used for initializing the state in the gradient computation
     grad_rng_seed = None
@@ -261,13 +264,17 @@ class ReplayCoupledEmulator:
         logging.debug(f"self.n_target: {self.n_target}")
 
         # set normalization here so that we can jit compile with this class
+        # a bit annoying, have to copy datatypes here to avoid the Ghost Bus problem
+        self.norm_urls = self.norm_urls.copy()
+        self.norm = dict()
+        self.stacked_norm = dict()
         self.set_normalization()
         self.set_stacked_normalization()
 
         # TOA Incident Solar Radiation integration period
         if self.tisr_integration_period is None:
             self.tisr_integration_period = self.delta_t
-    
+
     @property
     def name(self):
         return str(type(self).__name__)
@@ -381,8 +388,26 @@ class ReplayCoupledEmulator:
         # mask nans in ocean target variables
         if es_comp.lower() == "ocn".lower() or es_comp.lower() == "ice" or es_comp.lower() == "land":
             xds = xds.fillna(0)
-        
+
+        # select our vertical levels
+        xds = xds.sel(pfull=self.levels)
+
+        # if we have any transforms to apply, do it here
+        xds = self.transform_variables(xds)
+
         return xds
+
+
+    def transform_variables(self, xds):
+        """e.g. transform spfh -> log(spfh), but keep the name the same for ease with GraphCast code"""
+        if self.input_transforms is not None:
+            for key, mapping in self.input_transforms.items():
+                logging.info(f"{type(self).__name__}: transforming {key} -> {mapping.__name__}({key})")
+                with xr.set_options(keep_attrs=True):
+                    xds[key] = mapping(xds[key])
+                xds[key].attrs["transformation"] = f"this variable shows {mapping.__name__}({key})"
+        return xds
+
 
     def check_for_ints(self, xds):
         """Turn data variable integers into floats, because otherwise the normalization in GraphCast goes haywire
@@ -593,7 +618,14 @@ class ReplayCoupledEmulator:
                 all_new_time = all_new_time[slices[self.mpi_rank]]
                 logging.info(f"Data for {mode} MPI rank {self.mpi_rank}: {all_new_time[0]} to {all_new_time[-1]} : {len(all_new_time)} time stamps.")
 
-            # download the data
+         if self.input_transforms is not None:
+                        for key, transform_function in self.input_transforms.items():
+                            transformed_key = f"{transform_function.__name__}_{key}" # e.g. log_spfh
+                            idx = myvars.index(transformed_key)
+                            myvars[idx] = key
+
+                            # necessary for graphcast.dataset to stacked operations
+                            xds = xds.rename({transformed_key: key})   # download the data
             all_xds = self.get_the_data(all_new_time=all_new_time, mode=mode)
             # split dataset into chunks
             slices = self.divide_into_slices(len(all_new_time), n_chunks)
@@ -786,12 +818,17 @@ class ReplayCoupledEmulator:
                 os.path.basename(self.atm_norm_urls[component]),
             )
 
+
+
             if os.path.isdir(local_path):
                 xds = xr.open_zarr(local_path)
+                myvars = list(x for x in self.all_variables if x in xds)
+                xds = xds[myvars]
                 xds = xds.load()
                 foundit = True
 
             else:
+                kwargs = {"storage_options": {"token": "anon"}} if any(x in self.norm_urls[component] for x in ["gs://", "gcs://"]) else {}
                 xds_atm = xr.open_zarr(self.atm_norm_urls[component], **kwargs)
                 xds_ocn = xr.open_zarr(self.ocn_norm_urls[component], **kwargs)
                 xds_ice = xr.open_zarr(self.ice_norm_urls[component], **kwargs)
@@ -800,15 +837,39 @@ class ReplayCoupledEmulator:
                 vars_ocn = list(x for x in self.all_variables if x in xds_ocn)
                 vars_ice = list(x for x in self.all_variables if x in xds_ice)
                 vars_land = list(x for x in self.all_variables if x in xds_land)
-                xds_atm = xds_atm[vars_atm]
-                xds_atm = xds_atm.sel(pfull=self.atm_levels)
-                xds_ocn = xds_ocn[vars_ocn]
-                xds_ocn = xds_ocn.sel(z_l=self.ocn_levels)
-                xds_ice = xds_ice[vars_ice]
-                xds_land = xds_land[vars_land]
-                xds = xr.merge([xds_atm, xds_ocn, xds_ice, xds_land])
-                xds = xds.load()
-                xds = xds.rename({"pfull": "level"})
+                
+                # keep attributes in order to distinguish static from time varying components
+                with xr.set_options(keep_attrs=True):
+
+                    if self.input_transforms is not None:
+                        for key, transform_function in self.input_transforms.items():
+
+                            # make sure e.g. log_spfh is in the dataset
+                            transformed_key = f"{transform_function.__name__}_{key}" # e.g. log_spfh
+                            assert transformed_key in xds, \
+                                f"Emulator.set_normalization: couldn't find {transformed_key} in {component} normalization dataset"
+                            # there's a chance the original, e.g. spfh, is not in the dataset
+                            # if it is, replace it with e.g. log_spfh
+                            if key in myvars:
+                                idx = myvars.index(key)
+                                myvars[idx] = transformed_key
+                    xds_atm = xds_atm[vars_atm]
+                    if self.input_transforms is not None:
+                        for key, transform_function in self.input_transforms.items():
+                            transformed_key = f"{transform_function.__name__}_{key}" # e.g. log_spfh
+                            idx = myvars.index(transformed_key)
+                            myvars[idx] = key
+
+                            # necessary for graphcast.dataset to stacked operations
+                            xds = xds.rename({transformed_key: key})
+                    xds_atm = xds_atm.sel(pfull=self.atm_levels)
+                    xds_ocn = xds_ocn[vars_ocn]
+                    xds_ocn = xds_ocn.sel(z_l=self.ocn_levels)
+                    xds_ice = xds_ice[vars_ice]
+                    xds_land = xds_land[vars_land]
+                    xds = xr.merge([xds_atm, xds_ocn, xds_ice, xds_land])
+                    xds = xds.load()
+                    xds = xds.rename({"pfull": "level"})
                 xds.to_zarr(local_path)
             return xds
 
@@ -863,7 +924,14 @@ class ReplayCoupledEmulator:
 
         def stackit(xds, varnames, n_time, **kwargs):
             norms = xds[[x for x in varnames if x in xds]]
-            # replicate time varying variables
+            # replicate time varying variablesif self.input_transforms is not None:
+                        for key, transform_function in self.input_transforms.items():
+                            transformed_key = f"{transform_function.__name__}_{key}" # e.g. log_spfh
+                            idx = myvars.index(transformed_key)
+                            myvars[idx] = key
+
+                            # necessary for graphcast.dataset to stacked operations
+                            xds = xds.rename({transformed_key: key})
             for key in norms.data_vars:
                 if "description" in xds[key].attrs and "time" in xds[key].attrs["description"]:
                     norms[key] = xr.concat(
