@@ -87,7 +87,6 @@ class StatisticsComputer:
         localtime.start("Setup")
         ds = self.open_dataset(data_vars=data_vars, **tisr_kwargs)
         self._transforms_warning(list(ds.data_vars.keys()))
-        # >>>>>>> develop
         localtime.stop()
 
         # load if not 3D
