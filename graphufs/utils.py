@@ -3,7 +3,6 @@ import argparse
 import logging
 import threading
 import queue
-import numpy as np
 import xarray as xr
 import numpy as np
 import concurrent.futures
