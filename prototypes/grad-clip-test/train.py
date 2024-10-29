@@ -23,8 +23,7 @@ from graphufs import (
 )
 import jax
 
-#from config import TP0Emulator as Emulator
-from config import BatchTester as Emulator
+from config import GradClipTrainer as Emulator
 from graphufs.clipping import clip_by_global_norm
 
 def graphufs_optimizer(
@@ -135,14 +134,14 @@ if __name__ == "__main__":
     opt_state = None
     logging.info("Starting Training")
 
-    n_linear = min(10, int(len(trainer)/10))
+    n_linear = max(10, int(len(trainer)/100))
     n_total = gufs.num_epochs*len(trainer)
 
-    optimizer = graphufs_optimizer(n_linear=n_linear, n_total=n_total, clip_value=gufs.batch_size)
+    optimizer = graphufs_optimizer(n_linear=n_linear, n_total=n_total, clip_value=gufs.grad_clip_value)
 
     # training loop
     for e in range(gufs.num_epochs):
-        logging.info(f"Training on epoch {e}")
+        logging.info(f"Starting epoch {e+1}")
 
         # optimize
         params, loss, opt_state = optimize(
@@ -158,8 +157,7 @@ if __name__ == "__main__":
         )
 
         # save weights
-        ckpt_id = e
-        gufs.save_checkpoint(params, ckpt_id)
+        gufs.save_checkpoint(params, e+1)
 
     trainer.shutdown(cancel=True)
     validator.shutdown(cancel=True)
