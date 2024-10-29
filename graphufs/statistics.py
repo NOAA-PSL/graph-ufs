@@ -32,12 +32,12 @@ class StatisticsComputer:
         path_in: str,
         path_out: str,
         comp: str = "atm",
-        start_date: str = None,
-        end_date: str = None,
-        time_skip: int = None,
-        open_zarr_kwargs: dict = None,
-        to_zarr_kwargs: dict = None,
-        load_full_dataset: bool = False,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        time_skip: Optional[int] = None,
+        open_zarr_kwargs: Optional[dict] = None,
+        to_zarr_kwargs: Optional[dict] = None,
+        load_full_dataset: Optional[bool] = False,
         transforms: Optional[dict] = None,
     ):
         """Initializes StatisticsComputer with specified attributes.
