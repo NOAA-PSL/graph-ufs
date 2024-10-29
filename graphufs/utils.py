@@ -236,9 +236,6 @@ def get_channel_index(xds, preserved_dims=("batch", "lat", "lon")):
             with "varname" and each dimension, where value corresponds to logical position of that dimension
     """
 
-    if len(xds.time) > 2:
-        raise NotImplementedError("Not ready for multiple timesteps")
-
     mapping = {}
     channel = 0
     for varname in sorted(xds.data_vars):
