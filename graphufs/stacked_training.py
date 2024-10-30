@@ -132,7 +132,19 @@ def optimize(
         raise NotImplementedError
 
     @hk.transform_with_state
-    def loss_fn(inputs, targets):
+    def sample_loss_fn(inputs, targets):
+        """Note that this is only valid for a single sample, and if a batch of samples is passed,
+        a batch of losses will be returned
+        """
+        predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping)
+        return predictor.loss(inputs, targets, weights=weights)
+
+
+    @hk.transform_with_state
+    def batch_loss_fn(inputs, targets):
+        """Note that this is only valid for a single sample, and if a batch of samples is passed,
+        a batch of losses will be returned
+        """
         predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping)
         loss, diagnostics = predictor.loss(inputs, targets, weights=weights)
         return loss.mean(), diagnostics.mean(axis=0)
@@ -150,7 +162,7 @@ def optimize(
         # NOTE I think this can be deleted and we can just use loss_fn.apply directly
         def _aux(params, state, i, t):
 
-            (loss, diagnostics), next_state = loss_fn.apply(
+            (loss, diagnostics), next_state = sample_loss_fn.apply(
                 inputs=i,
                 targets=t,
                 params=params,
@@ -182,7 +194,7 @@ def optimize(
                 else:
                     loss += local_loss / batch_size
                     add_trees(grads, local_grads)
-                    add_trees(diagnostics, local_diagnostics)
+                    diagnostics += local_diagnostics / batch_size
                     add_trees(next_state, local_next_state)
 
             return (loss, (diagnostics, next_state)), grads
@@ -242,7 +254,7 @@ def optimize(
         first_input = jax.device_put(first_input, sharding)
         first_target = jax.device_put(first_target, sharding)
 
-        optimize.vloss_jitted = jit(loss_fn.apply)
+        optimize.vloss_jitted = jit(batch_loss_fn.apply)
         (x, _), _ = optimize.vloss_jitted(
             params=params,
             state=state,
@@ -290,6 +302,7 @@ def optimize(
             target_batch=target_batch,
         )
 
+
         # update progress bar from rank 0
         optim_steps.append(k)
         loss_values.append(loss)
@@ -317,6 +330,7 @@ def optimize(
 
     # validation
     loss_valid_values = []
+    loss_by_channel_valid = []
     n_steps_valid = len(validator)
     progress_bar = tqdm(total=n_steps_valid, ncols=100, desc="Processing")
     for input_batch, target_batch in validator:
@@ -324,7 +338,7 @@ def optimize(
         input_batch = jax.device_put(input_batch, sharding)
         target_batch = jax.device_put(target_batch, sharding)
 
-        (loss_valid, _), _ = optimize.vloss_jitted(
+        (loss_valid, diagnostics_valid), _ = optimize.vloss_jitted(
             params=params,
             state=state,
             inputs=input_batch,
@@ -332,6 +346,7 @@ def optimize(
             rng=PRNGKey(0),
         )
         loss_valid_values.append(loss_valid)
+        loss_by_channel_valid.append(diagnostics_valid)
         progress_bar.set_description(
             f"validation loss = {loss_valid:.5f}"
         )
@@ -351,6 +366,7 @@ def optimize(
     )
 
     # save losses for each batch
+
     loss_ds = xr.Dataset()
     loss_fname = os.path.join(emulator.local_store_path, "loss.nc")
     previous_optim_steps = 0
@@ -360,14 +376,17 @@ def optimize(
         previous_optim_steps = len(stored_loss_ds.optim_step)
         previous_epochs = len(stored_loss_ds["epoch"])
 
+    n_channels = target_batch.shape[-1]
     loss_by_channel = np.vstack(loss_by_channel)
+    loss_by_channel_valid = np.vstack(loss_by_channel_valid)
+
     loss_ds["optim_step"] = [x + previous_optim_steps for x in optim_steps]
     loss_ds["epoch"] = [1 + previous_epochs]
     loss_ds.attrs["batch_size"] = emulator.batch_size
-    loss_ds["channels"] = xr.DataArray(
-        np.arange(loss_by_channel.shape[-1]),
-        coords={"channels": np.arange(loss_by_channel.shape[-1])},
-        dims=("channels",),
+    loss_ds["channel"] = xr.DataArray(
+        np.arange(n_channels),
+        coords={"channel": np.arange(n_channels)},
+        dims=("channel",),
     )
     loss_ds["loss"] = xr.DataArray(
         loss_values,
@@ -377,7 +396,11 @@ def optimize(
     )
     loss_ds["loss_by_channel"] = xr.DataArray(
         loss_by_channel,
-        dims=("optim_step", "channels"),
+        dims=("optim_step", "channel"),
+    )
+    loss_ds["loss_by_channel_valid"] = xr.DataArray(
+        loss_by_channel_valid,
+        dims=("epoch", "channel"),
     )
     loss_ds["loss_avg"] = xr.DataArray(
         [np.mean(loss_values)],
