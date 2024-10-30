@@ -378,7 +378,7 @@ def optimize(
 
     n_channels = target_batch.shape[-1]
     loss_by_channel = np.vstack(loss_by_channel)
-    loss_by_channel_valid = np.vstack(loss_by_channel_valid)
+    loss_by_channel_valid = np.vstack(loss_by_channel_valid).mean(axis=0, keepdims=True)
 
     loss_ds["optim_step"] = [x + previous_optim_steps for x in optim_steps]
     loss_ds["epoch"] = [1 + previous_epochs]
