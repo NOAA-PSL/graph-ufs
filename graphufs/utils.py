@@ -152,8 +152,7 @@ class DataGenerator:
         self.gen_lock = threading.Lock()
 
         # initialize batch generator
-        #self.no_load_chunk = emulator.no_load_chunks
-        print(f"Starting to get {mode} batches")
+        logging.info(f"graphufs.utils.get_chunk_data: Starting to get {mode} batches")
         
         self.load_chunk = emulator.load_chunk
         self.shuffle = (mode != "testing") and emulator.use_preprocessed
