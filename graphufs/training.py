@@ -149,7 +149,7 @@ def optimize(
     emulator,
     training_data,
     validation_data,
-    weights,
+    per_variable_weights,
     opt_state=None,
     compute_mean_grad=False,
 ):
