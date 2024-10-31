@@ -30,19 +30,6 @@ def main(varname, comp="atm"):
 
 def compute_stats(varname, comp="atm"):
     
-    # On GCP
-    #jobscript = f"#!/bin/bash\n\n"+\
-    #    f"#SBATCH -J {varname}_norm\n"+\
-    #    f"#SBATCH -o slurm/normalization/{varname}.%j.out\n"+\
-    #    f"#SBATCH -e slurm/normalization/{varname}.%j.err\n"+\
-    #    f"#SBATCH --nodes=1\n"+\
-    #    f"#SBATCH --ntasks=1\n"+\
-    #    f"#SBATCH --cpus-per-task=30\n"+\
-    #    f"#SBATCH --partition={partition}\n"+\
-    #    f"#SBATCH -t 120:00:00\n\n"+\
-    #    f"source /contrib/niraj.agarwal/miniconda3/etc/profile.d/conda.sh\n"+\
-    #    f"conda activate graphufs\n"+\
-    #    f"python -c 'from calc_normalization import main ; main(\"{varname}\")'"
     
     # On PSL Cluster
     jobscript = f"#!/bin/bash\n\n"+\

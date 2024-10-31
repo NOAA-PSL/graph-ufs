@@ -3,45 +3,9 @@ import argparse
 import logging
 import threading
 import queue
-import numpy as np
 import xarray as xr
 import numpy as np
 import concurrent.futures
-import jax
-from graphcast import graphcast, checkpoint
-
-def get_network_shape(ckpt):
-    """Get the shape of all layers in the network
-
-    Args:
-        ckpt (graphcast.Checkpoint or str): either a model checkpoitn or a path to a checkpoint file
-
-    Returns:
-        network_shape (jax.pytree): basically a dict with each layer and the size of the weights and biases
-    """
-
-    if isinstance(ckpt, graphcast.CheckPoint):
-        params = ckpt.params
-    else:
-        with open(ckpt, "rb") as f:
-            params = checkpoint.load(f, graphcast.CheckPoint).params
-
-    return jax.tree_util.tree_map(lambda x: x.shape, params)
-
-
-def get_num_params(ckpt):
-    """Get the total number of parameters in a model
-
-    Args:
-        ckpt (graphcast.Checkpoint or str): either a model checkpoitn or a path to a checkpoint file
-
-    Returns:
-        num_params (int): total network size
-    """
-    shape = get_network_shape(ckpt)
-
-    num_per_layer = jax.tree_util.tree_map(lambda x: np.prod(x), shape)
-    return np.sum(jax.tree_util.tree_flatten(num_per_layer)[0])
 
 import jax
 from graphcast import graphcast, checkpoint
@@ -188,8 +152,7 @@ class DataGenerator:
         self.gen_lock = threading.Lock()
 
         # initialize batch generator
-        #self.no_load_chunk = emulator.no_load_chunks
-        print(f"Starting to get {mode} batches")
+        logging.info(f"graphufs.utils.get_chunk_data: Starting to get {mode} batches")
         
         self.load_chunk = emulator.load_chunk
         self.shuffle = (mode != "testing") and emulator.use_preprocessed
@@ -198,7 +161,6 @@ class DataGenerator:
             n_optim_steps=n_optim_steps,
             mode=mode,
         )
-        #print("self.gen:", self.gen)
 
         # create a thread pool of workers for generating data
         if self.num_workers > 0:

@@ -32,12 +32,12 @@ class StatisticsComputer:
         path_in: str,
         path_out: str,
         comp: str = "atm",
-        start_date: str = None,
-        end_date: str = None,
-        time_skip: int = None,
-        open_zarr_kwargs: dict = None,
-        to_zarr_kwargs: dict = None,
-        load_full_dataset: bool = False,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        time_skip: Optional[int] = None,
+        open_zarr_kwargs: Optional[dict] = None,
+        to_zarr_kwargs: Optional[dict] = None,
+        load_full_dataset: Optional[bool] = False,
         transforms: Optional[dict] = None,
     ):
         """Initializes StatisticsComputer with specified attributes.
@@ -85,23 +85,8 @@ class StatisticsComputer:
         walltime.start()
 
         localtime.start("Setup")
-        # <<<<<<< HEAD
-        #ds = xr.open_zarr(self.path_in, **self.open_zarr_kwargs)
-        #ds = add_derived_vars(ds, self.comp)
-
-        # select variables
-        #if data_vars is not None:
-        #    if isinstance(data_vars, str):
-        #        data_vars = [data_vars]
-        #    ds = ds[data_vars]
-
-        # subsample in time
-        #if "time" in ds.dims:
-        #    ds = self.subsample_time(ds)
-        # =======
         ds = self.open_dataset(data_vars=data_vars, **tisr_kwargs)
         self._transforms_warning(list(ds.data_vars.keys()))
-        # >>>>>>> develop
         localtime.stop()
 
         # load if not 3D
