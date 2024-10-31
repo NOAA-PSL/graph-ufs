@@ -85,23 +85,9 @@ class StatisticsComputer:
         walltime.start()
 
         localtime.start("Setup")
-        # <<<<<<< HEAD
-        #ds = xr.open_zarr(self.path_in, **self.open_zarr_kwargs)
-        #ds = add_derived_vars(ds, self.comp)
-
-        # select variables
-        #if data_vars is not None:
-        #    if isinstance(data_vars, str):
-        #        data_vars = [data_vars]
-        #    ds = ds[data_vars]
-
-        # subsample in time
-        #if "time" in ds.dims:
-        #    ds = self.subsample_time(ds)
-        # =======
+        
         ds = self.open_dataset(data_vars=data_vars, **tisr_kwargs)
         self._transforms_warning(list(ds.data_vars.keys()))
-        # >>>>>>> develop
         localtime.stop()
 
         # load if not 3D
@@ -282,7 +268,7 @@ class StatisticsComputer:
 
 def add_derived_vars(
     xds: xr.Dataset,
-    component: str = "atm",
+    comp: str = "atm",
     transforms: Optional[dict]=None,
     compute_tisr: Optional[bool]=False,
     **tisr_kwargs,
@@ -303,7 +289,7 @@ def add_derived_vars(
         xds (xr.Dataset): with added variables
     """
     with xr.set_options(keep_attrs=True):
-        if component.lower() == "atm".lower():
+        if comp.lower() == "atm".lower():
             xds = xds.rename({"time": "datetime", "grid_xt": "lon", "grid_yt": "lat", "pfull": "level"})
             data_utils.add_derived_vars(xds)
             if compute_tisr:
@@ -325,7 +311,7 @@ def add_derived_vars(
                     xds[transformed_key].attrs["units"] = ""
             xds = xds.rename({"datetime": "time", "lon": "grid_xt", "lat": "grid_yt", "level": "pfull"})
         
-        elif component.lower() == "ocean".lower():
+        elif comp.lower() == "ocean".lower() or comp.lower() == "ocn".lower():
             xds = xds.rename({"time": "datetime"})
             data_utils.add_derived_vars(xds)
             xds = xds.rename({"datetime": "time"})
