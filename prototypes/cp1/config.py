@@ -1,39 +1,47 @@
 from jax import tree_util
-
+import numpy as np
+import xarray as xr
 from graphufs import ReplayCoupledEmulator
+
+def log(xda):
+    cond = xda > 0
+    return xr.where(
+        cond,
+        np.log(xda.where(cond)),
+        0.,
+    )
+
+def exp(xda):
+    return np.exp(xda)
 
 class CP1Emulator(ReplayCoupledEmulator):
 
     data_url = {}
     norm_urls = {}
 
-    data_url{"atm": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.zarr"}
-    norm_urls{"atm": {
+    data_url["atm"] = "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.zarr"
+    norm_urls["atm"] = {
         "mean": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/06h-freq/zarr/fv3.fvstatistics.l16.1993-2019/mean_by_level.zarr",
         "std": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/06h-freq/zarr/fv3.fvstatistics.l16.1993-2019/stddev_by_level.zarr",
         "stddiff": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/06h-freq/zarr/fv3.fvstatistics.l16.1993-2019/diffs_stddev_by_level.zarr",
-        }
     }
-    data_url{"ocn": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/06h-freq/zarr/mom6.zarr"}
-    norm_urls{"ocn": {
+    data_url["ocn"] = "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/06h-freq/zarr/mom6.zarr"
+    norm_urls["ocn"] = {
         "mean": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/06h-freq/zarr/mom6.fvstatistics.l9.1993-2019/mean_by_level.zarr",
         "std": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/06h-freq/zarr/mom6.fvstatistics.l9.1993-2019/stddev_by_level.zarr",
         "stddiff": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/06h-freq/zarr/mom6.fvstatistics.l9.1993-2019/diffs_stddev_by_level.zarr",
-        }
     }
-    data_url{"ice": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.zarr"}
-    norm_urls{"ice": {
+    data_url["ice"] = "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.zarr"
+    norm_urls["ice"] = {
         "mean": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/06h-freq/zarr/fv3.fvstatistics.l16.1993-2019/mean_by_level.zarr",
         "std": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/06h-freq/zarr/fv3.fvstatistics.l16.1993-2019/stddev_by_level.zarr",
         "stddiff": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/06h-freq/zarr/fv3.fvstatistics.l16.1993-2019/diffs_stddev_by_level.zarr",
-        }
     }
-    data_url{"land": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.zarr"}
-    norm_urls{"land": {
+    data_url["land"] = "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.zarr"
+    norm_urls["land"] = {
         "mean": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/06h-freq/zarr/fv3.fvstatistics.l16.1993-2019/mean_by_level.zarr",
         "std": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/06h-freq/zarr/fv3.fvstatistics.l16.1993-2019/stddev_by_level.zarr",
         "stddiff": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/06h-freq/zarr/fv3.fvstatistics.l16.1993-2019/diffs_stddev_by_level.zarr",
-        }
     }
     
     wb2_obs_url = "gs://weatherbench2/datasets/era5/1959-2022-6h-64x32_equiangular_conservative.zarr"
@@ -62,22 +70,22 @@ class CP1Emulator(ReplayCoupledEmulator):
     )
     ocn_input_variables = (
         "SSH",
-        "LW",
-        "SW",
-        "so",
+        #"LW",
+        #"SW",
+        #"so",
         "temp",
-        "uo",
-        "vo",
-        "landsea_mask",
+        #"uo",
+        #"vo",
+        #"landsea_mask",
     )
     ice_input_variables = (
         "icec",
-        "icetk",
+        #"icetk",
     )
     land_input_variables = (
         "soilm",
-        "soilt1",
-        "tmpsfc",
+        #"soilt1",
+        #"tmpsfc",
     )
     atm_target_variables = (
         "pressfc",
@@ -93,16 +101,16 @@ class CP1Emulator(ReplayCoupledEmulator):
     )
     ocn_target_variables = (
         "SSH",
-        "LW",
-        "SW",
-        "so",
+        #"LW",
+        #"SW",
+        #"so",
         "temp",
-        "uo",
-        "vo",
+        #"uo",
+        #"vo",
     )
     ice_target_variables = (
         "icec",
-        "icetk",
+        #"icetk",
     )
     land_target_variables = (
         "soilm",
@@ -122,9 +130,10 @@ class CP1Emulator(ReplayCoupledEmulator):
 
     all_variables = tuple() # this is created in __init__
     interfaces = {}
-    interfaces{"atm": tuple(x for x in range(200, 1001, 50)))}
-    interfaces{"ocn":(
-        0.5, 
+    interfaces["atm"] = tuple(x for x in range(200, 1001, 100))
+    interfaces["ocn"] = (
+        0,
+        1,
         5, 
         10, 
         20, 
@@ -134,10 +143,9 @@ class CP1Emulator(ReplayCoupledEmulator):
         200, 
         350, 
         500,
-        )
-    }
-    interfaces{"ice": ()}
-    interfaces{"land": ()}
+    )
+    interfaces["ice"] = ()
+    interfaces["land"] = ()
 
     # time related
     delta_t = "6h"              # the model time step, assumed to be the same for both atm and ocn for now.
@@ -148,7 +156,7 @@ class CP1Emulator(ReplayCoupledEmulator):
     #target_lead_time = [f"{n}h" for n in range(6, 6*4*1+1, 6)]
     training_dates = (          # bounds of training data (inclusive)
         "1994-01-01T00",        # start
-        "2019-12-31T18"         # stop
+        "1994-12-31T18"         # stop
     )
     testing_dates = (           # bounds of testing data (inclusive)
         "2020-01-01T00",        # start

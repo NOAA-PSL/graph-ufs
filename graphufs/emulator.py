@@ -618,14 +618,14 @@ class ReplayCoupledEmulator:
                 all_new_time = all_new_time[slices[self.mpi_rank]]
                 logging.info(f"Data for {mode} MPI rank {self.mpi_rank}: {all_new_time[0]} to {all_new_time[-1]} : {len(all_new_time)} time stamps.")
 
-         if self.input_transforms is not None:
-                        for key, transform_function in self.input_transforms.items():
-                            transformed_key = f"{transform_function.__name__}_{key}" # e.g. log_spfh
-                            idx = myvars.index(transformed_key)
-                            myvars[idx] = key
-
-                            # necessary for graphcast.dataset to stacked operations
-                            xds = xds.rename({transformed_key: key})   # download the data
+            if self.input_transforms is not None:
+                for key, transform_function in self.input_transforms.items():
+                    transformed_key = f"{transform_function.__name__}_{key}" # e.g. log_spfh
+                    idx = myvars.index(transformed_key)
+                    myvars[idx] = key
+                 
+                    # necessary for graphcast.dataset to stacked operations
+                    xds = xds.rename({transformed_key: key})   # download the data
             all_xds = self.get_the_data(all_new_time=all_new_time, mode=mode)
             # split dataset into chunks
             slices = self.divide_into_slices(len(all_new_time), n_chunks)
@@ -925,13 +925,13 @@ class ReplayCoupledEmulator:
         def stackit(xds, varnames, n_time, **kwargs):
             norms = xds[[x for x in varnames if x in xds]]
             # replicate time varying variablesif self.input_transforms is not None:
-                        for key, transform_function in self.input_transforms.items():
-                            transformed_key = f"{transform_function.__name__}_{key}" # e.g. log_spfh
-                            idx = myvars.index(transformed_key)
-                            myvars[idx] = key
+            for key, transform_function in self.input_transforms.items():
+                transformed_key = f"{transform_function.__name__}_{key}" # e.g. log_spfh
+                idx = myvars.index(transformed_key)
+                myvars[idx] = key
 
-                            # necessary for graphcast.dataset to stacked operations
-                            xds = xds.rename({transformed_key: key})
+                # necessary for graphcast.dataset to stacked operations
+                xds = xds.rename({transformed_key: key})
             for key in norms.data_vars:
                 if "description" in xds[key].attrs and "time" in xds[key].attrs["description"]:
                     norms[key] = xr.concat(

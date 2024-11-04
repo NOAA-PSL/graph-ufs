@@ -31,7 +31,7 @@ class FVStatisticsComputer(StatisticsComputer):
         self,
         path_in: str,
         path_out: str,
-        comp: str = "atm",
+        comp: str,
         interfaces: tuple | list | np.ndarray,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
@@ -74,15 +74,13 @@ class FVStatisticsComputer(StatisticsComputer):
         if data_vars is not None:
             if isinstance(data_vars, str):
                 data_vars = [data_vars]
-            if self.comp.lower() == "atm" and "delz" not in data_vars:
+            if self.comp.lower() == "atm".lower() and "delz" not in data_vars:
                 data_vars.append("delz")
-            elif self.comp.lower() == "ocn" and "z_l" not in data_vars.coords:
-                raise ValueError("z_l not in coordinates. Aborting...")
 
             logging.info(f"{self.name}: computing statistics for {data_vars}")
             xds = xds[data_vars]
 
         # regrid in the vertical
-        logging.info(f"{self.name}: starting vertical regridding")
-        xds = fv_vertical_regrid(xds, interfaces=list(self.interfaces), comp=self.comp)
+        logging.info(f"{self.name}: entering vertical regridding")
+        xds = fv_vertical_regrid(xds, interfaces=list(self.interfaces))
         return xds

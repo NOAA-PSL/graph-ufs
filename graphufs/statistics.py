@@ -62,14 +62,14 @@ class StatisticsComputer:
         self.open_zarr_kwargs = open_zarr_kwargs if open_zarr_kwargs is not None else dict()
         self.to_zarr_kwargs = to_zarr_kwargs if to_zarr_kwargs is not None else dict()
         self.load_full_dataset = load_full_dataset 
-        if self.comp.lower() == "atm".lower():
+        if self.comp in ["atm", "ice", "land"]:
             self.delta_t = f"{self.time_skip*3} hour" if self.time_skip is not None else "3 hour"
             self.dims = ("time", "grid_yt", "grid_xt")
-        elif self.comp.lower() == "ocean".lower():
+        elif self.comp.lower() == "ocn".lower():
             self.delta_t = f"{self.time_skip*6} hour" if self.time_skip is not None else "6 hour"
             self.dims = ("time", "lat", "lon")
         else:
-            raise ValueError("component can only be atm or ocean")
+            raise ValueError("component can only be atm/ocn/ice/land")
         self.transforms = transforms
 
         self.delta_t = f"{self.time_skip*3} hour" if self.time_skip is not None else "3 hour"
@@ -86,8 +86,9 @@ class StatisticsComputer:
 
         localtime.start("Setup")
         
-        ds = self.open_dataset(data_vars=data_vars, **tisr_kwargs)
+        ds = self.open_dataset(data_vars=data_vars, **tisr_kwargs) 
         self._transforms_warning(list(ds.data_vars.keys()))
+        
         localtime.stop()
 
         # load if not 3D
@@ -217,7 +218,6 @@ class StatisticsComputer:
                 opstr="mean",
                 description=f"average over ",
             )
-
         this_path_out = os.path.join(
             self.path_out,
             "mean_by_level.zarr",
@@ -230,7 +230,7 @@ class StatisticsComputer:
 
         # get appropriate dims, e.g. maybe not time varying
         dims = list(d for d in self.dims if d in xda.dims)
-
+        
         with xr.set_options(keep_attrs=True):
             if opstr == "mean":
                 result = xda.mean(dims)
@@ -311,7 +311,7 @@ def add_derived_vars(
                     xds[transformed_key].attrs["units"] = ""
             xds = xds.rename({"datetime": "time", "lon": "grid_xt", "lat": "grid_yt", "level": "pfull"})
         
-        elif comp.lower() == "ocean".lower() or comp.lower() == "ocn".lower():
+        elif comp.lower() == "ocn".lower():
             xds = xds.rename({"time": "datetime"})
             data_utils.add_derived_vars(xds)
             xds = xds.rename({"datetime": "time"})
