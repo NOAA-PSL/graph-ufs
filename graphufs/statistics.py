@@ -89,6 +89,9 @@ class StatisticsComputer:
         self._transforms_warning(list(ds.data_vars.keys()))
         localtime.stop()
 
+
+        logging.info(f"{self.name}: computing statistics for {data_vars}")
+
         # load if not 3D
         if self.load_full_dataset:
             localtime.start("Loading the whole dataset...")
@@ -118,9 +121,9 @@ class StatisticsComputer:
         if "time" in xds.dims:
             xds = self.subsample_time(xds)
 
+        logging.info(f"{self.name}: Adding any derived variables")
         xds = add_derived_vars(
             xds,
-            transforms=self.transforms,
             compute_tisr=data_utils.TISR in data_vars if data_vars is not None else False,
             **tisr_kwargs,
         )
@@ -131,6 +134,11 @@ class StatisticsComputer:
                 data_vars = [data_vars]
             xds = xds[data_vars]
 
+        logging.info(f"{self.name}: Adding any transformed variables")
+        xds = add_transformed_vars(
+            xds,
+            transforms=self.transforms,
+        )
         return xds
 
     def subsample_time(self, xds):
@@ -166,6 +174,8 @@ class StatisticsComputer:
                 description=f"standard deviation of temporal {self.delta_t} difference over ",
             )
 
+        result = self._add_coords(result, xds)
+
         this_path_out = os.path.join(
             self.path_out,
             "diffs_stddev_by_level.zarr",
@@ -192,6 +202,8 @@ class StatisticsComputer:
                 description=f"standard deviation over ",
             )
 
+        result = self._add_coords(result, xds)
+
         this_path_out = os.path.join(
             self.path_out,
             "stddev_by_level.zarr",
@@ -216,6 +228,8 @@ class StatisticsComputer:
                 opstr="mean",
                 description=f"average over ",
             )
+
+        result = self._add_coords(result, xds)
 
         this_path_out = os.path.join(
             self.path_out,
@@ -244,6 +258,17 @@ class StatisticsComputer:
             result.attrs["stats_end_date"] = self._time2str(xda["time"][-1])
         return result
 
+    def _add_coords(self, result, xds):
+        for key in xds.coords:
+            if key not in result.coords:
+                result[key] = xds[key]
+                result = result.set_coords(key)
+        for key in ["cftime", "ftime"]:
+            if key in result:
+                logging.info(f"{self.name}: dropping coordinate {key}")
+                result = result.drop_vars(key)
+        return result
+
     def _transforms_warning(self, data_vars):
         if self.transforms is not None:
             for key, mapping in self.transforms.items():
@@ -268,7 +293,6 @@ class StatisticsComputer:
 def add_derived_vars(
     xds: xr.Dataset,
     component: str = "atm",
-    transforms: Optional[dict]=None,
     compute_tisr: Optional[bool]=False,
     **tisr_kwargs,
 ) -> xr.Dataset:
@@ -297,10 +321,33 @@ def add_derived_vars(
                     xds,
                     **tisr_kwargs
                 )
+            xds = xds.rename({"datetime": "time", "lon": "grid_xt", "lat": "grid_yt", "level": "pfull"})             
+        
+        elif component.lower() == "ocean".lower():
+            xds = xds.rename({"time": "datetime"})
+            data_utils.add_derived_vars(xds)
+            xds = xds.rename({"datetime": "time"})
+        
+    return xds
 
-            if transforms is not None:
-                for key, mapping in transforms.items():
-                    logging.info(f"statistics.add_derived_vars: transforming {key} -> {mapping.__name__}({key})")
+def add_transformed_vars(
+    xds: xr.Dataset,
+    transforms: Optional[dict]=None,
+) -> xr.Dataset:
+    """Add any transformed variables, like e.g. log(spfh)
+    Args:
+        xds (xr.Dataset): with original data
+        transforms (dict, optional): with a mapping from {variable_name : operation} e.g. {"spfh": np.log}
+
+    Returns:
+        xds (xr.Dataset): with transformed variables added
+    """
+
+    with xr.set_options(keep_attrs=True):
+        if transforms is not None:
+            for key, mapping in transforms.items():
+                if key in xds:
+                    logging.info(f"statistics.add_transformed_vars: transforming {key} -> {mapping.__name__}({key})")
                     transformed_key = f"{mapping.__name__}_{key}"
                     with xr.set_options(keep_attrs=True):
                         xds[transformed_key] = mapping(xds[key])
@@ -308,11 +355,5 @@ def add_derived_vars(
                     xds[transformed_key].attrs["long_name"] = f"{mapping.__name__} of {xds[key].attrs['long_name']}"
                     xds[transformed_key].attrs["transformation"] = f"this variable shows {mapping.__name__}({key})"
                     xds[transformed_key].attrs["units"] = ""
-            xds = xds.rename({"datetime": "time", "lon": "grid_xt", "lat": "grid_yt", "level": "pfull"})
-        
-        elif component.lower() == "ocean".lower():
-            xds = xds.rename({"time": "datetime"})
-            data_utils.add_derived_vars(xds)
-            xds = xds.rename({"datetime": "time"})
 
     return xds

@@ -260,7 +260,9 @@ def optimize(
     optim_steps = []
     loss_values = []
     learning_rates = []
+    gradient_norms = []
     lr = np.nan
+    g_norm = np.nan
     loss_by_channel = []
     n_steps = len(trainer)
 
@@ -292,15 +294,22 @@ def optimize(
         optim_steps.append(k)
         loss_values.append(loss)
         loss_by_channel.append(diagnostics)
+        msg = f"loss = {loss:.5f}"
+        try:
+            g_norm = opt_state[0].inner_state["g_norm"]
+            msg += f", g_norm = {g_norm:1.2e}"
+        except:
+            pass
+        gradient_norms.append(g_norm)
+
         try:
             lr = opt_state[1].hyperparams["learning_rate"]
+            msg += f", LR = {lr:.2e}"
         except:
             pass
         learning_rates.append(lr)
 
-        progress_bar.set_description(
-            f"loss = {loss:.5f}, LR = {lr:.2e}",
-        )
+        progress_bar.set_description(msg)
         progress_bar.update()
 
     progress_bar.close()
@@ -333,6 +342,13 @@ def optimize(
     )
     progress_bar.close()
     validator.restart()
+
+    # Compute gradient avg absolute value after each epoch
+    mean_grad = np.mean(
+        tree_util.tree_flatten(
+            tree_util.tree_map(lambda x: np.abs(x).mean(), grads)
+        )[0]
+    )
 
     # save losses for each batch
     loss_ds = xr.Dataset()
@@ -379,6 +395,24 @@ def optimize(
         attrs={
             "long_name": "validation loss function value",
             "description": "averaged over validation data once per epoch",
+        },
+    )
+    loss_ds["mgrad"] = xr.DataArray(
+        [mean_grad],
+        coords={"epoch": loss_ds["epoch"]},
+        dims=("epoch",),
+        attrs={
+            "long_name": "mean absolute value of loss function gradient w.r.t. parameters",
+            "description": "np.abs(x).mean() applied to grads after each epoch",
+        },
+    )
+    loss_ds["g_norm"] = xr.DataArray(
+        gradient_norms,
+        coords={"optim_step": loss_ds["optim_step"]},
+        dims=("optim_step",),
+        attrs={
+            "long_name": "global norm of gradient",
+            "description": "global gradient norm taken before clipping",
         },
     )
     loss_ds["learning_rate"] = xr.DataArray(

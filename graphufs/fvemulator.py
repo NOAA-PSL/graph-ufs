@@ -141,7 +141,7 @@ def get_new_vertical_grid(interfaces):
     return nds
 
 
-def fv_vertical_regrid(xds, interfaces):
+def fv_vertical_regrid(xds, interfaces, keep_delz=False):
     """Vertically regrid a dataset based on approximately located interfaces
     by "approximately" we mean to grab the nearest neighbor to the values in interfaces
 
@@ -163,15 +163,15 @@ def fv_vertical_regrid(xds, interfaces):
             xds = xds.rename({"pfull": "level"})
 
     # Regrid vertical distance, and get weighting
-    nds["delz"] = xds["delz"].groupby_bins(
+    delz = xds["delz"].groupby_bins(
         "pfull",
         bins=nds["phalf"],
     ).sum()
-    new_delz_inverse = 1/nds["delz"]
+    new_delz_inverse = 1/delz
 
     # Do the regridding
     vars2d = [x for x in xds.data_vars if "pfull" not in xds[x].dims]
-    vars3d = [x for x in xds.data_vars if "pfull" in xds[x].dims]
+    vars3d = [x for x in xds.data_vars if "pfull" in xds[x].dims and x != "delz"]
     for key in vars3d:
         with xr.set_options(keep_attrs=True):
             nds[key] = new_delz_inverse * (
@@ -189,9 +189,13 @@ def fv_vertical_regrid(xds, interfaces):
     for key in vars3d:
         with xr.set_options(keep_attrs=True):
             nds[key] = nds[key].swap_dims({"pfull_bins": "pfull"})
-        nds[key].attrs["regridding"] = "delz weighted average in vertical, new coordinate bounds represented by 'pfull_bins'"
+        nds[key].attrs["regridding"] = "delz weighted average in vertical, new coordinate bounds represented by 'phalf'"
     for v in vars2d:
         nds[v] = xds[v]
+
+    if keep_delz:
+        delz = delz.swap_dims({"pfull_bins": "pfull"})
+        nds["delz"] = delz
 
     # unfortunately, cannot store the pfull_bins due to this issue: https://github.com/pydata/xarray/issues/2847
     nds = nds.drop_vars("pfull_bins")

@@ -1,8 +1,12 @@
+import os
 import xarray as xr
 from jax import tree_util
 import numpy as np
 
 from graphufs import FVEmulator
+
+
+tp0_path = os.path.dirname(os.path.realpath(__file__))
 
 def log(xda):
     cond = xda > 0
@@ -19,13 +23,13 @@ class TP0Emulator(FVEmulator):
 
     data_url = "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.zarr"
     norm_urls = {
-        "mean": "./fv3.fvstatistics.1993-01/mean_by_level.zarr",
-        "std": "./fv3.fvstatistics.1993-01/stddev_by_level.zarr",
-        "stddiff": "./fv3.fvstatistics.1993-01/diffs_stddev_by_level.zarr",
+        "mean": f"{tp0_path}/fv3.fvstatistics.1994/mean_by_level.zarr",
+        "std": f"{tp0_path}/fv3.fvstatistics.1994/stddev_by_level.zarr",
+        "stddiff": f"{tp0_path}/fv3.fvstatistics.1994/diffs_stddev_by_level.zarr",
     }
     wb2_obs_url = "gs://weatherbench2/datasets/era5/1959-2022-6h-64x32_equiangular_conservative.zarr"
 
-    local_store_path = "./local-output"
+    local_store_path = f"{tp0_path}/local-output"
     cache_data = True
 
     # these could be moved to a yaml file later
@@ -34,8 +38,12 @@ class TP0Emulator(FVEmulator):
         "pressfc",
         "tmp2m",
         "spfh2m",
+        "ugrd10m",
+        "vgrd10m",
         "tmp",
         "spfh",
+        "ugrd",
+        "vgrd",
         "land_static",
         "hgtsfc_static",
         "dswrf_avetoa",
@@ -48,8 +56,12 @@ class TP0Emulator(FVEmulator):
         "pressfc",
         "tmp2m",
         "spfh2m",
+        "ugrd10m",
+        "vgrd10m",
         "tmp",
         "spfh",
+        "ugrd",
+        "vgrd",
     )
     forcing_variables = (
         "dswrf_avetoa",
@@ -66,7 +78,7 @@ class TP0Emulator(FVEmulator):
     target_lead_time = "3h"     # how long is the forecast ... at what point do we compare model to targets
     training_dates = (          # bounds of training data (inclusive)
         "1994-01-01T00",        # start
-        "1994-03-31T18"         # stop
+        "1994-12-31T21"         # stop
     )
     testing_dates = (           # bounds of testing data (inclusive)
         "1995-01-01T00",        # start
@@ -74,7 +86,7 @@ class TP0Emulator(FVEmulator):
     )
     validation_dates = (        # bounds of validation data (inclusive)
         "1996-01-01T00",        # start
-        "1996-01-31T18"         # stop
+        "1996-01-31T21"         # stop
     )
 
     # training protocol
@@ -93,13 +105,7 @@ class TP0Emulator(FVEmulator):
     # loss weighting, defaults to GraphCast implementation
     weight_loss_per_latitude = True
     weight_loss_per_level = False
-    loss_weights_per_variable = {
-        "pressfc"   : 1.0,
-        "tmp2m"     : 1.0,
-        "spfh2m"    : 1.0,
-        "tmp"       : 1.0,
-        "spfh"      : 1.0,
-    }
+    loss_weights_per_variable = dict()
     input_transforms = {
         "spfh": log,
         "spfh2m": log,
@@ -131,8 +137,17 @@ class TP0Emulator(FVEmulator):
     use_xla_flags = False
     dask_threads = 8
 
+class TP0Tester(TP0Emulator):
+    target_lead_time = ["3h", "6h", "9h", "12h", "15h", "18h", "21h", "24h"]
+
 tree_util.register_pytree_node(
     TP0Emulator,
     TP0Emulator._tree_flatten,
     TP0Emulator._tree_unflatten
+)
+
+tree_util.register_pytree_node(
+    TP0Tester,
+    TP0Tester._tree_flatten,
+    TP0Tester._tree_unflatten
 )

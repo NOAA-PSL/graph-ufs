@@ -1,5 +1,6 @@
 import logging
 from typing import Optional
+from copy import copy
 
 import numpy as np
 import xarray as xr
@@ -7,7 +8,7 @@ import xarray as xr
 from graphcast import data_utils
 
 from .fvemulator import fv_vertical_regrid
-from .statistics import StatisticsComputer, add_derived_vars
+from .statistics import StatisticsComputer, add_derived_vars, add_transformed_vars
 
 class FVStatisticsComputer(StatisticsComputer):
     """Class for computing normalization statistics, using a delz vertical weighted average
@@ -60,24 +61,45 @@ class FVStatisticsComputer(StatisticsComputer):
         if "time" in xds.dims:
             xds = self.subsample_time(xds)
 
+        logging.info(f"{self.name}: Adding any derived variables")
         xds = add_derived_vars(
             xds,
-            transforms=self.transforms,
             compute_tisr=data_utils.TISR in data_vars if data_vars is not None else False,
             **tisr_kwargs,
         )
 
         # select variables, keeping delz
         if data_vars is not None:
+            local_data_vars = copy(data_vars)
             if isinstance(data_vars, str):
                 data_vars = [data_vars]
-            if "delz" not in data_vars:
-                data_vars.append("delz")
+                local_data_vars = [local_data_vars]
 
-            logging.info(f"{self.name}: computing statistics for {data_vars}")
-            xds = xds[data_vars]
+            # if the transformed variables are desired, need to hang onto
+            # the original, not transformed variable, since we vertically average then transform
+            for key, mapping in self.transforms.items():
+                transformed_key = f"{mapping.__name__}_{key}"
+                do_transformed_var = any(transformed_key == dv for dv in local_data_vars)
+                original_var_not_in_list = all(key != dv for dv in local_data_vars)
+
+                if do_transformed_var:
+                    local_data_vars.remove(transformed_key)
+                if do_transformed_var and original_var_not_in_list:
+                    local_data_vars.append(key)
+
+            xds = xds[local_data_vars+["delz"]]
 
         # regrid in the vertical
         logging.info(f"{self.name}: starting vertical regridding")
         xds = fv_vertical_regrid(xds, interfaces=list(self.interfaces))
+
+        logging.info(f"{self.name}: Adding any transformed variables")
+        xds = add_transformed_vars(
+            xds,
+            transforms=self.transforms,
+        )
+
+        if data_vars is not None:
+            xds = xds[data_vars+["phalf", "ak", "bk"]]
+
         return xds
