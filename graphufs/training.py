@@ -177,7 +177,7 @@ def optimize(
     @hk.transform_with_state
     def loss_fn(emulator, inputs, targets, forcings):
         predictor = construct_wrapped_graphcast(emulator)
-        loss, diagnostics = predictor.loss(inputs, targets, forcings, weights)
+        loss, diagnostics = predictor.loss(inputs, targets, forcings, per_variable_weights)
         return map_structure(
             lambda x: unwrap_data(x.mean(), require_jax=True), (loss, diagnostics)
         )
