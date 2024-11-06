@@ -262,7 +262,10 @@ class ReplayCoupledEmulator:
 
         # set normalization here so that we can jit compile with this class
         # a bit annoying, have to copy datatypes here to avoid the Ghost Bus problem
-        self.norm_urls = self.norm_urls.copy()
+        self.atm_norm_urls = self.atm_norm_urls.copy()
+        self.ocn_norm_urls = self.ocn_norm_urls.copy()
+        self.ice_norm_urls = self.ice_norm_urls.copy()
+        self.land_norm_urls = self.land_norm_urls.copy()
         self.norm = dict()
         self.stacked_norm = dict()
         self.set_normalization()
@@ -1004,13 +1007,13 @@ class ReplayCoupledEmulator:
     @staticmethod
     def _get_replay_vertical_levels(es_comp="atm"):
         if es_comp.lower() == "atm".lower():
-            pfull_path = os.path.join(os.path.dirname(__file__), "replay_atm_vertical_levels.yaml")
+            pfull_path = os.path.join(os.path.dirname(__file__), "replay_vertical_levels.yaml")
             with open(pfull_path, "r") as f:
                 pfull = yaml.safe_load(f)["pfull"]
             return xr.DataArray(pfull, coords={"pfull": pfull}, dims="pfull")
 
         elif es_comp.lower() == "ocn".lower():
-            z_l_path = os.path.join(os.path.dirname(__file__), "replay_ocn_vertical_levels.yaml")
+            z_l_path = os.path.join(os.path.dirname(__file__), "replay_vertical_levels.yaml")
             with open(z_l_path, "r") as f:
                 z_l = yaml.safe_load(f)["z_l"]
             return xr.DataArray(z_l, coords={"z_l": z_l}, dims="z_l")

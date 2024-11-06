@@ -17,7 +17,6 @@ from graphufs import (
 
 from mini_coupled_emulator import CP0Emulator
 
-
 """
 Script to train and test graphufs over multiple chunks and epochs
 
@@ -108,7 +107,7 @@ if __name__ == "__main__":
                     emulator=gufs,
                     training_data=data_train,
                     validation_data=data_valid,
-                    weights=loss_weights_per_var,
+                    per_variable_weights=loss_weights_per_var,
                     opt_state=opt_state,
                 )
 
