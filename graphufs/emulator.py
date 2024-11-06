@@ -965,7 +965,7 @@ class ReplayEmulator:
         with open(ckpt_path, "rb") as f:
             ckpt = checkpoint.load(f, CheckPoint)
 
-        print("Loaded checkpoint from ", f)
+        logging.info(f"Loaded checkpoint from: {ckpt_path}")
         params = ckpt.params
         state = {}
         model_config = ckpt.model_config
