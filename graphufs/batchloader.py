@@ -49,12 +49,15 @@ class BatchLoader():
         max_queue_size=1,
         rng_seed=None,
         sample_stride=None,
+        start=0,
     ):
 
         self.dataset = dataset
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.drop_last = drop_last
+        self.counter = start
+        self.data_counter = start
 
         self.sample_indices = list(int(idx) for idx in np.arange(len(self.dataset)))
         self.sample_stride = sample_stride
@@ -78,7 +81,7 @@ class BatchLoader():
             self.data_queue = queue.Queue(maxsize=max_queue_size)
             self.stop_event = threading.Event()
 
-        self.restart()
+        self.restart(idx=start)
 
     @property
     def initial_times(self) -> list[np.datetime64]:
@@ -180,7 +183,7 @@ class BatchLoader():
         self.data_queue.task_done()
         logging.debug(f"{self.dataset.mode} BatchLoader: marked task_done")
 
-    def restart(self, cancel=False, **kwargs):
+    def restart(self, idx=0, cancel=False, **kwargs):
         """Restart the :attr:`data_counter` and ThreadPoolExecutor to get ready for the pass through the data
 
         Args:
@@ -190,7 +193,7 @@ class BatchLoader():
 
         if self.shuffle:
             self.rstate.shuffle(self.sample_indices)
-            self.sample_indices = list(int(idx) for idx in self.sample_indices)
+            self.sample_indices = list(int(i) for i in self.sample_indices)
 
         # start filling the queue
         if self.num_workers > 0:
@@ -200,7 +203,7 @@ class BatchLoader():
                 self.stop_event.clear()
 
             with self.data_counter_lock:
-                self.data_counter = 0
+                self.data_counter = idx
 
             with self.executor_lock:
                 self.executor = concurrent.futures.ThreadPoolExecutor(
@@ -210,7 +213,7 @@ class BatchLoader():
                     self.executor.submit(self.generate) for _ in range(self.num_workers)
                 ]
         else:
-            self.data_counter = 0
+            self.data_counter = idx
 
 
     def cancel(self):
