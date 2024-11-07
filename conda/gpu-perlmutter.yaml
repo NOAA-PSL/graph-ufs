@@ -1,0 +1,51 @@
+name: graphufs
+channels:
+    - conda-forge
+    - nvidia
+dependencies:
+    - python=3.11
+# Basics
+    - numpy
+    - matplotlib
+# xarray et al
+    - xarray
+    - netCDF4
+    - h5netcdf
+    - bottleneck
+    - dask[complete]
+    - zarr
+    - cftime
+    - flox
+# jupyter etc
+    - jupyter
+    - ipython
+    - ipykernel
+# filesystem
+    - fsspec
+    - gcsfs
+# graphcast
+    - cartopy
+    - chex
+    - google-colab
+    - dm-haiku
+    - jax=0.4.26
+    - jaxlib=0.4.26=*cuda*
+    - optax
+    - jraph
+    - pandas
+    - rtree
+    - dm-tree
+    - trimesh
+    - typing_extensions
+    - google-api-python-client
+# WeatherBench2
+    - apache-beam
+    - xarray-beam
+    - xesmf
+# legit progress bar
+    - tqdm
+# StackedGraphCast
+    - xbatcher
+    - pytest
+      # perlmutter?
+    - aiohttp

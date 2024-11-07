@@ -6,6 +6,13 @@ Create with
 conda env create -f gpu.yaml
 ```
 
+On Perlmutter, make sure to have cudatoolkit loaded. It's a default, but just in
+case:
+
+```
+module load cudatoolkit
+```
+
 Or similarly with `cpu.yaml`.
 
 ## Optional dependencies
