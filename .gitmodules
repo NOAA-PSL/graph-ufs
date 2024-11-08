@@ -1,7 +1,7 @@
 [submodule "graphcast"]
     path = graphcast
     url = git@github.com:NOAA-PSL/graphcast.git
-    branch = feature/coupled
+    branch = feature/replay-integration
 [submodule "ufs2arco"]
 	path = ufs2arco
 	url = https://github.com/NOAA-PSL/ufs2arco.git
