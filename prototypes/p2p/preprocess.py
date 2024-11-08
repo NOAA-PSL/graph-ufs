@@ -25,7 +25,7 @@ def setup(mode, level=logging.INFO):
     setup_simple_log(level=level)
 
     emulator = Emulator()
-    pt = ProgressTracker(json_file_path=f"{emulator.local_store_path}/preprocess_progress.json")
+    pt = ProgressTracker(json_file_path=f"{emulator.local_store_path}/progress.{mode}.json")
     start = pt.get_current_iteration()
     tds = Dataset(
         emulator,
