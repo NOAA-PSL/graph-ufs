@@ -15,6 +15,8 @@ def log(xda):
 def exp(xda):
     return np.exp(xda)
 
+_scratch = "/pscratch/sd/t/timothys"
+
 class P2PTrainer(FVEmulator):
 
     # paths
@@ -24,7 +26,7 @@ class P2PTrainer(FVEmulator):
         "std": "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.fvstatistics.p2p/stddev_by_level.zarr",
         "stddiff": "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.fvstatistics.p2p/diffs_stddev_by_level.zarr",
     }
-    local_store_path = "/pscratch/sd/t/timothys/p2p"
+    local_store_path = f"{_scratch}/p2p"
 
     # these could be moved to a yaml file later
     # task config options
@@ -102,6 +104,7 @@ class P2PTrainer(FVEmulator):
     radius_query_fraction_edge_length = 0.6
 
     # loss weighting, defaults to GraphCast implementation
+    weight_loss_per_channel = True
     weight_loss_per_latitude = True
     weight_loss_per_level = False
     loss_weights_per_variable = dict() # weight them all equally
@@ -125,10 +128,10 @@ class P2PTrainer(FVEmulator):
     dask_threads = 32
 
     # hardware
-    num_gpus = 1
+    num_gpus = 4
     log_only_rank0 = False
     use_jax_distributed = False
-    use_xla_flags = True
+    use_xla_flags = False
 
 class P2PPreprocessed(P2PTrainer):
     """The log transform has already been taken care of during preprocessing.

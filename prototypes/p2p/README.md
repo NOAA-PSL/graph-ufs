@@ -17,47 +17,36 @@
 
 ## Preprocessing
 
+To run preprocessing, first you'll want to figure out the inputs and targets
+chunksize.
+To do this, I would do the following:
 
-## Old numbers...
+* open up an interactive session (CPU or GPU doesn't matter)
+* Create the emulator and dataset object
+  ```python
+  from config import P2PTrainer
+  from graphufs.datasets import Dataset
 
-### How many dask threads to use?
-
-Timing to read With batch size = 16
-*  16 threads = 46 s
-*  32 threads = 47 s
-*  64 threads = 47 s
-* 128 threads = 46 s
-* 256 threads = 46 s
-
-
-### How many input/target channels are there? What chunksize to use?
-
-Timing to read from scratch, batch size 16, 32, 64
-
-**chunk size = 5**
-sec / batch
-*  1 worker  = 1.0
-*  2 worker  = .54
-*  4 worker  = .36
-*  8 workers = .26
-* 16 workers = .25
-* 32 workers = .24
-* 64 workers = .26
-* xarray-tensorstore = 0.16
-
-**chunk size = 19/15**
-*  1 worker  = .85, 2.4,
-*  2 worker  = .49, 1.0,
-*  4 worker  = .32, .58,
-*  8 workers = .28, .44,
-* 16 workers = .26, .40,
-* 32 workers = .25, .40,
-* 64 workers = .27, .41,
-* xarray-tensorstore = 0.16, .28
+  gufs = P2PTrainer()
+  tds = Dataset(gufs, mode="training")
+  ```
+* Then get a sample, inspect the size, and set the c
+  ```python
+  x,y = tds[0] # gets the first sample
+  print(x.shape) # length of the last dimension is the number of channels
+  print(y.shape)
+  ```
+* Pick a chunk size that the channel size is evenly divisible by, and is about
+  1-5 MB or so
+  * e.g. for me, my inputs/targets channel sizes were 175 and 85
+  * setting the channel chunksize to 5 results in a 1.5 MB chunk (since it
+    includes all latitudes and longitudes)
+* Set the `_input_channel_chunks` and `_target_channel_chunks` to these values,
+  lines 20 and 21 in preprocess.py
 
 
-Steps
-- [ ] Create the chunksize = 5 dataset
-- [ ] Run the test read script, running up to a lot more threads
-- [ ] create the chunksize = 19/15 dataset
-- [ ] Run the test read script, running up to a lot more threads
+Lastly, if you want to run the script over multiple, short jobs then choose a
+short walltime by setting `_walltime` at the top of preprocess.py script.
+This corresponds to the length of each job.
+Then the `_n_jobs` parameter sets the number of jobs to spread it all across.
+Alternatively, you can do it in a single, long job. This actually worked for me.
