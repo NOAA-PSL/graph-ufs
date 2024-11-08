@@ -87,11 +87,15 @@ class FVStatisticsComputer(StatisticsComputer):
                 if do_transformed_var and original_var_not_in_list:
                     local_data_vars.append(key)
 
-            xds = xds[local_data_vars+["delz"]]
+            if "pfull" in xds[local_data_vars].dims:
+                xds = xds[local_data_vars+["delz"]]
+            else:
+                xds = xds[local_data_vars]
 
         # regrid in the vertical
-        logging.info(f"{self.name}: starting vertical regridding")
-        xds = fv_vertical_regrid(xds, interfaces=list(self.interfaces))
+        if "pfull" in xds[local_data_vars].dims:
+            logging.info(f"{self.name}: starting vertical regridding")
+            xds = fv_vertical_regrid(xds, interfaces=list(self.interfaces))
 
         logging.info(f"{self.name}: Adding any transformed variables")
         xds = add_transformed_vars(
@@ -100,6 +104,10 @@ class FVStatisticsComputer(StatisticsComputer):
         )
 
         if data_vars is not None:
-            xds = xds[data_vars+["phalf", "ak", "bk"]]
+            selvars = data_vars
+            for key in ["phalf", "ak", "bk"]:
+                if key in xds:
+                    selvars.append(key)
+            xds = xds[selvars]
 
         return xds
