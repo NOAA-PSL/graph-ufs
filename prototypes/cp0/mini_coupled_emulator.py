@@ -4,28 +4,32 @@ from graphufs import ReplayCoupledEmulator
 
 class CP0Emulator(ReplayCoupledEmulator):
 
-    atm_data_url = "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/03h-freq/zarr/fv3.zarr"
-    atm_norm_urls = {
+    data_url = {}
+    norm_urls = {}
+    
+    data_url["atm"] = "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/03h-freq/zarr/fv3.zarr"
+    norm_urls["atm"] = {
         "mean": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/fv3.statistics.1993-1997/mean_by_level.zarr",
         "std": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/fv3.statistics.1993-1997/stddev_by_level.zarr",
         "stddiff": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/fv3.statistics.1993-1997/diffs_stddev_by_level.zarr",
     }
 
-    ocn_data_url = "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/mom6.zarr"
-    ocn_norm_urls = {
+    data_url["ocn"] = "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/mom6.zarr"
+    norm_urls["ocn"] = {
         "mean": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/mom6.statistics.1993-1997/mean_by_level.zarr",
         "std": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/mom6.statistics.1993-1997/stddev_by_level.zarr",
         "stddiff": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/mom6.statistics.1993-1997/diffs_stddev_by_level.zarr",
     }
     
-    ice_data_url = "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/03h-freq/zarr/fv3.zarr"
-    ice_norm_urls = {
+    data_url["ice"] = "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/03h-freq/zarr/fv3.zarr"
+    norm_urls["ice"] = {
         "mean": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/fv3.statistics.1993-1997/mean_by_level.zarr",
         "std": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/fv3.statistics.1993-1997/stddev_by_level.zarr",
         "stddiff": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/fv3.statistics.1993-1997/diffs_stddev_by_level.zarr",
     }
-    land_data_url = "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/03h-freq/zarr/fv3.zarr"
-    land_norm_urls = {
+
+    data_url["land"] = "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/03h-freq/zarr/fv3.zarr"
+    norm_urls["land"] = {
         "mean": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/fv3.statistics.1993-1997/mean_by_level.zarr",
         "std": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/fv3.statistics.1993-1997/stddev_by_level.zarr",
         "stddiff": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/1.00-degree/06h-freq/zarr/fv3.statistics.1993-1997/diffs_stddev_by_level.zarr",
@@ -112,8 +116,8 @@ class CP0Emulator(ReplayCoupledEmulator):
                                 # A more complicated case of diffential time steps and grid size will be 
                                 # developed in the future
     input_duration = "12h"      # time covered by initial condition(s) + delta_t (necessary for GraphCast code)
-    target_lead_time = "6h"     # how long is the forecast ... at what point do we compare model to targets
-    #target_lead_time = [f"{n}h" for n in range(6, 6*4*10+1, 6)]
+    #target_lead_time = "6h"     # how long is the forecast ... at what point do we compare model to targets
+    target_lead_time = [f"{n}h" for n in range(6, 6*2*1+1, 6)]
     training_dates = (          # bounds of training data (inclusive)
         "1994-01-01T00",        # start
         "1994-12-31T18"         # stop

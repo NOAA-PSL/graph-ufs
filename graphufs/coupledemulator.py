@@ -34,12 +34,12 @@ class ReplayCoupledEmulator:
         see graph-ufs/prototypes/cp0_mini/mini_coupled_emulator.py for example usage
     """
 
-    atm_data_url = ""
-    atm_norm_urls = {
+    data_url = {"atm":""}
+    norm_urls = {"atm":{
         "mean": "",
         "std": "",
         "stddiff": "",
-    }
+    }}
     norm = dict()
     stacked_norm = dict()
     wb2_obs_url = ""
@@ -262,10 +262,7 @@ class ReplayCoupledEmulator:
 
         # set normalization here so that we can jit compile with this class
         # a bit annoying, have to copy datatypes here to avoid the Ghost Bus problem
-        self.atm_norm_urls = self.atm_norm_urls.copy()
-        self.ocn_norm_urls = self.ocn_norm_urls.copy()
-        self.ice_norm_urls = self.ice_norm_urls.copy()
-        self.land_norm_urls = self.land_norm_urls.copy()
+        self.norm_urls = self.norm_urls.copy()
         self.norm = dict()
         self.stacked_norm = dict()
         self.set_normalization()
@@ -315,19 +312,19 @@ class ReplayCoupledEmulator:
 
 
     def open_atm_dataset(self, **kwargs):
-        xds = xr.open_zarr(self.atm_data_url, storage_options={"token": "anon"}, **kwargs)
+        xds = xr.open_zarr(self.data_url["atm"], storage_options={"token": "anon"}, **kwargs)
         return xds
     
     def open_ocn_dataset(self, **kwargs):
-        xds = xr.open_zarr(self.ocn_data_url, storage_options={"token": "anon"}, **kwargs)
+        xds = xr.open_zarr(self.data_url["ocn"], storage_options={"token": "anon"}, **kwargs)
         return xds
     
     def open_ice_dataset(self, **kwargs):
-        xds = xr.open_zarr(self.ice_data_url, storage_options={"token": "anon"}, **kwargs)
+        xds = xr.open_zarr(self.data_url["ice"], storage_options={"token": "anon"}, **kwargs)
         return xds
 
     def open_land_dataset(self, **kwargs):
-        xds = xr.open_zarr(self.land_data_url, storage_options={"token": "anon"}, **kwargs)
+        xds = xr.open_zarr(self.data_url["land"], storage_options={"token": "anon"}, **kwargs)
         return xds
 
     def get_time(self, mode):
@@ -369,17 +366,23 @@ class ReplayCoupledEmulator:
         """
 
         # select our vertical levels
-        if es_comp.lower() == "atm".lower() or es_comp.lower() == "ice".lower() or es_comp.lower() == "land".lower():
+        if es_comp.lower() == "atm".lower():
             xds = xds.sel(pfull=self.atm_levels)
+            myvars = list(x for x in set(self.atm_input_variables+self.atm_target_variables+self.atm_forcing_variables) if x in xds)
         elif es_comp.lower() == "ocn".lower():
             xds = xds.sel(z_l=self.ocn_levels)
+            myvars = list(x for x in set(self.ocn_input_variables+self.ocn_target_variables+self.ocn_forcing_variables) if x in xds)
+        elif es_comp.lower() == "ice".lower():
+            myvars = list(x for x in set(self.ice_input_variables+self.ice_target_variables+self.ice_forcing_variables) if x in xds)
+        elif es_comp.lower() == "land".lower():
+            myvars = list(x for x in set(self.land_input_variables+self.land_target_variables+self.land_forcing_variables) if x in xds)
         elif es_comp.lower() == "coupled".lower():
             xds = xds.sel(pfull=self.atm_levels, z_l=self.ocn_levels)
+            myvars = list(x for x in self.all_variables if x in xds)
         else:
-            raise ValueError("Unknown earth system component: only atm, ocn, ice, and land are supported" )
+            raise ValueError("Unknown earth system component: only atm, ocn, ice, and land are supported")
 
         # only grab variables we care about
-        myvars = list(x for x in self.all_variables if x in xds)
         xds = xds[myvars]
 
         if new_time is not None:
@@ -388,9 +391,6 @@ class ReplayCoupledEmulator:
         # mask nans in ocean target variables
         if es_comp.lower() == "ocn".lower() or es_comp.lower() == "ice" or es_comp.lower() == "land":
             xds = xds.fillna(0)
-
-        # select our vertical levels
-        xds = xds.sel(pfull=self.levels)
 
         # if we have any transforms to apply, do it here
         xds = self.transform_variables(xds)
@@ -451,17 +451,17 @@ class ReplayCoupledEmulator:
         if self.no_cache_data or not os.path.exists(self.local_data_path):
             logging.info(f"Downloading {mode} data for {len(all_new_time)} time stamps.")
             # atm
-            xds_atm = xr.open_zarr(self.atm_data_url, storage_options={"token": "anon"})
+            xds_atm = xr.open_zarr(self.data_url["atm"], storage_options={"token": "anon"})
             all_xds_atm = self.subsample_dataset(xds_atm, new_time=all_new_time, es_comp="atm")
             # ocn
-            xds_ocn = xr.open_zarr(self.ocn_data_url, storage_options={"token": "anon"})
+            xds_ocn = xr.open_zarr(self.data_url["ocn"], storage_options={"token": "anon"})
             all_xds_ocn = self.subsample_dataset(xds_ocn, new_time=all_new_time, es_comp="ocn")
             all_xds_ocn = all_xds_ocn.rename({"lat":"grid_yt", "lon":"grid_xt"})
             # ice
-            xds_ice = xr.open_zarr(self.ice_data_url, storage_options={"token": "anon"})
+            xds_ice = xr.open_zarr(self.data_url["ice"], storage_options={"token": "anon"})
             all_xds_ice = self.subsample_dataset(xds_ice, new_time=all_new_time, es_comp="ice")
             # land
-            xds_land = xr.open_zarr(self.land_data_url, storage_options={"token": "anon"})
+            xds_land = xr.open_zarr(self.data_url["land"], storage_options={"token": "anon"})
             all_xds_land = self.subsample_dataset(xds_land, new_time=all_new_time, es_comp="land")
 
             all_xds = xr.merge([all_xds_atm, all_xds_ocn, all_xds_ice, all_xds_land])
@@ -469,6 +469,7 @@ class ReplayCoupledEmulator:
                 all_xds.to_zarr(self.local_data_path)
                 all_xds.close()
                 all_xds = xr.open_zarr(self.local_data_path)
+
         else:
             # figure out missing dates
             xds_on_disk = xr.open_zarr(self.local_data_path)
@@ -575,7 +576,6 @@ class ReplayCoupledEmulator:
 
 
         all_xds = self.get_the_data(all_new_time=all_new_time, mode=mode)
-        # print("all_xds:", all_xds)
 
         # split dataset into chunks
         n_chunks = self.chunks_per_epoch
@@ -703,7 +703,6 @@ class ReplayCoupledEmulator:
 
                 # subsample in time, grab variables and vertical levels we want
                 xds = self.subsample_dataset(all_xds, es_comp="coupled", new_time=new_time)
-                #print('xds subsampled:', xds)
                 xds = xds.rename({
                     "pfull": "level",
                     "grid_xt": "lon",
@@ -801,14 +800,14 @@ class ReplayCoupledEmulator:
             mean_by_level, stddev_by_level, diffs_stddev_by_level (xarray.Dataset): with normalization fields
         """
 
-        def open_normalization(component):
+        def open_normalization(key):
 
             # try to read locally first
             local_path = os.path.join(
                 self.local_store_path,
                 "normalization",
                 "coupled",
-                os.path.basename(self.atm_norm_urls[component]),
+                os.path.basename(self.norm_urls["atm"][key]),
             )
 
 
@@ -821,11 +820,11 @@ class ReplayCoupledEmulator:
                 foundit = True
 
             else:
-                kwargs = {"storage_options": {"token": "anon"}} if any(x in self.norm_urls[component] for x in ["gs://", "gcs://"]) else {}
-                xds_atm = xr.open_zarr(self.atm_norm_urls[component], **kwargs)
-                xds_ocn = xr.open_zarr(self.ocn_norm_urls[component], **kwargs)
-                xds_ice = xr.open_zarr(self.ice_norm_urls[component], **kwargs)
-                xds_land = xr.open_zarr(self.land_norm_urls[component], **kwargs)
+                kwargs = {"storage_options": {"token": "anon"}} if any(x in self.norm_urls[comp][key] for x in ["gs://", "gcs://"] for comp in ["atm", "ocn", "ice", "land"]) else {}
+                xds_atm = xr.open_zarr(self.norm_urls["atm"][key], **kwargs)
+                xds_ocn = xr.open_zarr(self.norm_urls["ocn"][key], **kwargs)
+                xds_ice = xr.open_zarr(self.norm_urls["ice"][key], **kwargs)
+                xds_land = xr.open_zarr(self.norm_urls["land"][key], **kwargs)
                 vars_atm = list(x for x in self.all_variables if x in xds_atm)
                 vars_ocn = list(x for x in self.all_variables if x in xds_ocn)
                 vars_ice = list(x for x in self.all_variables if x in xds_ice)
@@ -880,13 +879,13 @@ class ReplayCoupledEmulator:
                 self.local_store_path,
                 "stacked-normalization",
                 "inputs",
-                os.path.basename(self.atm_norm_urls[component]),
+                os.path.basename(self.norm_urls["atm"][component]),
             )
             targets_path = os.path.join(
                 self.local_store_path,
                 "stacked-normalization",
                 "targets",
-                os.path.basename(self.atm_norm_urls[component]),
+                os.path.basename(self.norm_urls["atm"][component]),
             )
 
             if os.path.isdir(inputs_path) and os.path.isdir(targets_path):
@@ -929,7 +928,6 @@ class ReplayCoupledEmulator:
             norms = norms.transpose(*dimorder)
             return dataset_to_stacked(norms, **kwargs)
 
-        #print('Dataset:', xds)
         input_norms = stackit(xds, self.input_variables, n_time=self.n_input, **kwargs)
         forcing_norms = stackit(xds, self.forcing_variables, n_time=self.n_target, **kwargs)
         target_norms = stackit(xds, self.target_variables, n_time=self.n_target, **kwargs)
@@ -1023,7 +1021,7 @@ class ReplayCoupledEmulator:
 
     def _get_replay_grid(self, resolution: int | float):
         if int(resolution) == 1:
-            if "0.25-degree-subsampled" in self.atm_data_url:
+            if "0.25-degree-subsampled" in self.data_url["atm"]:
                 lats, lons = UFSRegridder.compute_gaussian_grid(768, 1536)
                 lats = lats[::4]
                 lons = lons[::4]
