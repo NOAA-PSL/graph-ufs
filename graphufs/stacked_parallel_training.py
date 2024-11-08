@@ -2,7 +2,6 @@
 Same as training.py, but for StackedGraphCast
 """
 
-import os
 import logging
 from functools import partial
 import numpy as np
@@ -18,66 +17,17 @@ from jax.sharding import NamedSharding, Mesh, PartitionSpec as P
 from jax.sharding import PositionalSharding
 from jax.experimental import mesh_utils
 from jax.random import PRNGKey
-import jax.numpy as jnp
 import optax
 import haiku as hk
 
-from graphcast.stacked_graphcast import StackedGraphCast
-from graphcast.stacked_casting import StackedBfloat16Cast
-from graphcast.stacked_normalization import StackedInputsAndResiduals
-
 from tqdm import tqdm
 
-
-def construct_wrapped_graphcast(emulator, last_input_channel_mapping):
-    """Constructs and wraps the GraphCast Predictor object"""
-
-    predictor = StackedGraphCast(emulator.model_config, emulator.task_config)
-
-    # handle inputs/outputs float32 <-> BFloat16
-    # ... and so that this happens after applying
-    # normalization to inputs & targets
-    predictor = StackedBfloat16Cast(predictor)
-    predictor = StackedInputsAndResiduals(
-        predictor,
-        diffs_stddev_by_level=emulator.stacked_norm["stddiff"],
-        mean_by_level=emulator.stacked_norm["mean"],
-        stddev_by_level=emulator.stacked_norm["std"],
-        last_input_channel_mapping=last_input_channel_mapping,
-    )
-    # multi step rollout is not implemented yet
-    return predictor
-
-
-def init_model(emulator, inputs, last_input_channel_mapping):
-    """Initialize model with random weights.
-    """
-
-    @hk.transform_with_state
-    def run_forward(inputs):
-        predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping)
-        return predictor(inputs)
-
-    devices = jax.devices()[:emulator.num_gpus]
-    sharding = PositionalSharding(devices)
-    sharding = sharding.reshape((emulator.num_gpus, 1, 1, 1))
-
-    inputs = jax.device_put(inputs, sharding)
-
-    init = jax.jit( run_forward.init )
-    params, state = init(
-        rng=PRNGKey(emulator.init_rng_seed),
-        inputs=inputs,
-    )
-    return params, state
-
-def add_trees(tree1, tree2):
-    def add_inplace(x, y):
-        x += y
-        return x
-
-    tree_util.tree_map(add_inplace, tree1, tree2)
-    return tree1
+from graphufs.stacked_training import (
+    construct_wrapped_graphcast,
+    init_model,
+    add_trees,
+    store_loss,
+)
 
 def optimize(
     params, state, optimizer, emulator, trainer, validator, weights, last_input_channel_mapping, opt_state=None
@@ -141,7 +91,7 @@ def optimize(
         # NOTE I think this can be deleted and we can just use loss_fn.apply directly
         def _aux(params, state, i, t):
 
-            (loss, diagnostics), next_state = sample_loss_fn.apply(
+            (loss, diagnostics), next_state = batch_loss_fn.apply(
                 inputs=i,
                 targets=t,
                 params=params,
@@ -153,29 +103,14 @@ def optimize(
         # process one batch per GPU
         def process_batch(inputs, targets):
 
-            batch_size = inputs.shape[0]
-
-            for i in range(batch_size):
-
-                (local_loss, (local_diagnostics, local_next_state)), local_grads = value_and_grad(
-                    _aux, has_aux=True
-                )(
-                    params,
-                    state,
-                    inputs[i, ...],
-                    targets[i, ...],
-                )
-                if i == 0:
-                    loss = local_loss / batch_size
-                    grads = local_grads
-                    diagnostics = local_diagnostics
-                    next_state = local_next_state
-                else:
-                    loss += local_loss / batch_size
-                    add_trees(grads, local_grads)
-                    diagnostics += local_diagnostics / batch_size
-                    add_trees(next_state, local_next_state)
-
+            (loss, (diagnostics, next_state)), grads = value_and_grad(
+                _aux, has_aux=True
+            )(
+                params,
+                state,
+                inputs,
+                targets,
+            )
             return (loss, (diagnostics, next_state)), grads
 
         (loss, (diagnostics, next_state)), grads = process_batch(
@@ -357,103 +292,3 @@ def optimize(
         mean_grad=mean_grad,
     )
     return params, loss_ds, opt_state
-
-def store_loss(
-    emulator,
-    optim_steps,
-    loss_values,
-    loss_by_channel,
-    loss_valid_avg,
-    loss_by_channel_valid,
-    learning_rates,
-    gradient_norms,
-    mean_grad,
-
-):
-
-    loss_ds = xr.Dataset()
-    loss_fname = os.path.join(emulator.local_store_path, "loss.nc")
-    previous_optim_steps = 0
-    previous_epochs = 0
-    if os.path.exists(loss_fname):
-        stored_loss_ds = xr.open_dataset(loss_fname)
-        previous_optim_steps = len(stored_loss_ds.optim_step)
-        previous_epochs = len(stored_loss_ds["epoch"])
-
-    n_channels = len(loss_by_channel[0])
-    loss_by_channel = np.vstack(loss_by_channel)
-    loss_by_channel_valid = np.vstack(loss_by_channel_valid).mean(axis=0, keepdims=True)
-
-    loss_ds["optim_step"] = [x + previous_optim_steps for x in optim_steps]
-    loss_ds["epoch"] = [1 + previous_epochs]
-    loss_ds.attrs["batch_size"] = emulator.batch_size
-    loss_ds["channel"] = xr.DataArray(
-        np.arange(n_channels),
-        coords={"channel": np.arange(n_channels)},
-        dims=("channel",),
-    )
-    loss_ds["loss"] = xr.DataArray(
-        loss_values,
-        coords={"optim_step": loss_ds["optim_step"]},
-        dims=("optim_step",),
-        attrs={"long_name": "loss function value"},
-    )
-    loss_ds["loss_by_channel"] = xr.DataArray(
-        loss_by_channel,
-        dims=("optim_step", "channel"),
-    )
-    loss_ds["loss_by_channel_valid"] = xr.DataArray(
-        loss_by_channel_valid,
-        dims=("epoch", "channel"),
-    )
-    loss_ds["loss_avg"] = xr.DataArray(
-        [np.mean(loss_values)],
-        coords={"epoch": loss_ds["epoch"]},
-        dims=("epoch",),
-        attrs={
-            "long_name": "average loss function value",
-            "description": "averaged over training data once per epoch",
-        },
-    )
-    loss_ds["loss_valid"] = xr.DataArray(
-        [loss_valid_avg],
-        coords={"epoch": loss_ds["epoch"]},
-        dims=("epoch",),
-        attrs={
-            "long_name": "validation loss function value",
-            "description": "averaged over validation data once per epoch",
-        },
-    )
-    loss_ds["mgrad"] = xr.DataArray(
-        [mean_grad],
-        coords={"epoch": loss_ds["epoch"]},
-        dims=("epoch",),
-        attrs={
-            "long_name": "mean absolute value of loss function gradient w.r.t. parameters",
-            "description": "np.abs(x).mean() applied to grads after each epoch",
-        },
-    )
-    loss_ds["g_norm"] = xr.DataArray(
-        gradient_norms,
-        coords={"optim_step": loss_ds["optim_step"]},
-        dims=("optim_step",),
-        attrs={
-            "long_name": "global norm of gradient",
-            "description": "global gradient norm taken before clipping",
-        },
-    )
-    loss_ds["learning_rate"] = xr.DataArray(
-        learning_rates,
-        dims=("optim_step",),
-    )
-    # this is just so we know what optim steps correspond to what epoch
-    loss_ds["epoch_label"] = (1+previous_epochs)*xr.ones_like(loss_ds.optim_step)
-
-    # concatenate losses and store
-    if os.path.exists(loss_fname):
-        stored_loss_ds = xr.merge([stored_loss_ds, loss_ds])
-    else:
-        stored_loss_ds = loss_ds
-    stored_loss_ds.to_netcdf(loss_fname)
-    return loss_ds
-
