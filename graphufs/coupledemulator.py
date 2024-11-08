@@ -83,6 +83,7 @@ class ReplayCoupledEmulator:
 
     # training protocol
     batch_size = None               # number of forecasts averaged over in loss per optim_step
+    grad_clip_value = 32.
     num_batch_splits = None         # number of batch splits
     num_epochs = None               # number of epochs
     chunks_per_epoch = None         # number of chunks per epoch
