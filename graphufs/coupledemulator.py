@@ -710,7 +710,6 @@ class ReplayCoupledEmulator:
                     "time": "datetime",
                     })
                 xds = xds.drop(["cftime", "ftime"])
-                xds.load()
 
                 # iterate through batches
                 inputs = []
