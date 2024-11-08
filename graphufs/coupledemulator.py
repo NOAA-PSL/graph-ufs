@@ -865,8 +865,8 @@ class ReplayCoupledEmulator:
                 xds.to_zarr(local_path)
             return xds
 
-        for key in ["mean", "std", "stddiff"]:
-            self.norm[key] = open_normalization(key)
+        for moment in ["mean", "std", "stddiff"]:
+            self.norm[moment] = open_normalization(moment)
 
     def set_stacked_normalization(self):
 
