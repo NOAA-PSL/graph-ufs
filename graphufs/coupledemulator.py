@@ -800,14 +800,14 @@ class ReplayCoupledEmulator:
             mean_by_level, stddev_by_level, diffs_stddev_by_level (xarray.Dataset): with normalization fields
         """
 
-        def open_normalization(key):
+        def open_normalization(moment):
 
             # try to read locally first
             local_path = os.path.join(
                 self.local_store_path,
                 "normalization",
                 "coupled",
-                os.path.basename(self.norm_urls["atm"][key]),
+                os.path.basename(self.norm_urls["atm"][moment]),
             )
 
 
@@ -820,11 +820,11 @@ class ReplayCoupledEmulator:
                 foundit = True
 
             else:
-                kwargs = {"storage_options": {"token": "anon"}} if any(x in self.norm_urls[comp][key] for x in ["gs://", "gcs://"] for comp in ["atm", "ocn", "ice", "land"]) else {}
-                xds_atm = xr.open_zarr(self.norm_urls["atm"][key], **kwargs)
-                xds_ocn = xr.open_zarr(self.norm_urls["ocn"][key], **kwargs)
-                xds_ice = xr.open_zarr(self.norm_urls["ice"][key], **kwargs)
-                xds_land = xr.open_zarr(self.norm_urls["land"][key], **kwargs)
+                kwargs = {"storage_options": {"token": "anon"}} if any(x in self.norm_urls[comp][moment] for x in ["gs://", "gcs://"] for comp in ["atm", "ocn", "ice", "land"]) else {}
+                xds_atm = xr.open_zarr(self.norm_urls["atm"][moment], **kwargs)
+                xds_ocn = xr.open_zarr(self.norm_urls["ocn"][moment], **kwargs)
+                xds_ice = xr.open_zarr(self.norm_urls["ice"][moment], **kwargs)
+                xds_land = xr.open_zarr(self.norm_urls["land"][moment], **kwargs)
                 vars_atm = list(x for x in self.all_variables if x in xds_atm)
                 vars_ocn = list(x for x in self.all_variables if x in xds_ocn)
                 vars_ice = list(x for x in self.all_variables if x in xds_ice)
