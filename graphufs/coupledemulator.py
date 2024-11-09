@@ -122,6 +122,7 @@ class ReplayCoupledEmulator:
     # loss weighting, defaults to GraphCast implementation
     weight_loss_per_latitude = True
     weight_loss_per_level = True
+    weight_loss_per_channel = False
     atm_loss_weights_per_variable = {
         "tmp2m"         : 1.0,
         "ugrd10m"       : 0.1,
