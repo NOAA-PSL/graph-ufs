@@ -972,23 +972,30 @@ class ReplayCoupledEmulator:
             lat_weights = lat_weights.data[...,None][...,None]
 
             weights *= lat_weights
+            weights /= (len(xtargets["lon"]) * len(xtargets["lat"]))
+
 
         # 2. compute per variable weighting
-        #   a. incorporate user-specified variable weights
-        target_idx = get_channel_index(xtargets)
-        var_count = {k: 0 for k in self.target_variables}
-        for ichannel in range(targets.shape[-1]):
-            varname = target_idx[ichannel]["varname"]
-            var_count[varname] += 1
-            if varname in self.loss_weights_per_variable:
-                weights[..., ichannel] *= self.loss_weights_per_variable[varname]
+        # Either do this per channel, or per variable as in GraphCast
+        n_channels = targets.shape[-1]
+        if self.weight_loss_per_channel:
+            for ichannel in range(n_channels):
+                weights[..., ichannel] /= n_channels
 
-        # 2. compute per variable weighting
-        #   b. take average within variable, so if we have 3 levels of 1 var, divide by 3*n_latitude*n_longitude
-        for ichannel in range(targets.shape[-1]):
-            varname = target_idx[ichannel]["varname"]
-            local_weight = len(xtargets["lon"]) * len(xtargets["lat"]) * var_count[varname]
-            weights[..., ichannel] /= local_weight
+        else:
+            #   a. incorporate user-specified variable weights
+            target_idx = get_channel_index(xtargets)
+            var_count = {k: 0 for k in self.target_variables}
+            for ichannel in range(targets.shape[-1]):
+                varname = target_idx[ichannel]["varname"]
+                var_count[varname] += 1
+                if varname in self.loss_weights_per_variable:
+                    weights[..., ichannel] *= self.loss_weights_per_variable[varname]
+
+            #   b. take average within variable, so if we have 3 levels of 1 var, divide by 3*n_latitude*n_longitude
+            for ichannel in range(targets.shape[-1]):
+                varname = target_idx[ichannel]["varname"]
+                weights[..., ichannel] /= var_count[varname]
 
 
         # 3. compute per level weighting
