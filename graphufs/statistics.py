@@ -172,6 +172,10 @@ class StatisticsComputer:
             self.path_out,
             "diffs_stddev_by_level.zarr",
         )
+        if "z_i" in xds.dims:
+            interface_ds = xr.Dataset({
+                "z_i":xds["z_i"]}).set_coords(["z_i"])
+            result = xr.merge([result, interface_ds])
         result.to_zarr(this_path_out, **self.to_zarr_kwargs)
         logging.info(f"Stored result: {this_path_out}")
         return result
@@ -198,6 +202,10 @@ class StatisticsComputer:
             self.path_out,
             "stddev_by_level.zarr",
         )
+        if "z_i" in xds.dims:
+            interface_ds = xr.Dataset({
+                "z_i":xds["z_i"]}).set_coords(["z_i"])
+            result = xr.merge([result, interface_ds])
         result.to_zarr(this_path_out, **self.to_zarr_kwargs)
         logging.info(f"Stored result: {this_path_out}")
         return result
@@ -222,6 +230,10 @@ class StatisticsComputer:
             self.path_out,
             "mean_by_level.zarr",
         )
+        if "z_i" in xds.dims:
+            interface_ds = xr.Dataset({
+                "z_i":xds["z_i"]}).set_coords(["z_i"])
+            result = xr.merge([result, interface_ds])
         result.to_zarr(this_path_out, **self.to_zarr_kwargs)
         logging.info(f"Stored result: {this_path_out}")
         return result
