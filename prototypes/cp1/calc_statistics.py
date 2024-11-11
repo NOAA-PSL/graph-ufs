@@ -45,7 +45,7 @@ def submit_slurm_job(varname, comp="atm", apartition="compute", n_cpus=30):
     subprocess.run(f"chmod a+x {scriptname}", shell=True)
     subprocess.run(f"{scriptname}", shell=True)
 
-def main(varname, comp="atm"):
+def main(varname, comp):
 
     setup_simple_log()
 
