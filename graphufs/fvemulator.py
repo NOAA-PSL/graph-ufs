@@ -1,23 +1,21 @@
 import logging
 import warnings
-import os
 import numpy as np
 import xarray as xr
 import pandas as pd
-import yaml
 try:
     import flox
     _has_flox = True
 except ImportError:
     _has_flox = False
-from typing import Optional
+
 from ufs2arco import Layers2Pressure
 from graphcast.graphcast import ModelConfig, TaskConfig
 from graphcast import data_utils
 
-from .coupledemulator import ReplayCoupledEmulator
+from .emulator import ReplayEmulator
 
-class FVEmulator(ReplayCoupledEmulator):
+class FVEmulator(ReplayEmulator):
     interfaces = None # Note the these values can be approximate, we'll grab nearest neighbors to Replay dataset
 
 
@@ -34,9 +32,7 @@ class FVEmulator(ReplayCoupledEmulator):
 
         self.mpi_rank = mpi_rank
         self.mpi_size = mpi_size
-        vcoord_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "replay_vertical_levels.yaml")
-        with open(vcoord_path, "r") as f:
-            vcoords = yaml.safe_load(f)
+
         latitude, longitude = self._get_replay_grid(self.resolution)
         self.latitude = tuple(float(x) for x in latitude)
         self.longitude = tuple(float(x) for x in longitude)
@@ -128,72 +124,24 @@ class FVEmulator(ReplayCoupledEmulator):
         xds = self.transform_variables(xds)
         return xds
 
-def get_new_vertical_grid(interfaces, comp):
+def get_new_vertical_grid(interfaces):
+
 
     # Create the parent vertical grid via layers2pressure object
-    if comp.lower()=="atm".lower():
-        replay_layers = Layers2Pressure()
-        phalf = replay_layers.phalf.sel(phalf=interfaces, method="nearest")
+    replay_layers = Layers2Pressure()
+    phalf = replay_layers.phalf.sel(phalf=interfaces, method="nearest")
 
-        # Make a new Layers2Pressure object, which has the subsampled vertical grid
-        # note that pfull gets defined internally
-        child_layers = Layers2Pressure(
-                ak=replay_layers.xds["ak"].sel(phalf=phalf),
-                bk=replay_layers.xds["bk"].sel(phalf=phalf),
-        )
-        nds = child_layers.xds.copy(deep=True)
-    
-    elif comp.lower()=="ocn".lower():
-        vcoord_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "replay_vertical_levels.yaml")
-        with open(vcoord_path, "r") as f:
-            vcoords = yaml.safe_load(f)
-        replay_mom6_interface = xr.DataArray(np.array(vcoords["z_i"]),
-                coords={"z_i":np.array(vcoords["z_i"])},
-                dims=["z_i"],
-                )
-        #replay_mom6_layerinterface = _get_ocn_xds(np.array(vcoords["z_i"]))
-        nz_i = replay_mom6_interface.sel(z_i=interfaces, method='nearest').values
-        nz_l = (nz_i[1:] + nz_i[:-1])/2
-        nds = _get_ocn_xds(nz_i, nz_l)
-        
+    # Make a new Layers2Pressure object, which has the subsampled vertical grid
+    # note that pfull gets defined internally
+    child_layers = Layers2Pressure(
+        ak=replay_layers.xds["ak"].sel(phalf=phalf),
+        bk=replay_layers.xds["bk"].sel(phalf=phalf),
+    )
+    nds = child_layers.xds.copy(deep=True)
     return nds
 
-def _get_ocn_xds(
-        z_i: np.ndarray,
-        z_l: Optional[np.ndarray] = None,
-    ) -> xr.Dataset:
-    
-        if z_i is not None:
-            z_i = xr.DataArray(
-                z_i,
-                coords={"z_i":z_i},
-                dims=["z_i"],
-            )
-            if z_l is not None:
-                z_l = xr.DataArray(
-                    z_l,
-                    coords={"z_l":z_l},
-                    dims=["z_l"],
-                )
 
-                xds = xr.Dataset({
-                    "z_i": z_i,
-                    "z_l": z_l,
-                })
-                xds = xds.set_coords(["z_i", "z_l"])
-            
-            else:
-                xds = xr.Dataset({
-                    "z_i":z_i,
-                })
-                xds = xds.set_coords(["z_i"])
-            
-            return xds
-        
-        else:
-            raise ValueError("Both z_i and z_l are empty")
-
-def fv_vertical_regrid(xds, interfaces):
+def fv_vertical_regrid(xds, interfaces, keep_delz=False):
     """Vertically regrid a dataset based on approximately located interfaces
     by "approximately" we mean to grab the nearest neighbor to the values in interfaces
 
@@ -204,105 +152,51 @@ def fv_vertical_regrid(xds, interfaces):
     Returns:
         nds (xr.Dataset): with vertical averaging
     """
-    # 2D or 3D: no vertical regridding required for 2D
-    vars2d = [x for x in xds.data_vars if not ("pfull" in xds[x].dims or "z_l" in xds[x].dims)]
-    vars3d = {}
-    vars3d["atm"] = [x for x in xds.data_vars if "pfull" in xds[x].dims]
-    vars3d["ocn"] = [x for x in xds.data_vars if "z_l" in xds[x].dims]
+    # create a new dataset with the new vertical grid
+    nds = get_new_vertical_grid(interfaces)
 
-    if vars3d:
-        if vars3d["atm"]:
-            logging.info(f"3D atmospheric variable detected:{vars3d} ")
-            # create a new dataset with the new vertical grid 
-            nds = get_new_vertical_grid(interfaces, "atm")
 
-            # if the dataset has somehow already renamed pfull -> level, rename to pfull for Layers2Pressure computations
-            has_level_not_pfull = False 
-            if "level" in xds.dims and "pfull" not in xds.dims:
-                with xr.set_options(keep_attrs=True):
-                    xds = xds.rename({"level": "pfull"}) 
+    # if the dataset has somehow already renamed pfull -> level, rename to pfull for Layers2Pressure computations
+    has_level_not_pfull = False
+    if "level" in xds.dims and "pfull" not in xds.dims:
+        with xr.set_options(keep_attrs=True):
+            xds = xds.rename({"pfull": "level"})
 
-            # Regrid vertical distance, and get weighting
-            nds["delz"] = xds["delz"].groupby_bins(
-                "pfull",
-                bins=nds["phalf"],
-            ).sum()
-            new_delz_inverse = 1/nds["delz"]
+    # Regrid vertical distance, and get weighting
+    delz = xds["delz"].groupby_bins(
+        "pfull",
+        bins=nds["phalf"],
+    ).sum()
+    new_delz_inverse = 1/delz
 
-            for key in vars3d["atm"]:
-                # Regrid the variable
-                with xr.set_options(keep_attrs=True):
-                    nds[key] = new_delz_inverse * (
-                        (
-                            xds[key]*xds["delz"]
-                        ).groupby_bins(
-                            "pfull",
-                            bins=nds["phalf"],
-                        ).sum()
-                    )
-                nds[key].attrs = xds[key].attrs.copy()
-            
-                # set the coordinates
-                nds = nds.set_coords("pfull")
-                nds["pfull_bins"] = nds["pfull_bins"].swap_dims({"pfull_bins": "pfull"})
-                with xr.set_options(keep_attrs=True):
-                    nds[key] = nds[key].swap_dims({"pfull_bins": "pfull"})
+    # Do the regridding
+    vars2d = [x for x in xds.data_vars if "pfull" not in xds[x].dims]
+    vars3d = [x for x in xds.data_vars if "pfull" in xds[x].dims and x != "delz"]
+    for key in vars3d:
+        with xr.set_options(keep_attrs=True):
+            nds[key] = new_delz_inverse * (
+                (
+                    xds[key]*xds["delz"]
+                ).groupby_bins(
+                    "pfull",
+                    bins=nds["phalf"],
+                ).sum()
+            )
+        nds[key].attrs = xds[key].attrs.copy()
 
-                nds[key].attrs["regridding"] = "delz weighted average in vertical,new coordinate bounds represented by 'pfull_bins'"
-                # unfortunately, cannot store the pfull_bins due to this issue: https://github.com/pydata/xarray/issues/2847  
-                nds = nds.drop_vars("pfull_bins")
+    nds = nds.set_coords("pfull")
+    nds["pfull_bins"] = nds["pfull_bins"].swap_dims({"pfull_bins": "pfull"})
+    for key in vars3d:
+        with xr.set_options(keep_attrs=True):
+            nds[key] = nds[key].swap_dims({"pfull_bins": "pfull"})
+        nds[key].attrs["regridding"] = "delz weighted average in vertical, new coordinate bounds represented by 'phalf'"
+    for v in vars2d:
+        nds[v] = xds[v]
 
-        if vars3d["ocn"]:
-            logging.info(f"3D ocean variable detected:{vars3d} ")
-            # create a new dataset with the new vertical grid
-            nds = get_new_vertical_grid(interfaces, "ocn")
+    if keep_delz:
+        delz = delz.swap_dims({"pfull_bins": "pfull"})
+        nds["delz"] = delz
 
-            # Regrid static layer thickness and get weighting
-            vcoord_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"replay_vertical_levels.yaml")
-            with open(vcoord_path, "r") as f:
-                vcoords = yaml.safe_load(f)
-            xa_interface = xr.DataArray(np.array(vcoords["z_i"]),
-                    coords={"z_i":np.array(vcoords["z_i"])},
-                    dims=["z_i"],
-                    )
-
-            xa_dz = xa_interface.diff(dim="z_i")
-            xa_dz = xa_dz.assign_coords({"z_i":xds.coords["z_l"].values})
-            xa_dz = xa_dz.rename({"z_i":"z_l"})
-            nds["dz"] = xa_dz.groupby_bins(
-                    "z_l",
-                    bins=nds["z_i"],
-            ).sum()
-            dz_inverse = 1/nds["dz"]
-            # do the regridding for all variables now.
-            for key in vars3d["ocn"]:
-                with xr.set_options(keep_attrs=True):
-                    weighted_mult = xds[key]*xa_dz
-                    nds[key] = dz_inverse*(
-                        weighted_mult.groupby_bins(
-                            "z_l",
-                            bins=nds["z_i"],
-                        ).sum()
-                    )
-                nds[key].attrs = xds[key].attrs.copy()
-                # set the coordinates
-                nds = nds.set_coords("z_l")
-                nds["z_l_bins"] = nds["z_l_bins"].swap_dims({"z_l_bins": "z_l"})
-                with xr.set_options(keep_attrs=True):
-                    nds[key] = nds[key].swap_dims({"z_l_bins": "z_l"})
-                nds[key].attrs["regridding"] = "layer thickness weighted average in vertical, new coordinate bounds represented by 'z_l_bins'"
-
-                nds = nds.drop_vars("z_l_bins")
-            nds["dz"] = nds["dz"].swap_dims({"z_l_bins": "z_l"})
-
-    if vars2d:
-        logging.info("2D atmospheric variable detected: no regridding applied")
-        nds = xr.Dataset(
-                data_vars={}, 
-                coords=xds.coords,
-                attrs=xds.attrs,
-        )
-        for v in vars2d:
-            nds[v] = xds[v]
-    
+    # unfortunately, cannot store the pfull_bins due to this issue: https://github.com/pydata/xarray/issues/2847
+    nds = nds.drop_vars("pfull_bins")
     return nds

@@ -71,7 +71,6 @@ class ReplayEmulator:
 
     # training protocol
     batch_size = None               # number of forecasts averaged over in loss per optim_step
-    grad_clip_value = 32.
     num_batch_splits = None         # number of batch splits
     num_epochs = None               # number of epochs
     chunks_per_epoch = None         # number of chunks per epoch
@@ -110,7 +109,6 @@ class ReplayEmulator:
     # loss weighting, defaults to GraphCast implementation
     weight_loss_per_latitude = True
     weight_loss_per_level = True
-    weight_loss_per_channel = False
     loss_weights_per_variable = {
         "tmp2m"         : 1.0,
         "ugrd10m"       : 0.1,
@@ -834,30 +832,23 @@ class ReplayEmulator:
             lat_weights = lat_weights.data[...,None][...,None]
 
             weights *= lat_weights
-            weights /= (len(xtargets["lon"]) * len(xtargets["lat"]))
-
 
         # 2. compute per variable weighting
-        # Either do this per channel, or per variable as in GraphCast
-        n_channels = targets.shape[-1]
-        if self.weight_loss_per_channel:
-            for ichannel in range(n_channels):
-                weights[..., ichannel] /= n_channels
+        #   a. incorporate user-specified variable weights
+        target_idx = get_channel_index(xtargets)
+        var_count = {k: 0 for k in self.target_variables}
+        for ichannel in range(targets.shape[-1]):
+            varname = target_idx[ichannel]["varname"]
+            var_count[varname] += 1
+            if varname in self.loss_weights_per_variable:
+                weights[..., ichannel] *= self.loss_weights_per_variable[varname]
 
-        else:
-            #   a. incorporate user-specified variable weights
-            target_idx = get_channel_index(xtargets)
-            var_count = {k: 0 for k in self.target_variables}
-            for ichannel in range(targets.shape[-1]):
-                varname = target_idx[ichannel]["varname"]
-                var_count[varname] += 1
-                if varname in self.loss_weights_per_variable:
-                    weights[..., ichannel] *= self.loss_weights_per_variable[varname]
-
-            #   b. take average within variable, so if we have 3 levels of 1 var, divide by 3*n_latitude*n_longitude
-            for ichannel in range(targets.shape[-1]):
-                varname = target_idx[ichannel]["varname"]
-                weights[..., ichannel] /= var_count[varname]
+        # 2. compute per variable weighting
+        #   b. take average within variable, so if we have 3 levels of 1 var, divide by 3*n_latitude*n_longitude
+        for ichannel in range(targets.shape[-1]):
+            varname = target_idx[ichannel]["varname"]
+            local_weight = len(xtargets["lon"]) * len(xtargets["lat"]) * var_count[varname]
+            weights[..., ichannel] /= local_weight
 
 
         # 3. compute per level weighting
@@ -972,8 +963,6 @@ class ReplayEmulator:
 
         with open(ckpt_path, "rb") as f:
             ckpt = checkpoint.load(f, CheckPoint)
-
-        logging.info(f"Loaded checkpoint from: {ckpt_path}")
         params = ckpt.params
         state = {}
         model_config = ckpt.model_config

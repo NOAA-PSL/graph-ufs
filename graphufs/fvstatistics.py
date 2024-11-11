@@ -6,7 +6,7 @@ import xarray as xr
 
 from graphcast import data_utils
 
-from .fvemulator import fv_vertical_regrid
+from .fvcoupledemulator import fv_vertical_regrid
 from .statistics import StatisticsComputer, add_derived_vars
 
 class FVStatisticsComputer(StatisticsComputer):
