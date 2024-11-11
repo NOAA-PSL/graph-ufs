@@ -70,12 +70,12 @@ class CP1Emulator(ReplayCoupledEmulator):
     )
     ocn_input_variables = (
         "SSH",
-        #"LW",
-        #"SW",
-        #"so",
-        #"temp",
-        #"uo",
-        #"vo",
+        "LW",
+        "SW",
+        "so",
+        "temp",
+        "uo",
+        "vo",
         #"landsea_mask",
     )
     ice_input_variables = (
@@ -101,12 +101,12 @@ class CP1Emulator(ReplayCoupledEmulator):
     )
     ocn_target_variables = (
         "SSH",
-        #"LW",
-        #"SW",
-        #"so",
+        "LW",
+        "SW",
+        "so",
         "temp",
-        #"uo",
-        #"vo",
+        "uo",
+        "vo",
     )
     ice_target_variables = (
         "icec",
@@ -155,12 +155,12 @@ class CP1Emulator(ReplayCoupledEmulator):
     target_lead_time = "6h"     # how long is the forecast ... at what point do we compare model to targets
     #target_lead_time = [f"{n}h" for n in range(6, 6*4*1+1, 6)]
     training_dates = (          # bounds of training data (inclusive)
-        "1994-01-01T00",        # start
-        "1994-12-31T18"         # stop
+        "1993-12-31T18",        # start
+        "2019-12-31T18"         # stop
     )
     testing_dates = (           # bounds of testing data (inclusive)
         "2020-01-01T00",        # start
-        "2020-02-01T18"         # stop
+        "2021-12-31T18"         # stop
     )
     validation_dates = (        # bounds of validation data (inclusive)
         "2022-01-01T00",        # start
