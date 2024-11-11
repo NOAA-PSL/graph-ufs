@@ -53,7 +53,7 @@ def main(varname, comp="atm"):
     # stats exist, then compute everything. If 3D, compute the FV version.
     
     #path_out = os.path.dirname(Emulator.norm_urls[comp]["mean"])
-    statsdir = "coupled.statistics.1994-2019"
+    statsdir = "mom6.fvstatistics.l10.1993-2019"
     if not os.path.isdir(statsdir):
         os.makedirs(statsdir)
     path_out = os.path.abspath(statsdir)
@@ -136,13 +136,13 @@ def main(varname, comp="atm"):
 
 
 if __name__ == "__main__":
-    comp = "land"
+    comp = "ocn"
     all_variables = list(set(
         # uncomment one of the below lines based on the component chosen. This would be automated in the future.
         #Emulator.atm_input_variables + Emulator.atm_forcing_variables + Emulator.atm_target_variables
-        #Emulator.ocn_input_variables + Emulator.ocn_forcing_variables + Emulator.ocn_target_variables
+        Emulator.ocn_input_variables + Emulator.ocn_forcing_variables + Emulator.ocn_target_variables
         #Emulator.ice_input_variables + Emulator.ice_forcing_variables + Emulator.ice_target_variables
-        Emulator.land_input_variables + Emulator.land_forcing_variables + Emulator.land_target_variables
+        #Emulator.land_input_variables + Emulator.land_forcing_variables + Emulator.land_target_variables
     ))
     
     if comp.lower() == "atm".lower(): 

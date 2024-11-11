@@ -83,4 +83,5 @@ class FVStatisticsComputer(StatisticsComputer):
         # regrid in the vertical
         logging.info(f"{self.name}: entering vertical regridding")
         xds = fv_vertical_regrid(xds, interfaces=list(self.interfaces))
+        
         return xds

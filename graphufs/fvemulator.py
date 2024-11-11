@@ -15,7 +15,7 @@ from ufs2arco import Layers2Pressure
 from graphcast.graphcast import ModelConfig, TaskConfig
 from graphcast import data_utils
 
-from .emulator import ReplayCoupledEmulator
+from .coupledemulator import ReplayCoupledEmulator
 
 class FVEmulator(ReplayCoupledEmulator):
     interfaces = None # Note the these values can be approximate, we'll grab nearest neighbors to Replay dataset
