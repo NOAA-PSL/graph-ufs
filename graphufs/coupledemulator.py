@@ -873,7 +873,7 @@ class ReplayCoupledEmulator:
 
         assert len(self.norm["mean"]) > 0, "normalization not set, call Emulator.set_normalization()"
 
-        def open_normalization(component):
+        def open_normalization(moment):
 
             # try to read locally first
             inputs_path = os.path.join(
