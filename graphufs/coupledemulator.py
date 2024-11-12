@@ -840,7 +840,7 @@ class ReplayCoupledEmulator:
                             # make sure e.g. log_spfh is in the dataset
                             transformed_key = f"{transform_function.__name__}_{key}" # e.g. log_spfh
                             assert transformed_key in xds, \
-                                f"Emulator.set_normalization: couldn't find {transformed_key} in {component} normalization dataset"
+                                f"Emulator.set_normalization: couldn't find {transformed_key} in {moment} normalization dataset"
                             # there's a chance the original, e.g. spfh, is not in the dataset
                             # if it is, replace it with e.g. log_spfh
                             if key in myvars:
