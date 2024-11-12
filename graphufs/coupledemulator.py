@@ -896,7 +896,7 @@ class ReplayCoupledEmulator:
                 targets = targets["targets"].load()
 
             else:
-                inputs, targets = self.normalization_to_stacked(self.norm[component], preserved_dims=tuple())
+                inputs, targets = self.normalization_to_stacked(self.norm[moment], preserved_dims=tuple())
                 ds = xr.Dataset()
                 inputs = inputs.load()
                 targets = targets.load()
