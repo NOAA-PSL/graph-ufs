@@ -2,7 +2,8 @@ import numpy as np
 import xesmf as xe
 import xarray as xr
 import pandas as pd
-
+from .emulator import ReplayEmulator
+from .coupledemulator import ReplayCoupledEmulator
 
 def convert_wb2_format(gufs, ds, inittimes) -> xr.Dataset:
     """Convert a dataset into weatherbench2 compatible format. Details can be
