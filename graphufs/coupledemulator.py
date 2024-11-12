@@ -880,7 +880,7 @@ class ReplayCoupledEmulator:
                 self.local_store_path,
                 "stacked-normalization",
                 "inputs",
-                os.path.basename(self.norm_urls["atm"][component]),
+                os.path.basename(self.norm_urls["atm"][moment]),
             )
             targets_path = os.path.join(
                 self.local_store_path,
