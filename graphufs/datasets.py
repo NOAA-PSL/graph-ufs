@@ -9,10 +9,11 @@ import dask.array
 
 from xbatcher import BatchGenerator
 
-from graphcast.data_utils import extract_inputs_targets_forcings
+from graphcast.data_utils import extract_inputs_targets_forcings, extract_inputs_targets_forcings_coupled
 from graphcast.model_utils import dataset_to_stacked
 
 from .emulator import ReplayEmulator
+from .coupledemulator import CoupledReplayEmulator
 
 class Dataset():
     """
@@ -20,7 +21,7 @@ class Dataset():
     """
     def __init__(
         self,
-        emulator: ReplayEmulator,
+        emulator: ReplayEmulator | ReplayCoupledEmulator,
         mode: str,
         preload_batch: bool = False,
         input_chunks: Optional[dict | None] = None,
@@ -41,19 +42,23 @@ class Dataset():
         self.input_chunks = input_chunks
         self.target_chunks = target_chunks
         xds = self._open_dataset()
-        self.sample_generator = BatchGenerator(
-            ds=xds,
-            input_dims={
+        input_dims={
                 "datetime": emulator.n_forecast,
                 "lon": len(xds["lon"]),
                 "lat": len(xds["lat"]),
                 "level": len(xds["level"]),
             },
+        if "z_l" in xds.dims:
+            input_dims["z_l"] = len(xds["z_l"])
+        self.sample_generator = BatchGenerator(
+            ds=xds,
+            input_dims=input_dims,
             input_overlap={
                 "datetime": emulator.n_forecast-1,
             },
             preload_batch=preload_batch,
         )
+        
 
     def __len__(self) -> int:
         """
