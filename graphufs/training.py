@@ -157,8 +157,6 @@ def optimize(
 
     Args:
         params (dict): with the initialized model parameters
- in graphufs/training.py
-Auto-merging graphufs/utils.py
         state (dict): this is empty, but for now has to be here
         optimizer (Callable, optax.optimizer): see `here <https://optax.readthedocs.io/en/latest/api/optimizers.html>`_
         emulator (ReplayEmulator): the emulator object
