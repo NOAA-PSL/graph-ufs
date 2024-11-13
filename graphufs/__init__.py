@@ -2,7 +2,6 @@ from .emulator import ReplayEmulator
 from .coupledemulator import ReplayCoupledEmulator
 from .fvemulator import FVEmulator
 from .fvcoupledemulator import FVCoupledEmulator
-from .coupledemulator import ReplayCoupledEmulator
 from .training import (
     construct_wrapped_graphcast,
     optimize,
