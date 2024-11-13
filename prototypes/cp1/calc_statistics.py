@@ -18,20 +18,6 @@ def submit_slurm_job(varname, comp="atm", apartition="compute", n_cpus=30):
         if not os.path.isdir(d):
             os.makedirs(d)
 
-    #jobscript = f"#!/bin/bash\n\n"+\
-    #    f"#SBATCH -J {varname}_norm\n"+\
-    #    f"#SBATCH -o {logdir}/{varname}.%j.out\n"+\
-    #    f"#SBATCH -e {logdir}/{varname}.%j.err\n"+\
-    #    f"#SBATCH --nodes=1\n"+\
-    #    f"#SBATCH --ntasks=1\n"+\
-    #    f"#SBATCH --cpus-per-task={n_cpus}\n"+\
-    #    f"#SBATCH --partition={apartition}\n"+\
-    #    f"#SBATCH -t 120:00:00\n\n"+\
-    #    f"source /contrib/niraj.agarwal/miniconda3/etc/profile.d/conda.sh\n"+\
-    #    f"conda activate graphufs\n"+\
-    #    f"echo $PYTHONPATH\n"+\
-    #    f"python -c 'from calc_statistics import main ; main(\"{varname}\", \"{comp}\")'"
-
     # On PSL Cluster
     jobscript = f"#!/bin/bash\n\n"+\
             f"source activate base\n"+\
