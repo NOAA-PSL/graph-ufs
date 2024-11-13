@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 import dask
 import xarray as xr
@@ -109,16 +110,32 @@ def regrid_and_rename(xds, truth):
     return ds_out
 
 
-def interp2pressure(xds, plevels):
+def interp2pressure(xds, plevels, diagnose_geopotential=False):
     """Assume plevels is in hPa"""
 
-    lp = Layers2Pressure(level_name="level")
+    kw = dict()
+    if "ak" in xds and "bk" in xds:
+        kw = {"ak": xds.ak.values, "bk": xds.bk.values}
+    lp = Layers2Pressure(level_name="level", **kw)
+
+    keep_delz = True
     if "delz" not in xds:
+        keep_delz = False
         xds["delz"] = lp.calc_delz(xds["pressfc"], xds["tmp"], xds["spfh"])
+
+    if diagnose_geopotential:
+        if "geopotential" in xds:
+            raise ValueError(f"Geopotential already exists")
+        xds["geopotential"] = lp.calc_geopotential(
+            hgtsfc=xds["hgtsfc_static"],
+            delz=xds["delz"],
+        )
     prsl = lp.calc_layer_mean_pressure(xds["pressfc"], xds["tmp"], xds["spfh"], xds["delz"])
 
     vars2d = [f for f in xds.keys() if "level" not in xds[f].dims]
     vars3d = [f for f in xds.keys() if "level" in xds[f].dims]
+    if not keep_delz and "delz" in vars3d:
+        vars3d.remove("delz")
     pds = xr.Dataset({f: xds[f] for f in vars2d})
     plevels = np.array(list(plevels))
     pds["level"] = xr.DataArray(
@@ -131,6 +148,8 @@ def interp2pressure(xds, plevels):
         },
     )
     results = {k: list() for k in vars3d}
+    logging.info(f"Regridding {vars3d}")
+    logging.info(f"to {plevels} hPa")
     for p in plevels:
 
         cds = lp.get_interp_coefficients(p*100, prsl)

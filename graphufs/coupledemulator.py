@@ -840,7 +840,7 @@ class ReplayCoupledEmulator:
                             # make sure e.g. log_spfh is in the dataset
                             transformed_key = f"{transform_function.__name__}_{key}" # e.g. log_spfh
                             assert transformed_key in xds, \
-                                f"Emulator.set_normalization: couldn't find {transformed_key} in {component} normalization dataset"
+                                f"Emulator.set_normalization: couldn't find {transformed_key} in {moment} normalization dataset"
                             # there's a chance the original, e.g. spfh, is not in the dataset
                             # if it is, replace it with e.g. log_spfh
                             if key in myvars:
@@ -873,20 +873,20 @@ class ReplayCoupledEmulator:
 
         assert len(self.norm["mean"]) > 0, "normalization not set, call Emulator.set_normalization()"
 
-        def open_normalization(component):
+        def open_normalization(moment):
 
             # try to read locally first
             inputs_path = os.path.join(
                 self.local_store_path,
                 "stacked-normalization",
                 "inputs",
-                os.path.basename(self.norm_urls["atm"][component]),
+                os.path.basename(self.norm_urls["atm"][moment]),
             )
             targets_path = os.path.join(
                 self.local_store_path,
                 "stacked-normalization",
                 "targets",
-                os.path.basename(self.norm_urls["atm"][component]),
+                os.path.basename(self.norm_urls["atm"][moment]),
             )
 
             if os.path.isdir(inputs_path) and os.path.isdir(targets_path):
@@ -896,7 +896,7 @@ class ReplayCoupledEmulator:
                 targets = targets["targets"].load()
 
             else:
-                inputs, targets = self.normalization_to_stacked(self.norm[component], preserved_dims=tuple())
+                inputs, targets = self.normalization_to_stacked(self.norm[moment], preserved_dims=tuple())
                 ds = xr.Dataset()
                 inputs = inputs.load()
                 targets = targets.load()

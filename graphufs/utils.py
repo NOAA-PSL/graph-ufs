@@ -188,8 +188,7 @@ class DataGenerator:
         self.gen_lock = threading.Lock()
 
         # initialize batch generator
-        #self.no_load_chunk = emulator.no_load_chunks
-        print(f"Starting to get {mode} batches")
+        logging.info(f"graphufs.utils.get_chunk_data: Starting to get {mode} batches")
         
         self.load_chunk = emulator.load_chunk
         self.shuffle = (mode != "testing") and emulator.use_preprocessed
@@ -276,9 +275,6 @@ def get_channel_index(xds, preserved_dims=("batch", "lat", "lon")):
         mapping (dict): with keys = logical indices 0 -> n_channels-1, and values = a dict
             with "varname" and each dimension, where value corresponds to logical position of that dimension
     """
-
-    if len(xds.time) > 2:
-        raise NotImplementedError("Not ready for multiple timesteps")
 
     mapping = {}
     channel = 0
@@ -452,3 +448,40 @@ def get_approximate_memory_usage(data, max_queue_size, num_workers, load_chunk):
             chunk_ram /= 1024 * 1024 * 1024
             total += (max_queue_size + num_workers) * chunk_ram
     return total
+
+def convert_loss_channel2var(Emulator, loss2d):
+    """Convert loss by channel to a dataset with loss separated by variable
+
+    Args:
+        Emulator: note that it has to be the training emulator
+        loss2d (xr.DataArray): second axis just has to be "channel"
+
+    Returns:
+        xds (xr.Dataset): with each variable indicating it's loss
+    """
+    em = Emulator()
+    tds = Dataset(em, mode="training")
+
+    _, xtargets, _ = tds.get_xarrays(0)
+    tmeta = get_channel_index(xtargets)
+
+    varloss = {}
+    for cidx in loss2d.channel.values:
+        mymeta = tmeta[cidx]
+        varname = mymeta["varname"]
+        this_loss = loss2d.sel(channel=cidx, drop=True)
+        this_loss.name = varname
+        if "level" in mymeta:
+            levelval = xtargets.level.isel(level=mymeta["level"]).values
+            this_loss = this_loss.expand_dims({"level": [levelval]})
+            if varname not in varloss:
+                varloss[varname] = [this_loss]
+            else:
+                varloss[varname].append(this_loss)
+        else:
+            varloss[varname] = this_loss
+
+    for key in xtargets.data_vars:
+        if "level" in xtargets[key].dims:
+            varloss[key] = xr.concat(varloss[key], dim="level")
+    return xr.Dataset(varloss)

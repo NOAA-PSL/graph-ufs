@@ -1,0 +1,183 @@
+[28 s] [Rank 0] [INFO] Unable to initialize backend 'rocm': NOT_FOUND: Could not find registered platform with name: "rocm". Available platform names are: CUDA
+[28 s] [Rank 0] [INFO] Unable to initialize backend 'tpu': INTERNAL: Failed to open libtpu.so: libtpu.so: cannot open shared object file: No such file or directory
+[28 s] [Rank 0] [INFO] Using 1 GPUs.
+[29 s] [Rank 0] [INFO] 
+jax:    0.4.27
+jaxlib: 0.4.23.dev20240503
+numpy:  1.26.4
+python: 3.11.9 | packaged by conda-forge | (main, Apr 19 2024, 18:36:13) [GCC 12.3.0]
+jax.devices (1 total, 1 local): [cuda(id=0)]
+process_count: 1
+platform: uname_result(system='Linux', node='timsmith-p1rocky-00047-1-0001', release='4.18.0-513.18.1.el8_9.x86_64', version='#1 SMP Wed Feb 21 21:34:36 UTC 2024', machine='x86_64')
+
+
+$ nvidia-smi
+Fri Oct 11 23:12:21 2024       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 550.54.15              Driver Version: 550.54.15      CUDA Version: 12.4     |
+|-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA A100 80GB PCIe          On  |   00000001:00:00.0 Off |                    0 |
+| N/A   31C    P0             67W /  300W |     428MiB /  81920MiB |      2%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+                                                                                         
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI        PID   Type   Process name                              GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A     54136      C   python                                        416MiB |
++-----------------------------------------------------------------------------------------+
+
+[29 s] [Rank 0] [INFO] Local devices: 1 [cuda(id=0)]
+[29 s] [Rank 0] [INFO] Global devices: 1 [cuda(id=0)]
+[41 s] [Rank 0] [INFO] P2TrainingEmulator: transforming spfh -> log(spfh)
+[41 s] [Rank 0] [INFO] P2TrainingEmulator: transforming spfh2m -> log(spfh2m)
+[42 s] [Rank 0] [INFO] Initializing Loss Function Weights and Stacked Mappings
+[50 s] [Rank 0] [INFO] Initializing Optimizer and Parameters
+[91 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_0.npz
+[91 s] [Rank 0] [INFO] Starting Training with:
+[91 s] [Rank 0] [INFO] 	 batch_size = 16
+[91 s] [Rank 0] [INFO] 	 4747 validation steps per epoch
+[91 s] [Rank 0] [INFO] 	 325 validation steps per epoch
+[91 s] [Rank 0] [INFO] 	 ---
+[91 s] [Rank 0] [INFO] 	 1000 linearly increasing LR steps
+[91 s] [Rank 0] [INFO] 	 302808 cosine decay LR steps
+[91 s] [Rank 0] [INFO] 	 303808 total training steps
+[91 s] [Rank 0] [INFO] Training on epoch 0
+[92 s] [Rank 0] [INFO] Started jitting optim_step
+[290 s] [Rank 0] [INFO] Finished jitting optim_step
+[290 s] [Rank 0] [INFO] Started jitting validation loss
+[327 s] [Rank 0] [INFO] Finished jitting validation loss
+[7566 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_1.npz
+[7566 s] [Rank 0] [INFO] Training on epoch 1
+[14803 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_2.npz
+[14803 s] [Rank 0] [INFO] Training on epoch 2
+[22029 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_3.npz
+[22029 s] [Rank 0] [INFO] Training on epoch 3
+[29252 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_4.npz
+[29252 s] [Rank 0] [INFO] Training on epoch 4
+[36455 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_5.npz
+[36455 s] [Rank 0] [INFO] Training on epoch 5
+[43650 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_6.npz
+[43650 s] [Rank 0] [INFO] Training on epoch 6
+[50844 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_7.npz
+[50844 s] [Rank 0] [INFO] Training on epoch 7
+[58035 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_8.npz
+[58035 s] [Rank 0] [INFO] Training on epoch 8
+[65217 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_9.npz
+[65217 s] [Rank 0] [INFO] Training on epoch 9
+[72404 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_10.npz
+[72405 s] [Rank 0] [INFO] Training on epoch 10
+[79591 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_11.npz
+[79591 s] [Rank 0] [INFO] Training on epoch 11
+[86776 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_12.npz
+[86776 s] [Rank 0] [INFO] Training on epoch 12
+[93975 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_13.npz
+[93975 s] [Rank 0] [INFO] Training on epoch 13
+[101170 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_14.npz
+[101170 s] [Rank 0] [INFO] Training on epoch 14
+[108374 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_15.npz
+[108374 s] [Rank 0] [INFO] Training on epoch 15
+[115569 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_16.npz
+[115569 s] [Rank 0] [INFO] Training on epoch 16
+[122789 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_17.npz
+[122789 s] [Rank 0] [INFO] Training on epoch 17
+[129996 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_18.npz
+[129996 s] [Rank 0] [INFO] Training on epoch 18
+[137207 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_19.npz
+[137207 s] [Rank 0] [INFO] Training on epoch 19
+[144421 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_20.npz
+[144421 s] [Rank 0] [INFO] Training on epoch 20
+[151635 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_21.npz
+[151635 s] [Rank 0] [INFO] Training on epoch 21
+[158846 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_22.npz
+[158846 s] [Rank 0] [INFO] Training on epoch 22
+[166043 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_23.npz
+[166043 s] [Rank 0] [INFO] Training on epoch 23
+[173234 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_24.npz
+[173234 s] [Rank 0] [INFO] Training on epoch 24
+[180433 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_25.npz
+[180433 s] [Rank 0] [INFO] Training on epoch 25
+[187629 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_26.npz
+[187629 s] [Rank 0] [INFO] Training on epoch 26
+[194833 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_27.npz
+[194833 s] [Rank 0] [INFO] Training on epoch 27
+[202047 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_28.npz
+[202047 s] [Rank 0] [INFO] Training on epoch 28
+[209270 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_29.npz
+[209270 s] [Rank 0] [INFO] Training on epoch 29
+[216486 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_30.npz
+[216486 s] [Rank 0] [INFO] Training on epoch 30
+[223710 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_31.npz
+[223710 s] [Rank 0] [INFO] Training on epoch 31
+[230937 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_32.npz
+[230937 s] [Rank 0] [INFO] Training on epoch 32
+[238161 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_33.npz
+[238161 s] [Rank 0] [INFO] Training on epoch 33
+[245388 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_34.npz
+[245388 s] [Rank 0] [INFO] Training on epoch 34
+[252622 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_35.npz
+[252622 s] [Rank 0] [INFO] Training on epoch 35
+[259854 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_36.npz
+[259854 s] [Rank 0] [INFO] Training on epoch 36
+[267100 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_37.npz
+[267100 s] [Rank 0] [INFO] Training on epoch 37
+[274355 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_38.npz
+[274355 s] [Rank 0] [INFO] Training on epoch 38
+[281609 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_39.npz
+[281609 s] [Rank 0] [INFO] Training on epoch 39
+[288888 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_40.npz
+[288888 s] [Rank 0] [INFO] Training on epoch 40
+[296174 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_41.npz
+[296174 s] [Rank 0] [INFO] Training on epoch 41
+[303434 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_42.npz
+[303434 s] [Rank 0] [INFO] Training on epoch 42
+[310694 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_43.npz
+[310694 s] [Rank 0] [INFO] Training on epoch 43
+[317960 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_44.npz
+[317960 s] [Rank 0] [INFO] Training on epoch 44
+[325233 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_45.npz
+[325233 s] [Rank 0] [INFO] Training on epoch 45
+[332483 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_46.npz
+[332483 s] [Rank 0] [INFO] Training on epoch 46
+[339726 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_47.npz
+[339726 s] [Rank 0] [INFO] Training on epoch 47
+[346980 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_48.npz
+[346980 s] [Rank 0] [INFO] Training on epoch 48
+[354227 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_49.npz
+[354227 s] [Rank 0] [INFO] Training on epoch 49
+[361456 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_50.npz
+[361456 s] [Rank 0] [INFO] Training on epoch 50
+[368688 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_51.npz
+[368688 s] [Rank 0] [INFO] Training on epoch 51
+[375948 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_52.npz
+[375948 s] [Rank 0] [INFO] Training on epoch 52
+[383188 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_53.npz
+[383188 s] [Rank 0] [INFO] Training on epoch 53
+[390464 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_54.npz
+[390464 s] [Rank 0] [INFO] Training on epoch 54
+[397713 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_55.npz
+[397713 s] [Rank 0] [INFO] Training on epoch 55
+[404975 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_56.npz
+[404975 s] [Rank 0] [INFO] Training on epoch 56
+[412231 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_57.npz
+[412231 s] [Rank 0] [INFO] Training on epoch 57
+[419801 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_58.npz
+[419801 s] [Rank 0] [INFO] Training on epoch 58
+[427032 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_59.npz
+[427032 s] [Rank 0] [INFO] Training on epoch 59
+[434265 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_60.npz
+[434265 s] [Rank 0] [INFO] Training on epoch 60
+[441505 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_61.npz
+[441505 s] [Rank 0] [INFO] Training on epoch 61
+[448745 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_62.npz
+[448745 s] [Rank 0] [INFO] Training on epoch 62
+[455990 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_63.npz
+[455990 s] [Rank 0] [INFO] Training on epoch 63
+[463242 s] [Rank 0] [INFO] Stored checkpoint: /p2-lustre/p2/models/model_64.npz
+[463242 s] [Rank 0] [INFO] Done Training

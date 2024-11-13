@@ -3,11 +3,11 @@
 export PYTHONPATH=$PYTHONPATH:$PWD/weatherbench2:$PWD/weatherbench2/weatherbench2:$PWD/weatherbench2/scripts
 
 year=2018
-output_dir=/p1-evaluation/v1/validation
+output_dir=/p2-lustre/baselines
 time_start="${year}-01-01T00"
 time_stop="${year}-12-31T23"
 time_stride=3
-variables="2m_temperature,10m_u_component_of_wind,10m_v_component_of_wind,mean_sea_level_pressure,temperature,specific_humidity,u_component_of_wind,v_component_of_wind"
+variables="2m_temperature,10m_u_component_of_wind,10m_v_component_of_wind,mean_sea_level_pressure,geopotential,temperature,specific_humidity,u_component_of_wind,v_component_of_wind"
 
 truth_names=("hres_analysis" "era5")
 truth_paths=( \
@@ -38,16 +38,14 @@ do
     if [[ ${model_name} == "ifs_ens_mean" ]] ; then
         levels=500,850
     else
-        levels=100,500,850
+        levels=100,250,500,850
     fi
 
     rename_variables="None"
     configs="deterministic"
     if [[ ${model_name} == "graphcast" ]]  ; then
         rename_variables="{'lat':'latitude','lon':'longitude'}"
-        if [[ ${truth_name} == "hres_analysis" ]] ; then
-            configs="deterministic,deterministic_spatial,deterministic_temporal"
-        fi
+        configs="deterministic,deterministic_spatial"
     fi
 
     for j in "${!truth_names[@]}"
@@ -73,17 +71,4 @@ do
          --variables=${variables} \
          --levels=${levels}
     done
-
-    echo "Computing spectra for ${model_name} ..."
-    python weatherbench2/scripts/compute_zonal_energy_spectrum.py \
-      --input_path=${native_model_path} \
-      --output_path=${output_dir}/${model_name}.${year}.spectra.zarr \
-      --base_variables=${variables} \
-      --time_dim="time" \
-      --time_start=${time_start} \
-      --time_stop=${time_stop} \
-      --time_stride=${time_stride} \
-      --levels=${levels} \
-      --averaging_dims="time" \
-      --rename_variables=${rename_variables}
 done

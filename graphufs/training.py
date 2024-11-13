@@ -149,7 +149,7 @@ def optimize(
     emulator,
     training_data,
     validation_data,
-    weights,
+    per_variable_weights,
     opt_state=None,
     compute_mean_grad=False,
 ):
@@ -157,6 +157,8 @@ def optimize(
 
     Args:
         params (dict): with the initialized model parameters
+ in graphufs/training.py
+Auto-merging graphufs/utils.py
         state (dict): this is empty, but for now has to be here
         optimizer (Callable, optax.optimizer): see `here <https://optax.readthedocs.io/en/latest/api/optimizers.html>`_
         emulator (ReplayEmulator): the emulator object
@@ -177,7 +179,7 @@ def optimize(
     @hk.transform_with_state
     def loss_fn(emulator, inputs, targets, forcings):
         predictor = construct_wrapped_graphcast(emulator)
-        loss, diagnostics = predictor.loss(inputs, targets, forcings, weights)
+        loss, diagnostics = predictor.loss(inputs, targets, forcings, per_variable_weights)
         return map_structure(
             lambda x: unwrap_data(x.mean(), require_jax=True), (loss, diagnostics)
         )

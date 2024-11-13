@@ -1,10 +1,11 @@
+from typing import Optional
 import matplotlib.pyplot as plt
 
 class LinePlotter():
 
     @staticmethod
     def subplots(nrows, ncols, **kwargs):
-        return plt.subplots(nrows, ncols, figsize=(ncols*3, nrows*4), constrained_layout=True)
+        return plt.subplots(nrows, ncols, figsize=(ncols*3.5, nrows*4), constrained_layout=True)
 
     @staticmethod
     def title(fldname):
@@ -16,11 +17,19 @@ class LinePlotter():
         mname = metric.upper() if metric != "bias" else "Bias"
         fig.suptitle(f"{mname} vs {truth}")
 
-    def plot_surface(self, dsdict: dict, truth: str, metric: str = "mae", fields: tuple[str] = ("2m_temperature", "10m_u_component_of_wind", "10m_v_component_of_wind")):
+    def plot_surface(
+        self,
+        dsdict: dict,
+        truth: str,
+        metric: str = "mae",
+        fields: tuple[str] = ("2m_temperature", "10m_u_component_of_wind", "10m_v_component_of_wind"),
+        color: Optional[dict] = None,
+        linestyle: Optional[dict | str] = None,
+    ):
 
         fig, axs = self.subplots(1, len(fields))
 
-        self._plot_row(axs, dsdict, truth, metric, fields)
+        self._plot_row(axs, dsdict, truth, metric, fields, color=color, linestyle=linestyle)
         self.nicefig(fig, metric, truth)
         return fig, axs
 
@@ -31,6 +40,8 @@ class LinePlotter():
         metric: str = "mae",
         fields: tuple[str] = ("temperature", "specific_humidity", "u_component_of_wind", "v_component_of_wind"),
         levels: tuple[int] = (100, 500, 850),
+        color: Optional[dict] = None,
+        linestyle: Optional[dict | str] = None,
     ):
 
         fig, axs = self.subplots(len(levels), len(fields))
@@ -39,38 +50,55 @@ class LinePlotter():
             axs = [axs]
 
         for level, axr in zip(levels, axs):
-            self._plot_row(axr, dsdict, truth, metric, fields, level=level)
+            self._plot_row(axr, dsdict, truth, metric, fields, level=level, color=color, linestyle=linestyle)
 
         self.nicefig(fig, metric, truth)
         return fig, axs
 
 
-    def _plot_row(self, axr, dsdict, truth, metric, fields, level=None):
+    def _plot_row(self, axr, dsdict, truth, metric, fields, level=None, color=None, linestyle=None):
 
-        xticks = dsdict["GraphUFS"][truth].fhr.values[3::4]
+        # we can assume it's first
+        graphufskey = list(dsdict.keys())[0]
+        xticks = dsdict[graphufskey][truth].fhr.values[3::4]
 
         for fld, ax in zip(fields, axr):
             sps = ax.get_subplotspec()
+            offset = 0
             for j, (label, xdict) in enumerate(dsdict.items()):
                 xds = xdict[truth]
+                kw = {"label": label if sps.is_last_row() and sps.is_first_col() else None}
                 if label == "Replay":
-                    color="gray"
+                    kw["color"] = "gray"
+                    offset += 1
+
                 elif label == "Replay Targets":
-                    color = "C5"
+                    kw["color"] = "C5"
+                    offset += 1
+
                 elif label == "GraphUFS 6h":
-                    color = "C0"
+                    kw["color"] = "C0"
+                    offset += 1
+
                 elif label == "GraphUFS GDM 6h":
-                    color = "C1"
+                    kw["color"] = "C1"
+                    offset += 1
 
                 else:
-                    color = f"C{j}"
+                    kw["color"] = f"C{j-offset}"
 
-                kw = {
-                    "color": color,
-                    "label": label if sps.is_last_row() and sps.is_first_col() else None
-                }
                 if label in ("GraphUFS 6h", "GraphUFS GDM 6h"):
                     kw["linestyle"] = "--"
+                if isinstance(linestyle, str):
+                    kw["linestyle"] = linestyle
+                elif isinstance(linestyle, dict):
+                    if label in linestyle:
+                        kw["linestyle"] = linestyle[label]
+
+                if color is not None:
+                    if label in color:
+                        kw["color"] = color[label]
+                        offset += 1
 
                 if fld in xds:
                     plotme = xds[fld].sel(metric=metric)

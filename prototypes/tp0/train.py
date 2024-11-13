@@ -24,39 +24,36 @@ from graphufs import (
 import jax
 
 from config import TP0Emulator
+from graphufs.optim import clipped_cosine_adamw
 
-if __name__ == "__main__":
-
-    # logging isn't working for me on PSL, no idea why
-    setup_simple_log()
+def calc_stats(Emulator):
 
     # This is a bit of a hack to enable testing, for real
     # cases, we want to compute statistics during preprocessing
     # Note we want to do this before initializing emulator object
     # since it tries to pull the statistics there.
-    stats_path = os.path.dirname(TP0Emulator.norm_urls["mean"])
-    if not os.path.isdir(stats_path):
-        logging.info(f"Could not find {stats_path}, computing statistics...")
-        fvstats = FVStatisticsComputer(
-            path_in=TP0Emulator.data_url,
-            path_out=stats_path,
-            interfaces=TP0Emulator.interfaces,
-            start_date=None,
-            end_date=TP0Emulator.training_dates[-1],
-            time_skip=None,
-            load_full_dataset=True,
-            transforms=TP0Emulator.input_transforms,
-        )
-        all_variables = list(set(
-            TP0Emulator.input_variables + TP0Emulator.forcing_variables + TP0Emulator.target_variables
-        ))
-        all_variables.append("log_spfh")
-        all_variables.append("log_spfh2m")
-        fvstats(all_variables, integration_period=pd.Timedelta(hours=3))
+    fvstats = FVStatisticsComputer(
+        path_in=Emulator.data_url,
+        path_out=os.path.dirname(Emulator.norm_urls["mean"]),
+        interfaces=Emulator.interfaces,
+        start_date=None,
+        end_date=Emulator.training_dates[-1],
+        time_skip=None,
+        load_full_dataset=True,
+        transforms=Emulator.input_transforms,
+    )
+    all_variables = list(set(
+        Emulator.input_variables + Emulator.forcing_variables + Emulator.target_variables
+    ))
+    all_variables.append("log_spfh")
+    all_variables.append("log_spfh2m")
+    fvstats(all_variables, integration_period=pd.Timedelta(hours=3))
+
+def train(Emulator):
 
     # We don't parse arguments since we can't be inconsistent with stats
     # computed above
-    gufs = TP0Emulator()
+    gufs = Emulator()
 
     # for multi-gpu training
     init_devices(gufs)
@@ -96,20 +93,36 @@ if __name__ == "__main__":
     logging.info("Initializing Optimizer and Parameters")
     inputs, _ = trainer.get_data()
     params, state = init_model(gufs, inputs, last_input_channel_mapping)
+    gufs.save_checkpoint(params, id=0)
 
     loss_name = f"{gufs.local_store_path}/loss.nc"
     if os.path.exists(loss_name):
         os.remove(loss_name)
 
+    # setup optimizer
+    steps_in_epoch = len(trainer)
+    n_total = gufs.num_epochs * steps_in_epoch
+    n_linear = max(10, int(len(trainer)/100))
+    n_cosine = n_total - n_linear
+    optimizer = clipped_cosine_adamw(
+        n_linear=n_linear,
+        n_total=n_total,
+        peak_value=1e-3,
+    )
+
+    logging.info(f"Starting Training with:")
+    logging.info(f"\t batch_size = {gufs.batch_size}")
+    logging.info(f"\t {len(trainer)} training steps per epoch")
+    logging.info(f"\t {len(validator)} validation steps per epoch")
+    logging.info(f"\t ---")
+    logging.info(f"\t {n_linear} linearly increasing LR steps")
+    logging.info(f"\t {n_cosine} cosine decay LR steps")
+    logging.info(f"\t {n_total} total training steps")
+
     # training
     opt_state = None
-    logging.info("Starting Training")
-
-    optimizer = optax.adam(learning_rate=1e-4)
-
-    # training loop
     for e in range(gufs.num_epochs):
-        logging.info(f"Training on epoch {e}")
+        logging.info(f"Starting epoch {e}")
 
         # optimize
         params, loss, opt_state = optimize(
@@ -124,9 +137,24 @@ if __name__ == "__main__":
             opt_state=opt_state,
         )
 
+        logging.info(f"Done with epoch {e}")
+
         # save weights
-        ckpt_id = e
-        gufs.save_checkpoint(params, ckpt_id)
+        gufs.save_checkpoint(params, id=e+1)
 
     trainer.shutdown(cancel=True)
     validator.shutdown(cancel=True)
+
+if __name__ == "__main__":
+
+    # logging isn't working for me on PSL, no idea why
+    setup_simple_log()
+
+    stats_path = os.path.dirname(TP0Emulator.norm_urls["mean"])
+    if not os.path.isdir(stats_path):
+        logging.info(f"Could not find {stats_path}, computing statistics...")
+        calc_stats(TP0Emulator)
+
+    train(TP0Emulator)
+
+
