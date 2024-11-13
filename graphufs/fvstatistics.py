@@ -98,7 +98,7 @@ class FVStatisticsComputer(StatisticsComputer):
             xds = xds[local_data_vars+["delz"]]
 
         # regrid in the vertical
-        logging.info(f"{self.name}: entering vertical regridding")
+        logging.info(f"{self.name}: starting vertical regridding")
         xds = fv_vertical_regrid(xds, interfaces=list(self.interfaces))
 
         logging.info(f"{self.name}: Adding any transformed variables")
