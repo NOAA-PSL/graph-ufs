@@ -67,7 +67,7 @@ def construct_wrapped_graphcast(emulator):
     # handle inputs/outputs float32 <-> BFloat16
     # ... and so that this happens after applying
     # normalization to inputs & targets
-    # predictor = Bfloat16Cast(predictor)
+    predictor = Bfloat16Cast(predictor)
     predictor = InputsAndResiduals(
         predictor,
         diffs_stddev_by_level=emulator.norm["stddiff"],
