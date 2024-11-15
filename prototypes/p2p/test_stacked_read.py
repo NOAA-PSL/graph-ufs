@@ -89,6 +89,8 @@ def read_tensorstore_test(gufs, num_tries=10):
 if __name__ == "__main__":
 
 
+    total_time = Timer()
+    total_time.start()
     setup_simple_log()
 
     # parse arguments
@@ -96,3 +98,4 @@ if __name__ == "__main__":
 
     read_test(emulator, num_tries=5)
     read_tensorstore_test(emulator, num_tries=5)
+    total_time.stop("Total Walltime")

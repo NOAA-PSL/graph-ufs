@@ -19,6 +19,19 @@ Notes:
 * Batch size 32 I/O is fast, but the model doesn't fit in memory unless we use
   the "sample loss" approach, but this is 2x slower per optim iteration
 
+## MPI I/O Timing
+
+
+Time to load, per batch
+| Batch Size | Non MPI | 1 Node | 2 Nodes | 4 Nodes |
+|------------|---------|--------|---------|---------|
+| 16         | .35     | 0.23   | 0.12    | 0.07    |
+| 32         | .69     | 0.46   | 0.23    | 0.11    |
+
+Note that the MPI total walltime seems to add ~28 seconds, and it's not clear where this comes from...
+Hopefully not from communication!
+But no matter what the scaling sticks.
+
 
 ## Initial P2 Light with 8 vertical levels
 
