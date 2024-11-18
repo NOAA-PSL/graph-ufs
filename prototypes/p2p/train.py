@@ -1,23 +1,18 @@
 import os
-import sys
 import logging
-from functools import partial
 
-import dask
-import numpy as np
-import optax
-from graphufs.stacked_parallel_training import (
+from mpi4py import MPI
+
+from graphufs.stacked_mpi_training import (
     optimize,
     init_model,
 )
-from graphufs.datasets import Dataset, PackedDataset
-from graphufs.tensorstore import PackedDataset as TSPackedDataset, BatchLoader as TSBatchLoader
-from graphufs.batchloader import BatchLoader
-from graphufs.log import setup_simple_log
+from graphufs.datasets import Dataset
+from graphufs.tensorstore import PackedDataset as TSPackedDataset, MPIBatchLoader as TSBatchLoader
+from graphufs.mpi import MPITopology
 
 from graphufs.optim import clipped_cosine_adamw
 from graphufs.utils import get_last_input_mapping
-from graphufs import init_devices
 
 from config import (
     P2PTrainer as RemoteEmulator,
@@ -28,15 +23,20 @@ from config import (
 if __name__ == "__main__":
 
     # initial setup
-    setup_simple_log()
-    emulator = PackedEmulator()
-    remote_emulator = RemoteEmulator()
-    init_devices(emulator)
+    topo = MPITopology(log_dir=f"{RemoteEmulator.local_store_path}/slurm/training")
+    emulator = PackedEmulator(mpi_rank=topo.rank, mpi_size=topo.size)
+    remote_emulator = RemoteEmulator(mpi_rank=topo.rank, mpi_size=topo.size)
 
     # data generators
     tds = Dataset(remote_emulator, mode="training")
     training_data = TSPackedDataset(emulator, mode="training")
     validation_data = TSPackedDataset(emulator, mode="validation")
+
+    #TODO: This is for debugging
+    training_data.inputs = training_data.inputs.isel(sample=slice(1000))
+    training_data.targets = training_data.targets.isel(sample=slice(1000))
+    validation_data.inputs = validation_data.inputs.isel(sample=slice(1000))
+    validation_data.targets = validation_data.targets.isel(sample=slice(1000))
 
     trainer = TSBatchLoader(
         training_data,
@@ -45,6 +45,7 @@ if __name__ == "__main__":
         drop_last=True,
         num_workers=emulator.num_workers,
         max_queue_size=emulator.max_queue_size,
+        mpi_topo=topo,
     )
     validator = TSBatchLoader(
         validation_data,
@@ -53,6 +54,7 @@ if __name__ == "__main__":
         drop_last=True,
         num_workers=emulator.num_workers,
         max_queue_size=emulator.max_queue_size,
+        mpi_topo=topo,
     )
 
     logging.info("Initializing Loss Function Weights and Stacked Mappings")
@@ -63,12 +65,13 @@ if __name__ == "__main__":
     # initialize a random model
     logging.info("Initializing Optimizer and Parameters")
     inputs, _ = trainer.get_data()
-    params, state = init_model(emulator, inputs, last_input_channel_mapping)
-    emulator.save_checkpoint(params, id=0)
+    params, state = init_model(emulator, inputs, last_input_channel_mapping, mpi_topo=topo)
 
     loss_name = f"{emulator.local_store_path}/loss.nc"
-    if os.path.exists(loss_name):
-        os.remove(loss_name)
+    if topo.is_root:
+        emulator.save_checkpoint(params, id=0)
+        if os.path.exists(loss_name):
+            os.remove(loss_name)
 
     # setup optimizer
     steps_in_epoch = len(trainer)
@@ -106,11 +109,13 @@ if __name__ == "__main__":
             weights=loss_weights,
             last_input_channel_mapping=last_input_channel_mapping,
             opt_state=opt_state,
+            mpi_topo=topo,
         )
 
         # save weights
         logging.info(f"Done with epoch {e+1}")
-        emulator.save_checkpoint(params, id=e+1)
+        if topo.is_root:
+            emulator.save_checkpoint(params, id=e+1)
 
     logging.info("Done Training")
     trainer.shutdown(cancel=True)

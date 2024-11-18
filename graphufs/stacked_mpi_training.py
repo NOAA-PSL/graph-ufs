@@ -30,13 +30,11 @@ from graphufs.stacked_training import (
 )
 from graphufs.mpi import MPITopology
 
-def init_model(emulator, inputs, last_input_channel_mapping):
+def init_model(emulator, inputs, last_input_channel_mapping, mpi_topo):
     """Initialize model with random weights.
     """
 
     logging.info(f"init_model: Initializing model on root")
-    # TODO: This should be passed not initialized
-    topo = MPITopology()
 
     @hk.transform_with_state
     def run_forward(inputs):
@@ -60,7 +58,16 @@ def init_model(emulator, inputs, last_input_channel_mapping):
     return params, state
 
 def optimize(
-    params, state, optimizer, emulator, trainer, validator, weights, last_input_channel_mapping, opt_state=None
+    params,
+    state,
+    optimizer,
+    emulator,
+    trainer,
+    validator,
+    weights,
+    last_input_channel_mapping,
+    mpi_topo,
+    opt_state=None,
 ):
     """Optimize the model parameters by running through all optim_steps in data
 
@@ -79,8 +86,6 @@ def optimize(
     """
     assert _has_mpi, "Can't find mpi4py or mpi4jax"
 
-    #TODO: this should be passed to the optimize call
-    topo = MPITopology()
     opt_state = optimizer.init(params) if opt_state is None else opt_state
 
     @hk.transform_with_state
@@ -91,6 +96,23 @@ def optimize(
         predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping)
         loss, diagnostics = predictor.loss(inputs, targets, weights=weights)
         return loss.mean(), diagnostics.mean(axis=0)
+
+    def vloss(
+        params,
+        state,
+        input_batch,
+        target_batch,
+    ):
+        loss, diagnostics = batch_loss_fn.apply(
+            inputs=input_batch,
+            targets=target_batch,
+            params=params,
+            state=state,
+            rng=PRNGKey(1),
+        )
+        loss = topo.device_mean(loss)
+        diagnostics = topo.device_mean(diagnostics)
+        return loss, diagnostics
 
     def optim_step(
         params,
@@ -110,7 +132,7 @@ def optimize(
                 targets=t,
                 params=params,
                 state=state,
-                rng=PRNGKey(0),
+                rng=PRNGKey(2),
             )
             return loss, (diagnostics, next_state)
 
@@ -126,12 +148,10 @@ def optimize(
                 targets,
             )
 
-            if (not emulator.use_jax_distributed) and (emulator.mpi_size > 1):
-                loss = topo.device_mean(loss)
-                grads = topo.device_mean(grads)
-                diagnostics = topo.device_mean(diagnostics)
-                next_state = topo.device_mean(next_state)
-
+            loss = topo.device_mean(loss)
+            grads = topo.device_mean(grads)
+            diagnostics = topo.device_mean(diagnostics)
+            next_state = topo.device_mean(next_state)
             return (loss, (diagnostics, next_state)), grads
 
         (loss, (diagnostics, next_state)), grads = process_batch(
@@ -189,20 +209,18 @@ def optimize(
         first_input = topo.device_put(first_input)
         first_target = topo.device_put(first_target)
 
-        optimize.vloss_jitted = jit(batch_loss_fn.apply)
-        (x, _), _ = optimize.vloss_jitted(
+        optimize.vloss_jitted = jit(vloss)
+        x, _ = optimize.vloss_jitted(
+            input_batch=first_input,
+            target_batch=first_target,
             params=params,
             state=state,
-            inputs=first_input,
-            targets=first_target,
-            rng=PRNGKey(0),
         )
         # refill validation queue since the first one was popped
         block_until_ready(x)
         logging.info("Finished jitting validation loss")
         validator.restart(cancel=True)
 
-    # TODO: need a barrier here?
 
     # training
     optim_steps = []
@@ -274,12 +292,11 @@ def optimize(
         input_batch = topo.device_put(input_batch)
         target_batch = topo.device_put(target_batch)
 
-        (loss_valid, diagnostics_valid), _ = optimize.vloss_jitted(
+        loss_valid, diagnostics_valid = optimize.vloss_jitted(
             params=params,
             state=state,
-            inputs=input_batch,
-            targets=target_batch,
-            rng=PRNGKey(0),
+            input_batch=input_batch,
+            target_batch=target_batch,
         )
         loss_valid_values.append(loss_valid)
         loss_by_channel_valid.append(diagnostics_valid)
@@ -302,16 +319,17 @@ def optimize(
     )
 
     # save losses for each batch
-    loss_ds = store_loss(
-        emulator=emulator,
-        optim_steps=optim_steps,
-        loss_values=loss_values,
-        loss_by_channel=loss_by_channel,
-        loss_valid_avg=loss_valid_avg,
-        loss_by_channel_valid=loss_by_channel_valid,
-        learning_rates=learning_rates,
-        gradient_norms=gradient_norms,
-        mean_grad=mean_grad,
-    )
+    if topo.is_root:
+        loss_ds = store_loss(
+            emulator=emulator,
+            optim_steps=optim_steps,
+            loss_values=loss_values,
+            loss_by_channel=loss_by_channel,
+            loss_valid_avg=loss_valid_avg,
+            loss_by_channel_valid=loss_by_channel_valid,
+            learning_rates=learning_rates,
+            gradient_norms=gradient_norms,
+            mean_grad=mean_grad,
+        )
     return params, loss_ds, opt_state
 

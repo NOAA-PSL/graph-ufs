@@ -86,13 +86,14 @@ class MPITopology():
         )
 
     def device_mean(self, array):
+        """Take an average across all devices"""
         def local_mean(local):
             local_avg, _ = mpi4jax.allreduce(
                 local,
                 op=MPI.SUM,
                 comm=self.comm,
             )
-            return local / self.size
+            return local_avg / self.size
         return jax.tree_util.tree_map(
             lambda x: local_mean(x),
             array,

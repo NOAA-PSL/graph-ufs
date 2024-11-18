@@ -1,5 +1,14 @@
 # Perlmutter I/O Performance
 
+Note that the statement
+
+```python
+from mpi4py import MPI
+```
+
+has to exist in all of the main scripts (e.g. in train.py) for mpi4py to work at
+all.
+
 ## Training timing
 
 Time per iteration (validation iterations in parentheses), moving through 100 iterations.
