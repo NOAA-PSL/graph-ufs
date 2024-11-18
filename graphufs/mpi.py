@@ -2,6 +2,8 @@ import os
 import logging
 import jax
 
+from graphufs.log import SimpleFormatter
+
 try:
     from mpi4py import MPI
     import mpi4jax
@@ -11,7 +13,6 @@ except:
     _has_mpi = False
     logging.warning(f"graphufs.mpi: Unable to import mpi4py or mpi4jax, cannot use this module")
 
-
 class MPITopology():
     """Note that all of this usage assumes that we have one process per GPU"""
 
@@ -19,7 +20,7 @@ class MPITopology():
     def is_root(self):
         return self.rank == self.root
 
-    def __init__(self, logdir=None):
+    def __init__(self, log_dir=None, log_level=logging.INFO):
 
         assert _has_mpi, f"MPITopology.__init__: Unable to import mpi4py or mpi4jax, cannot use this class"
         self.comm = MPI.COMM_WORLD
@@ -33,30 +34,44 @@ class MPITopology():
         self.root = 0
         self.friends = tuple(ii for ii in range(self.size) if ii!=self.root)
 
-        self.logdir = "./" if logdir is None else logdir
-        if not os.path.isdir(self.logdir):
-            os.makedirs(self.logdir)
-        self.logfile = f"{self.logdir}/log.{self.rank:02d}.{self.size:02d}.out"
-        self.log(str(self), mode="w")
+        self._init_log(log_dir=log_dir, level=log_level)
+        logging.info(str(self))
 
 
     def __str__(self):
-        msg = "MPITopology Summary\n" +\
+        msg = "\nEnvironment Info\n" +\
+            "----------------\n" +\
+            jax.print_environment_info(return_string=True) +\
+            "\n\n" +\
+            f"MPITopology Summary\n" +\
+            f"-------------------\n" +\
             f"comm: {self.comm.Get_name()}\n"
         for key in ["node", "local_rank", "rank", "local_size", "size"]:
-            msg += f"{key:<16s}: {getattr(self, key):02d}\n"
-        msg += f"local_devices   : {str(self.local_devices)}\n" +\
-            f"rank_device     : {str(self.rank_device)}\n"
+            msg += f"{key:<18s}: {getattr(self, key):02d}\n"
+        msg += f"{'local_devices':<18s}: {str(self.local_devices)}\n" +\
+            f"{'rank_device':<18s}: {str(self.rank_device)}\n"
         return msg
 
-    def log(self, msg, mode="a"):
-        with open(self.logfile, mode=mode) as f:
-            print(msg, file=f)
+    def _init_log(self, log_dir, level=logging.INFO):
+        self.log_dir = "./" if log_dir is None else log_dir
+        if self.is_root:
+            if not os.path.isdir(self.log_dir):
+                os.makedirs(self.log_dir)
+        self.comm.Barrier()
+        self.logfile = f"{self.log_dir}/log.{self.rank:02d}.{self.size:02d}.out"
+
+        logging.basicConfig(
+            level=level,
+            filename=self.logfile,
+            filemode="w",
+        )
+        logger = logging.getLogger()
+        formatter = SimpleFormatter(fmt="[%(relativeCreated)-7d s] [%(levelname)-7s] %(message)s")
+        for handler in logger.handlers:
+            handler.setFormatter(formatter)
 
     def bcast(self, x):
         return self.comm.bcast(x, root=self.root)
-
-
 
     def device_put(self, x, **kwargs):
         device = kwargs.get("device", self.rank_device)
@@ -85,7 +100,7 @@ class MPITopology():
 
     def _tree_flatten(self):
         children = tuple()
-        aux_data = dict(logdir=self.logdir)
+        aux_data = dict(log_dir=self.log_dir, log_level=self.log_level)
         return (children, aux_data)
 
     @classmethod

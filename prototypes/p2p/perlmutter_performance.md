@@ -22,6 +22,17 @@ Notes:
 ## MPI I/O Timing
 
 
+Tested by running
+
+```bash
+srun -n 4 python test_mpi_read.py # 1 node
+srun -n 8 python test_mpi_read.py # 2 nodes
+srun -n 16 python test_mpi_read.py # 4 nodes
+```
+
+See the submission scripts `job-scripts/submit_N.sh` for each node count.
+By using the `--tasks-per-node` option, the `-n n_processes` option in the `srun` command was not needed.
+
 Time to load, per batch
 | Batch Size | Non MPI | 1 Node | 2 Nodes | 4 Nodes |
 |------------|---------|--------|---------|---------|
@@ -31,6 +42,16 @@ Time to load, per batch
 Note that the MPI total walltime seems to add ~28 seconds, and it's not clear where this comes from...
 Hopefully not from communication!
 But no matter what the scaling sticks.
+
+Note that running `nvidia-smi` shows that all of the processes on that node are running
+on all 4 of the GPUs.
+So, in all of these cases there were 4 processes running (4 unique PIDs), each
+process is copied / running on each GPU, so it looks like 16 processes are
+running.
+However, this doesn't seem to matter, since we handle GPU data placement at the
+code level with JAX (as is recommended).
+Read time is the same with or without the `select_gpu_device` script that is
+potentially suggested by Perlmutter [here](https://docs.nersc.gov/development/languages/python/using-python-perlmutter/#using-mpi4py-with-gpu-aware-cray-mpich)
 
 
 ## Initial P2 Light with 8 vertical levels

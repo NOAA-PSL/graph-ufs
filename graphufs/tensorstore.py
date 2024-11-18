@@ -2,6 +2,7 @@
 Same as the LocalDataset and BatchLoader, but using xarray_tensorstore
 """
 import numpy as np
+import logging
 import xarray_tensorstore
 
 from .datasets import PackedDataset as BaseDataset
@@ -79,7 +80,18 @@ class MPIBatchLoader(BaseBatchLoader):
 
         self.data_per_device = batch_size // self.topo.size
         self.local_batch_index = self.topo.rank*self.data_per_device
-        self.topo.log(f"idx, data_per_device, batch_size = {self.local_batch_index}, {self.data_per_device}, {batch_size}")
+        logging.info(str(self))
+        if self.data_per_device*self.topo.size != batch_size:
+            logging.warning(f"MPIBatchLoader.__init__: batch_size = {batch_size} not divisible by MPI Size = {self.topo.size}")
+            logging.warning(f"MPIBatchLoader.__init__: some data will be skipped in each batch")
+
+    def __str__(self):
+        msg = "\ngraphufs.tensorstore.MPIBatchLoader\n" +\
+            "-----------------------------------\n"
+        for key in ["local_batch_index", "data_per_device", "batch_size"]:
+            msg += f"{key:<18s}: {getattr(self, key):02d}\n"
+        return msg
+
 
     def _next_data(self):
         if self.data_counter < len(self):

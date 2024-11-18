@@ -21,10 +21,10 @@ from config import P2PTrainer as Emulator
 
 def print_time(batch_size, avg_time, work="read", topo=None):
 
-    topo.log(f" --- Time to {work} batch_size = {batch_size} --- ")
-    topo.log(f"\tnum_workers\t avg seconds / batch")
+    logging.info(f" --- Time to {work} batch_size = {batch_size} --- ")
+    logging.info(f"\tnum_workers\t avg seconds / batch")
     for key, val in avg_time.items():
-        topo.log(f"\t{key}\t\t{val}")
+        logging.info(f"\t{key}\t\t{val}")
 
 def read_tensorstore_test(gufs, num_tries=10, topo=None):
     """Find optimal number of dask worker threads to read a single batch of data"""
@@ -62,7 +62,7 @@ if __name__ == "__main__":
 
 
 #    setup_simple_log()
-    topo = MPITopology(logdir="/pscratch/sd/t/timothys/newtestdir")
+    topo = MPITopology(log_dir="/pscratch/sd/t/timothys/test-mpi-read")
     if topo.is_root:
         total_time = Timer()
         total_time.start()
@@ -70,7 +70,7 @@ if __name__ == "__main__":
     # parse arguments
     emulator = Emulator()
 
-    read_tensorstore_test(emulator, num_tries=100, topo=topo)
+    read_tensorstore_test(emulator, num_tries=10, topo=topo)
 
     if topo.is_root:
         total_time.stop("Total Walltime")
