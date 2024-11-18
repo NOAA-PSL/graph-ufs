@@ -80,7 +80,15 @@ def add_trees(tree1, tree2):
     return tree1
 
 def optimize(
-    params, state, optimizer, emulator, trainer, validator, weights, last_input_channel_mapping, opt_state=None
+    params,
+    state,
+    optimizer,
+    emulator,
+    trainer,
+    validator,
+    weights,
+    last_input_channel_mapping,
+    opt_state=None,
 ):
     """Optimize the model parameters by running through all optim_steps in data
 
