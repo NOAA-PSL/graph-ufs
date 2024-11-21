@@ -50,3 +50,12 @@ short walltime by setting `_walltime` at the top of preprocess.py script.
 This corresponds to the length of each job.
 Then the `_n_jobs` parameter sets the number of jobs to spread it all across.
 Alternatively, you can do it in a single, long job. This actually worked for me.
+
+## Training
+
+Have to pin each MPI process to each GPU, using the `select_gpu_device` script:
+
+
+```
+srun ./select_gpu_device python train.py
+```

@@ -93,7 +93,7 @@ class P2PTrainer(FVEmulator):
 
     # training protocol
     batch_size = 16
-    num_epochs = 64
+    num_epochs = 1 #TODO Update this
 
     # model config options
     resolution = 1.0
@@ -124,7 +124,7 @@ class P2PTrainer(FVEmulator):
 
     # data loading options
     max_queue_size = 1
-    num_workers = 1
+    num_workers = 0 # TODO: update this
     dask_threads = 32
 
     # hardware

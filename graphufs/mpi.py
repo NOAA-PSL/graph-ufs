@@ -1,9 +1,3 @@
-import os
-import logging
-import jax
-
-from graphufs.log import SimpleFormatter
-
 try:
     from mpi4py import MPI
     import mpi4jax
@@ -12,6 +6,12 @@ try:
 except:
     _has_mpi = False
     logging.warning(f"graphufs.mpi: Unable to import mpi4py or mpi4jax, cannot use this module")
+
+import os
+import logging
+import jax
+
+from graphufs.log import SimpleFormatter
 
 class MPITopology():
     """Note that all of this usage assumes that we have one process per GPU"""
@@ -32,6 +32,7 @@ class MPITopology():
         self.local_devices = jax.local_devices()
         self.rank_device = self.local_devices[self.local_rank]
         self.root = 0
+        self.pid = os.getpid()
         self.friends = tuple(ii for ii in range(self.size) if ii!=self.root)
 
         self._init_log(log_dir=log_dir, level=log_level)
@@ -49,7 +50,8 @@ class MPITopology():
         for key in ["node", "local_rank", "rank", "local_size", "size"]:
             msg += f"{key:<18s}: {getattr(self, key):02d}\n"
         msg += f"{'local_devices':<18s}: {str(self.local_devices)}\n" +\
-            f"{'rank_device':<18s}: {str(self.rank_device)}\n"
+            f"{'rank_device':<18s}: {str(self.rank_device)}\n" +\
+            f"{'pid':<18s}: {self.pid}\n"
         return msg
 
     def _init_log(self, log_dir, level=logging.INFO):
@@ -59,16 +61,20 @@ class MPITopology():
                 os.makedirs(self.log_dir)
         self.comm.Barrier()
         self.logfile = f"{self.log_dir}/log.{self.rank:02d}.{self.size:02d}.out"
+        self.progress_file = f"{self.log_dir}/progress.{self.rank:02d}.{self.size:02d}.out"
 
         logging.basicConfig(
             level=level,
             filename=self.logfile,
-            filemode="w",
+            filemode="w+",
         )
         logger = logging.getLogger()
         formatter = SimpleFormatter(fmt="[%(relativeCreated)-7d s] [%(levelname)-7s] %(message)s")
         for handler in logger.handlers:
             handler.setFormatter(formatter)
+
+        with open(self.progress_file, "w"):
+            pass
 
     def bcast(self, x):
         return self.comm.bcast(x, root=self.root)
@@ -94,6 +100,7 @@ class MPITopology():
                 comm=self.comm,
             )
             return local_avg / self.size
+
         return jax.tree_util.tree_map(
             lambda x: local_mean(x),
             array,

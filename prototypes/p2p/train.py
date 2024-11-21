@@ -3,13 +3,14 @@ import logging
 
 from mpi4py import MPI
 
-from graphufs.stacked_mpi_training import (
-    optimize,
-    init_model,
-)
 from graphufs.datasets import Dataset
 from graphufs.tensorstore import PackedDataset as TSPackedDataset, MPIBatchLoader as TSBatchLoader
 from graphufs.mpi import MPITopology
+
+from graphufs.stacked_mpi_training import (
+    init_model,
+    optimize,
+)
 
 from graphufs.optim import clipped_cosine_adamw
 from graphufs.utils import get_last_input_mapping
@@ -65,7 +66,12 @@ if __name__ == "__main__":
     # initialize a random model
     logging.info("Initializing Optimizer and Parameters")
     inputs, _ = trainer.get_data()
-    params, state = init_model(emulator, inputs, last_input_channel_mapping, mpi_topo=topo)
+    params, state = init_model(
+        emulator=emulator,
+        inputs=inputs,
+        last_input_channel_mapping=last_input_channel_mapping,
+        mpi_topo=topo,
+    )
 
     loss_name = f"{emulator.local_store_path}/loss.nc"
     if topo.is_root:
@@ -76,7 +82,7 @@ if __name__ == "__main__":
     # setup optimizer
     steps_in_epoch = len(trainer)
     n_total = emulator.num_epochs * steps_in_epoch
-    n_linear = 1_000
+    n_linear = 5 #TODO 1_000
     n_cosine = n_total - n_linear
     optimizer = clipped_cosine_adamw(
         n_linear=n_linear,
