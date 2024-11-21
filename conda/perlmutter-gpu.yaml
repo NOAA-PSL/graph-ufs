@@ -1,7 +1,6 @@
 name: graphufs
 channels:
     - conda-forge
-    - nvidia
 dependencies:
     - python=3.11
 # Basics
@@ -16,6 +15,7 @@ dependencies:
     - zarr
     - cftime
     - flox
+    - cf_xarray
 # jupyter etc
     - jupyter
     - ipython
@@ -25,27 +25,13 @@ dependencies:
     - gcsfs
 # graphcast
     - cartopy
-    - chex
-    - google-colab
-    - dm-haiku
-    - jax=0.4.26
-    - jaxlib=0.4.26=*cuda*
-    - optax
-    - jraph
-    - pandas
     - rtree
     - dm-tree
     - trimesh
     - typing_extensions
-    - google-api-python-client
-# WeatherBench2
-    - apache-beam
-    - xarray-beam
-    - xesmf
 # legit progress bar
     - tqdm
 # StackedGraphCast
     - xbatcher
     - pytest
-      # perlmutter?
-    - aiohttp
+    - xarray-tensorstore
