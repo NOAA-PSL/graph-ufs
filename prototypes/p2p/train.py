@@ -47,6 +47,7 @@ if __name__ == "__main__":
         num_workers=emulator.num_workers,
         max_queue_size=emulator.max_queue_size,
         mpi_topo=topo,
+        rng_seed=10,
     )
     validator = TSBatchLoader(
         validation_data,
@@ -56,6 +57,7 @@ if __name__ == "__main__":
         num_workers=emulator.num_workers,
         max_queue_size=emulator.max_queue_size,
         mpi_topo=topo,
+        rng_seed=11,
     )
 
     logging.info("Initializing Loss Function Weights and Stacked Mappings")

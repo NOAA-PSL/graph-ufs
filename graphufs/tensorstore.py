@@ -77,6 +77,7 @@ class MPIBatchLoader(BaseBatchLoader):
             sample_stride=sample_stride,
             start=start,
         )
+        assert rng_seed is not None, "MPIBatchLoader.__init__: need to set rng_seed in order for processes to be in sync without collectives"
 
         self.data_per_device = batch_size // self.topo.size
         self.local_batch_index = self.topo.rank*self.data_per_device
@@ -107,10 +108,6 @@ class MPIBatchLoader(BaseBatchLoader):
             return x, y
         else:
             raise StopIteration
-
-    def restart(self, idx=0, cancel=False, **kwargs):
-        super().restart(idx=idx, cancel=cancel, **kwargs)
-        self.sample_indices = self.topo.bcast(self.sample_indices)
 
 class ExpandedBatchLoader(BaseBatchLoader):
     def _next_data(self):
