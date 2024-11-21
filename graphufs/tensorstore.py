@@ -87,7 +87,9 @@ class MPIBatchLoader(BaseBatchLoader):
 
     def __str__(self):
         msg = "\ngraphufs.tensorstore.MPIBatchLoader\n" +\
-            "-----------------------------------\n"
+            "-----------------------------------\n" +\
+            f"{'mode':<18s}: {self.mode}\n"
+
         for key in ["local_batch_index", "data_per_device", "batch_size"]:
             msg += f"{key:<18s}: {getattr(self, key):02d}\n"
         return msg
