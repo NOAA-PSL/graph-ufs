@@ -86,15 +86,15 @@ def optimize(
         input_batch,
         target_batch,
     ):
-        (loss, diagnostics), state = batch_loss_fn.apply(
+        (_, diagnostics), state = batch_loss_fn.apply(
             inputs=input_batch,
             targets=target_batch,
             params=params,
             state=state,
             rng=PRNGKey(1),
         )
-        loss = mpi_topo.device_mean(loss)
         diagnostics = mpi_topo.device_mean(diagnostics)
+        loss = diagnostics.sum()
         return loss, diagnostics
 
     def optim_step(
@@ -121,7 +121,7 @@ def optimize(
         # process one batch per GPU
         def process_batch(inputs, targets):
 
-            (loss, (diagnostics, next_state)), grads = value_and_grad(
+            (_, (diagnostics, next_state)), grads = value_and_grad(
                 _aux, has_aux=True
             )(
                 params,
@@ -129,12 +129,10 @@ def optimize(
                 inputs,
                 targets,
             )
-
-            loss = mpi_topo.device_mean(loss)
             grads = mpi_topo.device_mean(grads)
             diagnostics = mpi_topo.device_mean(diagnostics)
-            next_state = mpi_topo.device_mean(next_state)
-            return (loss, (diagnostics, next_state)), grads
+            loss = diagnostics.sum()
+            return (loss, (diagnostics, state)), grads
 
         (loss, (diagnostics, next_state)), grads = process_batch(
             input_batch,
