@@ -24,7 +24,7 @@ from config import (
 if __name__ == "__main__":
 
     # initial setup
-    topo = MPITopology(log_dir=f"{RemoteEmulator.local_store_path}/training-logs")
+    topo = MPITopology(log_dir=f"{RemoteEmulator.local_store_path}/logs/training")
     emulator = PackedEmulator(mpi_rank=topo.rank, mpi_size=topo.size)
     remote_emulator = RemoteEmulator(mpi_rank=topo.rank, mpi_size=topo.size)
 
