@@ -93,7 +93,7 @@ class P2PTrainer(FVEmulator):
 
     # training protocol
     batch_size = 16
-    num_epochs = 1 #TODO Update this
+    num_epochs = 64
 
     # model config options
     resolution = 1.0
@@ -124,14 +124,8 @@ class P2PTrainer(FVEmulator):
 
     # data loading options
     max_queue_size = 1
-    num_workers = 0 # TODO: update this
-    dask_threads = 32
+    num_workers = 0
 
-    # hardware
-    num_gpus = 4
-    log_only_rank0 = False
-    use_jax_distributed = False
-    use_xla_flags = False
 
 class P2PPreprocessed(P2PTrainer):
     """The log transform has already been taken care of during preprocessing.

@@ -24,7 +24,7 @@ from config import (
 if __name__ == "__main__":
 
     # initial setup
-    topo = MPITopology(log_dir=f"{RemoteEmulator.local_store_path}/slurm/training")
+    topo = MPITopology(log_dir=f"{RemoteEmulator.local_store_path}/training-logs")
     emulator = PackedEmulator(mpi_rank=topo.rank, mpi_size=topo.size)
     remote_emulator = RemoteEmulator(mpi_rank=topo.rank, mpi_size=topo.size)
 
@@ -32,12 +32,6 @@ if __name__ == "__main__":
     tds = Dataset(remote_emulator, mode="training")
     training_data = TSPackedDataset(emulator, mode="training")
     validation_data = TSPackedDataset(emulator, mode="validation")
-
-    #TODO: This is for debugging
-    training_data.inputs = training_data.inputs.isel(sample=slice(1000))
-    training_data.targets = training_data.targets.isel(sample=slice(1000))
-    validation_data.inputs = validation_data.inputs.isel(sample=slice(1000))
-    validation_data.targets = validation_data.targets.isel(sample=slice(1000))
 
     trainer = TSBatchLoader(
         training_data,
@@ -84,7 +78,7 @@ if __name__ == "__main__":
     # setup optimizer
     steps_in_epoch = len(trainer)
     n_total = emulator.num_epochs * steps_in_epoch
-    n_linear = 5 #TODO 1_000
+    n_linear = 1_000
     n_cosine = n_total - n_linear
     optimizer = clipped_cosine_adamw(
         n_linear=n_linear,

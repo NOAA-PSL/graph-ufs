@@ -9,7 +9,27 @@ from mpi4py import MPI
 has to exist in all of the main scripts (e.g. in train.py) for mpi4py to work at
 all.
 
-## Training timing
+## MPI Training Timing
+
+|                                                            | Batch Size = 16           |
+|------------------------------------------------------------|---------------------------|
+| MPI + Serial Data Loading<br>1 Node                        | 1.05 it/sec (2.04 it/sec) |
+| Threads + Serial Data Loading<br>1 Node                    | 1.05 it/sec (1.68 it/sec) |
+| Threads + Parallel Data Loading<br>1 Node                  | 1.15 it/sec (2.94 it/sec) |
+| MPI + Serial Data Loading<br>2 Nodes (8221,8224)           | 1.89 it/sec (3.98 it/sec) |
+| MPI + Serial Data Loading<br>4 Nodes (8241,8244,8301,8332) | 2.92 it/sec (7.38 it/sec) |
+
+
+Some notes:
+* using the slurm option `--nodelist` to select nearby nodes made no significant difference,
+  i.e. 0.01 it/sec faster
+* reducing communication by only communicating loss per channel, and summing to
+  compute the loss function, has a minor impact. No impact with 2 nodes, and
+  0.05 it/sec faster with 4 nodes.
+
+
+
+## Single Node Training Timing
 
 Time per iteration (validation iterations in parentheses), moving through 100 iterations.
 
