@@ -64,6 +64,7 @@ class MPIBatchLoader(BaseBatchLoader):
         start=0,
     ):
         assert _has_mpi, f"MPIBatchLoader.__init__: Unable to import mpi4py or mpi4jax, cannot use this class"
+        assert num_workers==0, f"MPIBatchLoader.__init__: Currently cannot use multithreading with MPI"
 
         self.topo = mpi_topo
         super().__init__(
