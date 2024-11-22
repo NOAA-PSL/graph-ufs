@@ -30,14 +30,9 @@ Note that:
   ```
   export graphufs=/global/common/software/m4718/timothys/graphufs
   ```
-* When I actually did this, I created a shell environment with just numpy and
-  xarray, then iteratively figured out JAX, mpi4py, and mpi4jax, having to
-  restart along the way... After I got that process working, I went in and installed everything else
-  in the [perlmutter-gpu.yaml](perlmutter-gpu.yaml) list,
-  then pip installed the rest of the JAX dependencies.
-  Hopefully it works in the way I've laid out the instructions:
-  creating the environment with more packages first, then
-  adding to it.
+* With this setup, using MPI and multithreading will not work
+* I also tried the GNU version listed in those instructions. Training timing
+  is essentially the same and multithreading + MPI still doesn't work.
 
 ### 1. Build the environment
 
@@ -58,6 +53,11 @@ conda activate $graphufs
 pip install --upgrade jax==0.4.26 jaxlib==0.4.26+cuda12.cudnn89 -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 MPICC="cc -shared" CC=nvc CFLAGS="-noswitcherror" pip install --force --no-cache-dir --no-binary=mpi4py mpi4py
 ```
+
+Note that when built this way, `jaxlib` will not show up in any `conda list`
+calls.
+However, it will show up if you use `pip list`.
+Maybe this is because of the `+` sign, or something? IDK.
 
 ### 3. Install mpi4jax
 
