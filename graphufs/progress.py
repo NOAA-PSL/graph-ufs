@@ -5,6 +5,9 @@ import os
 class ProgressTracker:
     def __init__(self, json_file_path):
         self.json_file_path = json_file_path
+        dirname = os.path.dirname(json_file_path)
+        if not os.path.isdir(dirname):
+            os.makedirs(dirname)
         self.current_iteration = 0
         self.load_progress()
 
