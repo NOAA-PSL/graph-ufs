@@ -32,8 +32,6 @@ def read_test(gufs, num_tries=10):
         mode="training",
         chunks={"sample": 1, "lat":-1, "lon": -1, "channels":-1},
     )
-    training_data.inputs = training_data.inputs.isel(sample=slice(5000))
-    training_data.targets = training_data.targets.isel(sample=slice(5000))
     trainer = BatchLoader(
         training_data,
         batch_size=gufs.batch_size,

@@ -140,8 +140,7 @@ class P2PEvaluator(P2PTrainer):
     target_lead_time = [f"{n}h" for n in range(3, 3*8*10+1, 3)]
     sample_stride = 9
     evaluation_checkpoint_id = 64
-    num_gpus = 1
-
+    batch_size = 32
 
 tree_util.register_pytree_node(
     P2PTrainer,

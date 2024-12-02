@@ -6,7 +6,7 @@ import logging
 import xarray_tensorstore
 
 from .datasets import PackedDataset as BaseDataset
-from .batchloader import BatchLoader as BaseBatchLoader
+from .batchloader import BatchLoader as BaseBatchLoader, MPIBatchLoader as BaseMPIBatchLoader
 from .mpi import MPITopology, _has_mpi
 
 class PackedDataset(BaseDataset):
@@ -47,55 +47,21 @@ class BatchLoader(BaseBatchLoader):
         else:
             raise StopIteration
 
-class MPIBatchLoader(BaseBatchLoader):
-    """Make sure mpi4py and mpi4jax is installed
-    """
-    def __init__(
-        self,
-        dataset,
-        batch_size,
-        shuffle,
-        mpi_topo,
-        drop_last=True,
-        num_workers=0,
-        max_queue_size=1,
-        rng_seed=None,
-        sample_stride=None,
-        start=0,
-    ):
-        assert _has_mpi, f"MPIBatchLoader.__init__: Unable to import mpi4py or mpi4jax, cannot use this class"
-        assert num_workers==0, f"MPIBatchLoader.__init__: Currently cannot use multithreading with MPI"
 
-        self.topo = mpi_topo
-        super().__init__(
-            dataset=dataset,
-            batch_size=batch_size,
-            shuffle=shuffle,
-            drop_last=drop_last,
-            num_workers=num_workers,
-            max_queue_size=max_queue_size,
-            rng_seed=rng_seed,
-            sample_stride=sample_stride,
-            start=start,
-        )
-        assert rng_seed is not None, "MPIBatchLoader.__init__: need to set rng_seed in order for processes to be in sync without collectives"
+class ExpandedBatchLoader(BaseBatchLoader):
+    def _next_data(self):
 
-        self.data_per_device = batch_size // self.topo.size
-        self.local_batch_index = self.topo.rank*self.data_per_device
-        logging.info(str(self))
-        if self.data_per_device*self.topo.size != batch_size:
-            logging.warning(f"MPIBatchLoader.__init__: batch_size = {batch_size} not divisible by MPI Size = {self.topo.size}")
-            logging.warning(f"MPIBatchLoader.__init__: some data will be skipped in each batch")
+        if self.data_counter < len(self):
+            st = self.data_counter * self.batch_size
+            ed = st + self.batch_size
+            batch_indices = self.sample_indices[st:ed]
+            data = self.dataset.get_batch_of_xarrays(batch_indices)
+            return tuple(d.compute() for d in data)
+        else:
+            raise StopIteration
 
-    def __str__(self):
-        msg = "\ngraphufs.tensorstore.MPIBatchLoader\n" +\
-            "-----------------------------------\n" +\
-            f"{'mode':<18s}: {self.mode}\n"
 
-        for key in ["local_batch_index", "data_per_device", "batch_size"]:
-            msg += f"{key:<18s}: {getattr(self, key):02d}\n"
-        return msg
-
+class MPIBatchLoader(BaseMPIBatchLoader):
 
     def _next_data(self):
         if self.data_counter < len(self):
@@ -107,17 +73,5 @@ class MPIBatchLoader(BaseBatchLoader):
             x = np.vstack([xi.values[None] for xi in x])
             y = np.vstack([yi.values[None] for yi in y])
             return x, y
-        else:
-            raise StopIteration
-
-class ExpandedBatchLoader(BaseBatchLoader):
-    def _next_data(self):
-
-        if self.data_counter < len(self):
-            st = self.data_counter * self.batch_size
-            ed = st + self.batch_size
-            batch_indices = self.sample_indices[st:ed]
-            data = self.dataset.get_batch_of_xarrays(batch_indices)
-            return tuple(d.compute() for d in data)
         else:
             raise StopIteration
