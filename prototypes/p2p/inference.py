@@ -15,6 +15,7 @@ from graphufs.training import construct_wrapped_graphcast
 from graphufs.batchloader import MPIExpandedBatchLoader
 from graphufs.datasets import Dataset
 from graphufs.inference import swap_batch_time_dims, store_container
+from graphufs.mpi import MPITopology
 
 from config import P2PEvaluator as Emulator
 
@@ -37,7 +38,9 @@ def predict(
     def drop_state(fn):
         return lambda **kw: fn(**kw)[0]
 
+    logging.info("JIT Compiling Predict")
     gc = drop_state(with_params(jax.jit(run_forward.apply)))
+    logging.info("Done Compiling Predict")
 
     hours = int(emulator.forecast_duration.value / 1e9 / 3600)
     pname = f"{emulator.local_store_path}/inference/{batchloader.dataset.mode}/graphufs.{hours}h.zarr"
@@ -68,6 +71,7 @@ def predict(
                 for key, mapping in emulator.output_transforms.items():
                     with xr.set_options(keep_attrs=True):
                         predictions[key] = mapping(predictions[key])
+                        targets[key] = mapping(targets[key])
 
                 # subsample to 6 hours
                 predictions = predictions.isel(time=slice(1, None, 2))
@@ -79,15 +83,19 @@ def predict(
                 targets = swap_batch_time_dims(targets, inittimes)
 
                 # Store to zarr one batch at a time
-                if k == 0 and mpi_topo.is_root:
-                    store_container(pname, predictions, time=batchloader.initial_times)
-                    store_container(tname, targets, time=batchloader.initial_times)
-                mpi_topo.comm.Barrier()
+                if k == 0:
+                    if mpi_topo.is_root:
+                        store_container(pname, predictions, time=batchloader.initial_times, mode="w")
+                        store_container(tname, targets, time=batchloader.initial_times, mode="w")
+                    mpi_topo.comm.Barrier()
 
                 # Store to zarr
-                spatial_region = {k: slice(None, None) for k in predictions.dims if k != "time"}
+                spatial_region = {d: slice(None, None) for d in predictions.dims if d != "time"}
+                rank_idx = mpi_topo.rank*batchloader.data_per_device
+                st = k*batchloader.batch_size + rank_idx
+                ed = st + batchloader.data_per_device
                 region = {
-                    "time": slice(k*batchloader.batch_size, (k+1)*batchloader.batch_size),
+                    "time": slice(st, ed),
                     **spatial_region,
                 }
                 predictions.to_zarr(pname, region=region)
@@ -118,6 +126,7 @@ if __name__ == "__main__":
         sample_stride=emulator.sample_stride,
         mpi_topo=topo,
     )
+    assert validator.data_per_device == 1
 
     # setup weights
     logging.info(f"Reading weights ...")
@@ -133,3 +142,4 @@ if __name__ == "__main__":
     )
 
     validator.shutdown()
+    logging.info("Done running inference")

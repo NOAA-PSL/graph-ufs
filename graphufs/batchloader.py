@@ -361,9 +361,9 @@ class MPIExpandedBatchLoader(MPIBatchLoader):
             if len(batch_indices) > 0:
                 data = self.dataset.get_batch_of_xarrays(batch_indices)
                 return (d.load() for d in data)
-            elif self.drop_last:
+            elif len(batch_indices) == 0 and not self.drop_last:
                 return None, None, None
             else:
-                raise IndexError(f"{self.name}._next_data: looking for indices [{st}:{ed}], but len(sample_indices) = {len(self.sample_indices)}")
+                raise IndexError(f"[Rank {self.topo.rank}] {self.name}._next_data: looking for indices [{st}:{ed}], but len(sample_indices) = {len(self.sample_indices)}")
         else:
             raise StopIteration
