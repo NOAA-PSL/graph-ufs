@@ -9,7 +9,7 @@
 #SBATCH --qos=regular
 #SBATCH --account=m4718
 #SBATCH --constraint=cpu
-#SBATCH -t 08:00:00
+#SBATCH -t 03:00:00
 
 conda activate graphufs-cpu
 cd /global/common/software/m4718/timothys/graph-ufs/prototypes/p2p
