@@ -114,6 +114,38 @@ class NoAllEmulator(TP0Emulator):
 class NoAllTester(NoAllEmulator):
     target_lead_time = ["3h", "6h", "9h", "12h", "15h", "18h", "21h", "24h"]
 
+
+class NoClockEmulator(TP0Emulator):
+    input_variables = (
+        "pressfc",
+        "tmp2m",
+        "spfh2m",
+        "ugrd10m",
+        "vgrd10m",
+        "tmp",
+        "spfh",
+        "ugrd",
+        "vgrd",
+        "land_static",
+        "hgtsfc_static",
+        "dswrf_avetoa",
+        #"year_progress_sin",
+        #"year_progress_cos",
+        #"day_progress_sin",
+        #"day_progress_cos",
+    )
+    forcing_variables = (
+        "dswrf_avetoa",
+#        "year_progress_sin",
+#        "year_progress_cos",
+        #"day_progress_sin",
+        #"day_progress_cos",
+    )
+    local_store_path = f"{local_path}/output-no-clock"
+
+class NoClockTester(NoClockEmulator):
+    target_lead_time = [f"{x}h" for x in range(3, 49, 3)]
+
 tree_util.register_pytree_node(
     NoLandEmulator,
     NoLandEmulator._tree_flatten,
@@ -160,4 +192,16 @@ tree_util.register_pytree_node(
     NoAllTester,
     NoAllTester._tree_flatten,
     NoAllTester._tree_unflatten
+)
+
+tree_util.register_pytree_node(
+    NoClockEmulator,
+    NoClockEmulator._tree_flatten,
+    NoClockEmulator._tree_unflatten
+)
+
+tree_util.register_pytree_node(
+    NoClockTester,
+    NoClockTester._tree_flatten,
+    NoClockTester._tree_unflatten
 )
