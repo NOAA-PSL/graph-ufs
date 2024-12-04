@@ -12,7 +12,7 @@ from graphufs.log import setup_simple_log
 from graphufs.progress import ProgressTracker
 
 # in the future this could be generalized to where it just takes the following as inputs
-from config import P2PTrainer as Emulator
+from config import P2PUVTrainer as Emulator
 _n_jobs = 1
 _n_cpus = 256
 _qos = "regular"
@@ -90,7 +90,7 @@ def submit_slurm_job():
         f.write(txt)
 
     if _n_jobs > 1:
-        runstr = "`for i in {1.."+f"{_n_jobs}"+"}; do sbatch --job-name=p2p-preproc --dependency=singleton "+fname+"; done`"
+        runstr = "`for i in {1.."+f"{_n_jobs}"+"}; do sbatch --job-name=preproc --dependency=singleton "+fname+"; done`"
     else:
         runstr = f"sbatch {fname}"
     subprocess.run(runstr, shell=True)
