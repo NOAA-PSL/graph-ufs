@@ -77,6 +77,7 @@ def regrid_and_rename(xds, truth):
         is_gaussian=False,
     )
     if "lat_b" not in xds and "lon_b" not in xds:
+        logging.info(f"{__name__}.regrid_and_rename: did not find lat_b or lon_b in xds, computing bounds.")
         xds = get_bounds(xds, is_gaussian=True)
 
     regridder = xesmf.Regridder(
