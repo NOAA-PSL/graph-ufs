@@ -13,7 +13,7 @@ from graphufs.log import setup_simple_log
 from graphufs.postprocess import interp2pressure, regrid_and_rename, get_valid_initial_conditions
 from graphufs.fvemulator import fv_vertical_regrid
 
-from config import P2PEvaluator as Emulator
+from config import P3Evaluator as Emulator
 
 def open_predictions_and_truth(emulator):
 

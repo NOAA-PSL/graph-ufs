@@ -1,8 +1,8 @@
 #!/bin/bash
 
 #SBATCH -J preprocess
-#SBATCH -o /pscratch/sd/t/timothys/p2p/slurm/preprocess.%j.out
-#SBATCH -e /pscratch/sd/t/timothys/p2p/slurm/preprocess.%j.err
+#SBATCH -o /pscratch/sd/t/timothys/p3/nv-nc/slurm/preprocess.%j.out
+#SBATCH -e /pscratch/sd/t/timothys/p3/nv-nc/slurm/preprocess.%j.err
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=256

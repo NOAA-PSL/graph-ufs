@@ -16,8 +16,8 @@ from graphufs.optim import clipped_cosine_adamw
 from graphufs.utils import get_last_input_mapping
 
 from config import (
-    P2PTrainer as RemoteEmulator,
-    P2PPreprocessed as PackedEmulator,
+    P3Trainer as RemoteEmulator,
+    P3Preprocessed as PackedEmulator,
 )
 
 

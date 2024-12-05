@@ -17,7 +17,7 @@ from graphufs.datasets import Dataset
 from graphufs.inference import swap_batch_time_dims, store_container
 from graphufs.mpi import MPITopology
 
-from config import P2PEvaluator as Emulator
+from config import P3Evaluator as Emulator
 
 def predict(
     params,

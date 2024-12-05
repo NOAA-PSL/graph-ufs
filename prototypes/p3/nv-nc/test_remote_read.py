@@ -15,7 +15,7 @@ from graphufs.mpi import MPITopology
 
 from ufs2arco import Timer
 
-from config import P2PEvaluator as Emulator
+from config import P3Evaluator as Emulator
 from test_stacked_read import print_time
 
 def read_test(gufs, topo, num_tries=10):
