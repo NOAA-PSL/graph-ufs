@@ -17,7 +17,7 @@ def exp(xda):
 
 _scratch = "/pscratch/sd/t/timothys"
 
-class P2PUVTrainer(FVEmulator):
+class P3Trainer(FVEmulator):
 
     # paths
     data_url = "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.zarr"
@@ -26,7 +26,7 @@ class P2PUVTrainer(FVEmulator):
         "std": "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.fvstatistics.trop16.1993-2019/stddev_by_level.zarr",
         "stddiff": "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.fvstatistics.trop16.1993-2019/diffs_stddev_by_level.zarr",
     }
-    local_store_path = f"{_scratch}/p2puv"
+    local_store_path = f"{_scratch}/p3/uv-nc"
 
     # these could be moved to a yaml file later
     # task config options
@@ -123,7 +123,7 @@ class P2PUVTrainer(FVEmulator):
     num_workers = 0
 
 
-class P2PUVPreprocessed(P2PUVTrainer):
+class P3Preprocessed(P3Trainer):
     """The log transform has already been taken care of during preprocessing.
     This version operates on transformed (preprocessed) data, so needs no transforms.
     """
@@ -131,7 +131,7 @@ class P2PUVPreprocessed(P2PUVTrainer):
     output_transforms = None
 
 
-class P2PUVEvaluator(P2PUVTrainer):
+class P3Evaluator(P3Trainer):
     wb2_obs_url = "gs://weatherbench2/datasets/era5/1959-2023_01_10-6h-240x121_equiangular_with_poles_conservative.zarr"
     target_lead_time = [f"{n}h" for n in range(3, 3*8*10+1, 3)]
     sample_stride = 9
@@ -140,19 +140,19 @@ class P2PUVEvaluator(P2PUVTrainer):
 
 
 tree_util.register_pytree_node(
-    P2PUVTrainer,
-    P2PUVTrainer._tree_flatten,
-    P2PUVTrainer._tree_unflatten
+    P3Trainer,
+    P3Trainer._tree_flatten,
+    P3Trainer._tree_unflatten
 )
 
 tree_util.register_pytree_node(
-    P2PUVPreprocessed,
-    P2PUVPreprocessed._tree_flatten,
-    P2PUVPreprocessed._tree_unflatten
+    P3Preprocessed,
+    P3Preprocessed._tree_flatten,
+    P3Preprocessed._tree_unflatten
 )
 
 tree_util.register_pytree_node(
-    P2PUVEvaluator,
-    P2PUVEvaluator._tree_flatten,
-    P2PUVEvaluator._tree_unflatten
+    P3Evaluator,
+    P3Evaluator._tree_flatten,
+    P3Evaluator._tree_unflatten
 )

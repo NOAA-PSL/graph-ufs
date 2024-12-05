@@ -2,7 +2,7 @@
 
 # Note that we have to have pip install --no-deps weatherbench2 as in the README
 
-output_dir=/pscratch/sd/t/timothys/p2puv/inference/validation
+output_dir=/pscratch/sd/t/timothys/p3/uv-nc/inference/validation
 forecast_duration="240h"
 time_start="2022-01-01T00"
 time_stop="2023-10-13T03"

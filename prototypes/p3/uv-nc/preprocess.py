@@ -12,7 +12,7 @@ from graphufs.log import setup_simple_log
 from graphufs.progress import ProgressTracker
 
 # in the future this could be generalized to where it just takes the following as inputs
-from config import P2PUVTrainer as Emulator
+from config import P3Trainer as Emulator
 _n_jobs = 1
 _n_cpus = 256
 _qos = "regular"
