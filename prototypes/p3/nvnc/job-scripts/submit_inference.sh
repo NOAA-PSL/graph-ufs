@@ -14,4 +14,4 @@
 conda activate /global/common/software/m4718/timothys/graphufs
 
 cd /global/common/software/m4718/timothys/graph-ufs/prototypes/p3/nvnc
-srun ./select_gpu_device python inference.py
+srun $COMMON/select_gpu_device python inference.py

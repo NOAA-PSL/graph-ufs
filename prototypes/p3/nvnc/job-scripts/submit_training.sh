@@ -15,4 +15,4 @@ conda activate /global/common/software/m4718/timothys/graphufs
 export MPI4JAX_USE_CUDA_MPI=1
 
 cd /global/common/software/m4718/timothys/graph-ufs/prototypes/p3/nvnc
-srun ./select_gpu_device python train.py
+srun $COMMON/select_gpu_device python train.py
