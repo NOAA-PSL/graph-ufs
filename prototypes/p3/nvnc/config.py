@@ -22,11 +22,11 @@ class P3Trainer(FVEmulator):
     # paths
     data_url = "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.zarr"
     norm_urls = {
-        "mean": "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.fvstatistics.trop16.1993-2019/mean_by_level.zarr",
-        "std": "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.fvstatistics.trop16.1993-2019/stddev_by_level.zarr",
-        "stddiff": "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.fvstatistics.trop16.1993-2019/diffs_stddev_by_level.zarr",
+        "mean": "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.fvstatistics.p2p/mean_by_level.zarr",
+        "std": "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.fvstatistics.p2p/stddev_by_level.zarr",
+        "stddiff": "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.fvstatistics.p2p/diffs_stddev_by_level.zarr",
     }
-    local_store_path = f"{_scratch}/p3/uv-nc"
+    local_store_path = f"{_scratch}/p3/nvnc"
 
     # these could be moved to a yaml file later
     # task config options
@@ -68,7 +68,11 @@ class P3Trainer(FVEmulator):
     )
 
     # vertical grid
-    interfaces = tuple(x for x in range(200, 1001, 50))
+    interfaces = (
+        200, 240, 280, 320, 360,
+        470, 580, 690, 800,
+        825, 850, 875, 900, 925, 950, 975, 1000
+    )
 
     # time related
     delta_t = "3h"
@@ -137,7 +141,6 @@ class P3Evaluator(P3Trainer):
     sample_stride = 9
     evaluation_checkpoint_id = 64
     batch_size = 32
-
 
 tree_util.register_pytree_node(
     P3Trainer,

@@ -26,7 +26,7 @@ class P3Trainer(FVEmulator):
         "std": "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.fvstatistics.trop16.1993-2019/stddev_by_level.zarr",
         "stddiff": "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.fvstatistics.trop16.1993-2019/diffs_stddev_by_level.zarr",
     }
-    local_store_path = f"{_scratch}/p3/uv-wc"
+    local_store_path = f"{_scratch}/p3/uvwc"
 
     # these could be moved to a yaml file later
     # task config options

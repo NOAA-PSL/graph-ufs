@@ -22,11 +22,11 @@ class P3Trainer(FVEmulator):
     # paths
     data_url = "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.zarr"
     norm_urls = {
-        "mean": "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.fvstatistics.p2p/mean_by_level.zarr",
-        "std": "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.fvstatistics.p2p/stddev_by_level.zarr",
-        "stddiff": "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.fvstatistics.p2p/diffs_stddev_by_level.zarr",
+        "mean": "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.fvstatistics.trop16.1993-2019/mean_by_level.zarr",
+        "std": "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.fvstatistics.trop16.1993-2019/stddev_by_level.zarr",
+        "stddiff": "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.fvstatistics.trop16.1993-2019/diffs_stddev_by_level.zarr",
     }
-    local_store_path = f"{_scratch}/p3/nv-nc"
+    local_store_path = f"{_scratch}/p3/uvncbs32"
 
     # these could be moved to a yaml file later
     # task config options
@@ -68,11 +68,7 @@ class P3Trainer(FVEmulator):
     )
 
     # vertical grid
-    interfaces = (
-        200, 240, 280, 320, 360,
-        470, 580, 690, 800,
-        825, 850, 875, 900, 925, 950, 975, 1000
-    )
+    interfaces = tuple(x for x in range(200, 1001, 50))
 
     # time related
     delta_t = "3h"
@@ -92,8 +88,8 @@ class P3Trainer(FVEmulator):
     )
 
     # training protocol
-    batch_size = 16
-    num_epochs = 64
+    batch_size = 32
+    num_epochs = 128
 
     # model config options
     resolution = 1.0
@@ -139,8 +135,8 @@ class P3Evaluator(P3Trainer):
     wb2_obs_url = "gs://weatherbench2/datasets/era5/1959-2023_01_10-6h-240x121_equiangular_with_poles_conservative.zarr"
     target_lead_time = [f"{n}h" for n in range(3, 3*8*10+1, 3)]
     sample_stride = 9
-    evaluation_checkpoint_id = 64
-    batch_size = 32
+    evaluation_checkpoint_id = 128
+
 
 tree_util.register_pytree_node(
     P3Trainer,

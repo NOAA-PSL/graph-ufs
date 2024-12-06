@@ -26,7 +26,7 @@ class P3Trainer(FVEmulator):
         "std": "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.fvstatistics.trop16.1993-2019/stddev_by_level.zarr",
         "stddiff": "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.fvstatistics.trop16.1993-2019/diffs_stddev_by_level.zarr",
     }
-    local_store_path = f"{_scratch}/p3/uv-nc-bs32"
+    local_store_path = f"{_scratch}/p3/uvnc"
 
     # these could be moved to a yaml file later
     # task config options
@@ -88,8 +88,8 @@ class P3Trainer(FVEmulator):
     )
 
     # training protocol
-    batch_size = 32
-    num_epochs = 128
+    batch_size = 16
+    num_epochs = 64
 
     # model config options
     resolution = 1.0
@@ -135,7 +135,8 @@ class P3Evaluator(P3Trainer):
     wb2_obs_url = "gs://weatherbench2/datasets/era5/1959-2023_01_10-6h-240x121_equiangular_with_poles_conservative.zarr"
     target_lead_time = [f"{n}h" for n in range(3, 3*8*10+1, 3)]
     sample_stride = 9
-    evaluation_checkpoint_id = 128
+    evaluation_checkpoint_id = 64
+    batch_size = 32
 
 
 tree_util.register_pytree_node(
