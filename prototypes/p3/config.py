@@ -132,7 +132,7 @@ class BaseP3Trainer(FVEmulator):
 
 
 tree_util.register_pytree_node(
-    P3Trainer,
-    P3Trainer._tree_flatten,
-    P3Trainer._tree_unflatten
+    BaseP3Trainer,
+    BaseP3Trainer._tree_flatten,
+    BaseP3Trainer._tree_unflatten
 )

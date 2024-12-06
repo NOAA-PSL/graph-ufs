@@ -1,3 +1,4 @@
+from jax import tree_util
 from prototypes.p3.config import BaseP3Trainer, _scratch
 
 class P3Trainer(BaseP3Trainer):

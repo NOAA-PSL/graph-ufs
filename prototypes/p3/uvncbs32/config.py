@@ -1,3 +1,4 @@
+from jax import tree_util
 from prototypes.p3.uvnc.config import P3Trainer as UVNCP3Trainer, _scratch
 
 class P3Trainer(UVNCP3Trainer):
