@@ -352,6 +352,23 @@ class MPIBatchLoader(BatchLoader):
         else:
             raise StopIteration
 
+class MPIXBatchLoader(MPIBatchLoader):
+    def _next_data(self):
+        if self.data_counter < len(self):
+            st = (self.data_counter * self.batch_size) + self.local_batch_index
+            ed = st + self.data_per_device
+            batch_indices = self.sample_indices[st:ed]
+
+            if len(batch_indices) > 0:
+                x, y = self.dataset[batch_indices]
+                return x.load(), y.load()
+            elif len(batch_indices) == 0 and not self.drop_last:
+                return None, None
+            else:
+                raise IndexError(f"[Rank {self.topo.rank}] {self.name}._next_data: looking for indices [{st}:{ed}], but len(sample_indices) = {len(self.sample_indices)}")
+        else:
+            raise StopIteration
+
 class MPIExpandedBatchLoader(MPIBatchLoader):
     def _next_data(self):
         if self.data_counter < len(self):

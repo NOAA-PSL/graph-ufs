@@ -127,7 +127,7 @@ class Dataset():
                 dim="channels",
             )
         result = result.transpose("batch", "lat", "lon", "channels")
-        return result.squeeze()
+        return result
 
     def _open_dataset(self) -> xr.Dataset:
         """

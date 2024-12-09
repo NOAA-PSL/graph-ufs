@@ -1,3 +1,4 @@
+from mpi4py import MPI
 import time
 import logging
 import os
@@ -6,26 +7,32 @@ import subprocess
 import numpy as np
 import dask
 
-from graphufs.batchloader import XBatchLoader
+from graphufs.batchloader import XBatchLoader, MPIXBatchLoader
 from graphufs.datasets import Dataset
 from graphufs.log import setup_simple_log
 from graphufs.progress import ProgressTracker
+from graphufs.mpi import MPITopology
 
 # in the future this could be generalized to where it just takes the following as inputs
-from config import P3Trainer as Emulator
+from config import P3Preprocessor as Emulator
 _n_jobs = 1
-_n_cpus = 256
+_n_tasks = Emulator.batch_size
+_n_cpus_per_task = 256 // _n_tasks
 _qos = "regular"
-_walltime = "36:00:00"
+_walltime = "06:00:00"
 _input_channel_chunks =  17
 _target_channel_chunks = 17
 
 def setup(mode, level=logging.INFO):
 
-    setup_simple_log(level=level)
-
+    log_dir = f"{Emulator.local_store_path}/logs/preprocessing-{mode}"
+    topo = MPITopology(log_dir=log_dir)
     emulator = Emulator()
-    pt = ProgressTracker(json_file_path=f"{emulator.local_store_path}/logs/preprocessing/progress.{mode}.json")
+    if topo.is_root:
+        pt = ProgressTracker(json_file_path=f"{log_dir}/restart.{topo.rank:02d}.{topo.size:02d}.json")
+    topo.comm.barrier()
+    if not topo.is_root:
+        pt = ProgressTracker(json_file_path=f"{log_dir}/restart.{topo.rank:02d}.{topo.size:02d}.json")
     start = pt.get_current_iteration()
     tds = Dataset(
         emulator,
@@ -44,16 +51,16 @@ def setup(mode, level=logging.INFO):
             "channels": _target_channel_chunks,
         },
     )
-    loader = XBatchLoader(
+    loader = MPIXBatchLoader(
         tds,
         batch_size=emulator.batch_size,
         shuffle=False,
         drop_last=False,
-        num_workers=1,
+        num_workers=0,
         max_queue_size=1,
         start=start,
+        mpi_topo=topo,
     )
-    dask.config.set(scheduler="threads", num_workers=emulator.dask_threads)
     return emulator, tds, loader, pt
 
 
@@ -70,8 +77,8 @@ def submit_slurm_job():
         f"#SBATCH -o {slurm_dir}/preprocess.%j.out\n"+\
         f"#SBATCH -e {slurm_dir}/preprocess.%j.err\n"+\
         f"#SBATCH --nodes=1\n"+\
-        f"#SBATCH --ntasks=1\n"+\
-        f"#SBATCH --cpus-per-task={_n_cpus}\n"+\
+        f"#SBATCH --ntasks={_n_tasks}\n"+\
+        f"#SBATCH --cpus-per-task={_n_cpus_per_task}\n"+\
         f"#SBATCH --qos={_qos}\n"+\
         f"#SBATCH --account=m4718\n"+\
         f"#SBATCH --constraint=cpu\n"+\
@@ -109,22 +116,23 @@ def store_batch_of_samples(mode):
 
         inputs, targets = next(loader)
 
-        inputs = inputs.rename({"batch": "sample"}).chunk(tds.input_chunks)
-        targets = targets.rename({"batch": "sample"}).chunk(tds.target_chunks)
+        if inputs is not None:
+            inputs = inputs.rename({"batch": "sample"}).chunk(tds.input_chunks)
+            targets = targets.rename({"batch": "sample"}).chunk(tds.target_chunks)
 
-        idx0 = int(inputs.sample.isel(sample=0))
-        idx1 = int(inputs.sample.isel(sample=-1))
-        logging.info(f" ... storing sample indices {idx0} - {idx1}")
-        spatial_region = {k : slice(None, None) for k in inputs.dims if k != "sample"}
-        region = {"sample": slice(idx0, idx1+1), **spatial_region}
+            idx0 = int(inputs.sample.isel(sample=0))
+            idx1 = int(inputs.sample.isel(sample=-1))
+            logging.info(f" ... storing sample indices {idx0} - {idx1}")
+            spatial_region = {k : slice(None, None) for k in inputs.dims if k != "sample"}
+            region = {"sample": slice(idx0, idx1+1), **spatial_region}
 
-        for name, xda, path in zip(
-            ["inputs", "targets"],
-            [inputs, targets],
-            [tds.local_inputs_path, tds.local_targets_path],
-        ):
+            for name, xda, path in zip(
+                ["inputs", "targets"],
+                [inputs, targets],
+                [tds.local_inputs_path, tds.local_targets_path],
+            ):
 
-            xda.to_dataset(name=name).to_zarr(path, region=region)
+                xda.to_dataset(name=name).to_zarr(path, region=region)
 
         if idx % 10 == 0:
             logging.info(f"Done with batch {idx} / {len(loader)}")

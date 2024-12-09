@@ -5,6 +5,10 @@ class P3Trainer(BaseP3Trainer):
 
     local_store_path = f"{_scratch}/p3/uvwc"
 
+class P3Preprocessor(P3Trainer):
+
+    batch_size = 64
+
 class P3Preprocessed(P3Trainer):
     """The log transform has already been taken care of during preprocessing.
     This version operates on transformed (preprocessed) data, so needs no transforms.
@@ -24,6 +28,12 @@ tree_util.register_pytree_node(
     P3Trainer,
     P3Trainer._tree_flatten,
     P3Trainer._tree_unflatten
+)
+
+tree_util.register_pytree_node(
+    P3Preprocessor,
+    P3Preprocessor._tree_flatten,
+    P3Preprocessor._tree_unflatten
 )
 
 tree_util.register_pytree_node(
