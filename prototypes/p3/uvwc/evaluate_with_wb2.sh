@@ -3,6 +3,7 @@
 # Note that we have to have pip install --no-deps weatherbench2 as in the README
 
 output_dir=/pscratch/sd/t/timothys/p3/uvwc/inference/validation
+wb2_dir=$COMMON/graph-ufs/weatherbench2
 forecast_duration="240h"
 time_start="2022-01-01T00"
 time_stop="2023-10-13T03"
@@ -12,7 +13,7 @@ level_variables="temperature,specific_humidity,u_component_of_wind,v_component_o
 diagnosed_variables="geopotential"
 
 levels=250,500,850
-native_levels='219.70920818626882,522.3855561923981,837.2170284748076,862.1290821838379,987.791875834465'
+native_levels='226.08772546708585,522.5402821445465,825.8226804542542,874.7199656200409,974.296663646698'
 
 truth_names=("era5" "hres_analysis")
 truth_paths=( \
@@ -40,7 +41,7 @@ do
         truth_path=${truth_paths[i]}
 
         echo "Evaluating ${dataset} against ${truth_name} ..."
-        python ../../weatherbench2/scripts/evaluate.py \
+        python ${wb2_dir}/scripts/evaluate.py \
           --forecast_path=${forecast_path} \
           --obs_path=${truth_path} \
           --climatology_path=gs://weatherbench2/datasets/era5-hourly-climatology/1990-2019_6h_240x121_equiangular_with_poles_conservative.zarr \
@@ -60,7 +61,7 @@ do
 
     if [[ ${dataset} == "graphufs" ]]; then
         echo "Computing spectra for ${dataset} ..."
-        python ../../weatherbench2/scripts/compute_zonal_energy_spectrum.py \
+        python ${wb2_dir}/scripts/compute_zonal_energy_spectrum.py \
           --input_path=${native_forecast_path} \
           --output_path=${output_dir}/${dataset}.${forecast_duration}.spectra.zarr \
           --base_variables="${surface_variables},${level_variables}" \
@@ -75,7 +76,7 @@ done
 
 # evaluate native against replay
 echo "Comparing GraphUFS vs Replay"
-python ../../weatherbench2/scripts/evaluate.py \
+python ${wb2_dir}/scripts/evaluate.py \
   --forecast_path=${output_dir}/graphufs.${forecast_duration}.zarr \
   --obs_path=${output_dir}/replay.vertical_regrid.zarr \
   --by_init=True \

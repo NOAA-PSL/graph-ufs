@@ -51,7 +51,7 @@ def open_predictions_and_truth(emulator):
     gds = gds.sel(time=t0)
     return gds, truth
 
-def open_targets(emulator, predictions):
+def open_targets(emulator, predictions, truth):
     rds = emulator.open_dataset()
     keep_vars = list(predictions.keys()) + ["geopotential", "delz"]
     rds = rds[keep_vars]
@@ -71,7 +71,7 @@ def open_targets(emulator, predictions):
     logging.info(f"Done writing Replay")
     return rds
 
-def postproc(xds, truth, name, plevels=(250, 500, 850)):
+def postproc(emulator, xds, truth, name, plevels=(250, 500, 850)):
 
     pds = interp2pressure(
         xds,
@@ -84,6 +84,7 @@ def postproc(xds, truth, name, plevels=(250, 500, 850)):
     pds = regrid_and_rename(pds, truth)
     logging.info(f"Done forming regridding operations...")
 
+    duration = emulator.target_lead_time[-1]
     path = f"{emulator.local_store_path}/inference/validation/{name}.{duration}.postprocessed.zarr"
     pds.to_zarr(path)
     logging.info(f"Done writing to {path}")
@@ -95,18 +96,18 @@ def main(Emulator):
     emulator = Emulator()
     dask.config.set(scheduler="threads", num_workers=64)
 
-    duration = emulator.target_lead_time[-1]
+
     logging.info("Opening Predictions")
     gds, truth = open_predictions_and_truth(emulator)
 
     logging.info("Postprocessing Predictions")
-    postproc(gds, truth, name="graphufs")
+    postproc(emulator, gds, truth, name="graphufs")
     logging.info("Done postprocessing predictions")
 
     logging.info("Opening Replay")
-    rds = open_targets(emulator, gds)
+    rds = open_targets(emulator, gds, truth)
 
     logging.info("Postprocessing Replay")
-    postproc(rds, truth, name="replay")
+    postproc(emulator, rds, truth, name="replay")
 
     logging.info("Done with all postprocessing")
