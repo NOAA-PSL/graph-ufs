@@ -18,7 +18,11 @@ if __name__ == "__main__":
 
     for ykey, label, ax in zip(["loss_avg", "loss_valid"], ["Training Loss", "Validation Loss"], axs):
         for key, xds in dsdict.items():
-            xds[ykey].plot(ax=ax, label=key)
+            plotme = xds[ykey]
+            if len(plotme) == 128:
+                ax.plot(plotme.epoch / 2, plotme, label=key)
+            else:
+                plotme.plot(ax=ax, label=key)
 
         ax.set(
             xlabel="Epoch",
