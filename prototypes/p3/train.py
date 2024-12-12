@@ -15,12 +15,6 @@ from graphufs.stacked_mpi_training import (
 from graphufs.optim import clipped_cosine_adamw
 from graphufs.utils import get_last_input_mapping
 
-from config import (
-    P3Trainer as RemoteEmulator,
-    P3Preprocessed as PackedEmulator,
-)
-
-
 def train(RemoteEmulator, PackedEmulator):
 
     # initial setup

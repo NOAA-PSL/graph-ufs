@@ -6,7 +6,7 @@ def worker(thread_id):
 
 # Request thread support (using THREAD_MULTIPLE for full support)
 required_level = MPI.THREAD_MULTIPLE
-provided_level = MPI.Init_thread(required_level)
+provided_level = MPI.Query_thread()
 
 if provided_level < required_level:
     print("Requested threading level not available!")
@@ -28,6 +28,17 @@ comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 print(f"Process {rank} is done with MPI operations.")
 
+# Now, create threads
+threads = []
+for i in range(4):
+    t = threading.Thread(target=worker, args=(i,))
+    threads.append(t)
+    t.start()
+
+for t in threads:
+    t.join()
+
+print(f"Process {rank} is done with thread operations.")
 # Finalize MPI once at the end
 MPI.Finalize()
 

@@ -23,6 +23,8 @@ class MPITopology():
     def __init__(self, log_dir=None, log_level=logging.INFO):
 
         assert _has_mpi, f"MPITopology.__init__: Unable to import mpi4py or mpi4jax, cannot use this class"
+        self.required_level = MPI.THREAD_MULTIPLE
+        self.provided_level = MPI.Query_thread()
         self.comm = MPI.COMM_WORLD
         self.rank = self.comm.Get_rank()
         self.size = self.comm.Get_size()
@@ -52,6 +54,9 @@ class MPITopology():
         msg += f"{'local_devices':<18s}: {str(self.local_devices)}\n" +\
             f"{'rank_device':<18s}: {str(self.rank_device)}\n" +\
             f"{'pid':<18s}: {self.pid}\n"
+        msg += "Thread Support\n"+\
+            f"{'required_level':<18s}: {self.required_level}\n" +\
+            f"{'provided_level':<18s}: {self.provided_level}\n"
         return msg
 
     def _init_log(self, log_dir, level=logging.INFO):

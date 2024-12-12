@@ -17,7 +17,7 @@ def exp(xda):
 
 _scratch = "/pscratch/sd/t/timothys"
 
-class BaseP3Trainer(FVEmulator):
+class P3Trainer(FVEmulator):
 
     # paths
     data_url = "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.zarr"
@@ -26,7 +26,7 @@ class BaseP3Trainer(FVEmulator):
         "std": "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.fvstatistics.trop16.1993-2019/stddev_by_level.zarr",
         "stddiff": "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.fvstatistics.trop16.1993-2019/diffs_stddev_by_level.zarr",
     }
-    local_store_path = None
+    local_store_path = f"{_scratch}/p3/uvwc-threadtest"
 
     # these could be moved to a yaml file later
     # task config options
@@ -130,9 +130,22 @@ class BaseP3Trainer(FVEmulator):
     max_queue_size = 1
     num_workers = 1
 
+class P3Preprocessed(P3Trainer):
+    """The log transform has already been taken care of during preprocessing.
+    This version operates on transformed (preprocessed) data, so needs no transforms.
+    """
+    input_transforms = None
+    output_transforms = None
+
 
 tree_util.register_pytree_node(
-    BaseP3Trainer,
-    BaseP3Trainer._tree_flatten,
-    BaseP3Trainer._tree_unflatten
+    P3Trainer,
+    P3Trainer._tree_flatten,
+    P3Trainer._tree_unflatten
+)
+
+tree_util.register_pytree_node(
+    P3Preprocessed,
+    P3Preprocessed._tree_flatten,
+    P3Preprocessed._tree_unflatten
 )

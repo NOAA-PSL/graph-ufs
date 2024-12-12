@@ -304,9 +304,10 @@ class MPIBatchLoader(BatchLoader):
         start=0,
     ):
         assert _has_mpi, f"{self.name}.__init__: Unable to import mpi4py or mpi4jax, cannot use this class"
-        assert num_workers==0, f"{self.name}.__init__: Currently cannot use multithreading with MPI"
 
         self.topo = mpi_topo
+        self.data_per_device = batch_size // self.topo.size
+        self.local_batch_index = self.topo.rank*self.data_per_device
         super().__init__(
             dataset=dataset,
             batch_size=batch_size,
@@ -318,12 +319,10 @@ class MPIBatchLoader(BatchLoader):
             sample_stride=sample_stride,
             start=start,
         )
+        logging.info(str(self))
         if shuffle:
             assert rng_seed is not None, f"{self.name}.__init__: need to set rng_seed in order for processes to be in sync without collectives"
 
-        self.data_per_device = batch_size // self.topo.size
-        self.local_batch_index = self.topo.rank*self.data_per_device
-        logging.info(str(self))
         if self.data_per_device*self.topo.size != batch_size:
             logging.warning(f"{self.name}.__init__: batch_size = {batch_size} not divisible by MPI Size = {self.topo.size}")
             logging.warning(f"{self.name}.__init__: some data will be skipped in each batch")
