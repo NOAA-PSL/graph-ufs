@@ -22,8 +22,9 @@ truth_paths=( \
 )
 rename_variables='{"pressfc":"surface_pressure","ugrd10m":"10m_u_component_of_wind","vgrd10m":"10m_v_component_of_wind","tmp2m":"2m_temperature","tmp":"temperature","ugrd":"u_component_of_wind","vgrd":"v_component_of_wind","dzdt":"vertical_velocity","spfh":"specific_humidity","spfh2m":"2m_specific_humidity","lat":"latitude","lon":"longitude"}'
 
+
 # Standard WB2 deterministic evaluation
-for dataset in "graphufs" "replay"
+for dataset in "graphufs"
 do
 
     forecast_path=${output_dir}/${dataset}.${forecast_duration}.postprocessed.zarr

@@ -61,7 +61,7 @@ def open_targets(emulator, predictions, truth):
     rds = rds.sel(time=time)
 
     # Now FV vertical
-    rds = fv_vertical_regrid(rds, interfaces=list(emulator.interfaces))
+    rds = fv_vertical_regrid(rds, interfaces=list(emulator.interfaces), keep_delz=True)
     rds = rds.rename({"pfull": "level", "grid_xt": "lon", "grid_yt": "lat"})
 
     # Store this as is
