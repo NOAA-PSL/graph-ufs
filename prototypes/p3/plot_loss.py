@@ -10,8 +10,8 @@ if __name__ == "__main__":
     plt.style.use("graphufs.plotstyle")
 
     dsdict = {
-        key: xr.load_dataset(f"/pscratch/sd/t/timothys/p3/{key}/loss.nc")
-        for key in ["uvwc", "uvnc", "uvncbs32", "nvnc"]
+        key: xr.load_dataset(f"/global/cfs/cdirs/m4718/timothys/p3/{key}/loss.nc")
+        for key in ["uvwc", "uvnc", "uvncbs32", "nvnc", "uvwcsic"]
     }
 
     fig, axs = plt.subplots(1, 2, figsize=(8,4), constrained_layout=True, sharey=True)
