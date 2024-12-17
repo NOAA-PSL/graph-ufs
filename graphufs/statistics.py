@@ -21,7 +21,6 @@ class StatisticsComputer:
         to_zarr_kwargs (dict): Keyword arguments for saving to zarr.
         load_full_dataset (bool): Whether to load the full dataset.
     """
-
     dims = ("time", "grid_yt", "grid_xt")
 
     @property
@@ -32,6 +31,7 @@ class StatisticsComputer:
         self,
         path_in: str,
         path_out: str,
+        comp: str = "atm",
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         time_skip: Optional[int] = None,
@@ -55,12 +55,21 @@ class StatisticsComputer:
         """
         self.path_in = path_in
         self.path_out = path_out
+        self.comp = comp
         self.start_date = start_date
         self.end_date = end_date
         self.time_skip = time_skip
         self.open_zarr_kwargs = open_zarr_kwargs if open_zarr_kwargs is not None else dict()
         self.to_zarr_kwargs = to_zarr_kwargs if to_zarr_kwargs is not None else dict()
         self.load_full_dataset = load_full_dataset
+        if self.comp.lower() == "atm".lower():
+            self.delta_t = f"{self.time_skip*3} hour" if self.time_skip is not None else "3 hour"
+            self.dims = ("time", "grid_yt", "grid_xt")
+        elif self.comp.lower() == "ocean".lower():
+            self.delta_t = f"{self.time_skip*6} hour" if self.time_skip is not None else "6 hour"
+            self.dims = ("time", "lat", "lon")
+        else:
+            raise ValueError("component can only be atm or ocean")
         self.transforms = transforms
 
         self.delta_t = f"{self.time_skip*3} hour" if self.time_skip is not None else "3 hour"
@@ -283,7 +292,7 @@ class StatisticsComputer:
 
 def add_derived_vars(
     xds: xr.Dataset,
-
+    component: str = "atm",
     compute_tisr: Optional[bool]=False,
     **tisr_kwargs,
 ) -> xr.Dataset:
@@ -303,15 +312,22 @@ def add_derived_vars(
         xds (xr.Dataset): with added variables
     """
     with xr.set_options(keep_attrs=True):
-        xds = xds.rename({"time": "datetime", "grid_xt": "lon", "grid_yt": "lat", "pfull": "level"})
-        data_utils.add_derived_vars(xds)
-        if compute_tisr:
-            logging.info(f"Computing {data_utils.TISR}")
-            xds[data_utils.TISR] = solar_radiation.get_toa_incident_solar_radiation_for_xarray(
-                xds,
-                **tisr_kwargs
-            )
-        xds = xds.rename({"datetime": "time", "lon": "grid_xt", "lat": "grid_yt", "level": "pfull"})
+        if component.lower() == "atm".lower():
+            xds = xds.rename({"time": "datetime", "grid_xt": "lon", "grid_yt": "lat", "pfull": "level"})
+            data_utils.add_derived_vars(xds)
+            if compute_tisr:
+                logging.info(f"Computing {data_utils.TISR}")
+                xds[data_utils.TISR] = solar_radiation.get_toa_incident_solar_radiation_for_xarray(
+                    xds,
+                    **tisr_kwargs
+                )
+            xds = xds.rename({"datetime": "time", "lon": "grid_xt", "lat": "grid_yt", "level": "pfull"})
+
+        elif component.lower() == "ocean".lower():
+            xds = xds.rename({"time": "datetime"})
+            data_utils.add_derived_vars(xds)
+            xds = xds.rename({"datetime": "time"})
+
     return xds
 
 def add_transformed_vars(

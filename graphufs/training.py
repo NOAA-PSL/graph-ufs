@@ -150,6 +150,7 @@ def optimize(
     emulator,
     training_data,
     validation_data,
+    per_variable_weights,
     opt_state=None,
     compute_mean_grad=False,
 ):
@@ -177,7 +178,7 @@ def optimize(
     @hk.transform_with_state
     def loss_fn(emulator, inputs, targets, forcings):
         predictor = construct_wrapped_graphcast(emulator)
-        loss, diagnostics = predictor.loss(inputs, targets, forcings)
+        loss, diagnostics = predictor.loss(inputs, targets, forcings, per_variable_weights)
         return map_structure(
             lambda x: unwrap_data(x.mean(), require_jax=True), (loss, diagnostics)
         )
@@ -430,7 +431,7 @@ def optimize(
             break
 
         # The purpose of the following code is best described as confusing
-        # the jix.jat cache system. We start from a deepcopy of slice 0 where the jitting
+        # the jax.jit cache system. We start from a deepcopy of slice 0 where the jitting
         # is carried out, and sneakly update its values. If you use xarray update/copy etc
         # the cache system somehow notices, and either becomes slow or messes up the result
         # Copying variable values individually avoids both, fast and produces same results as before
@@ -632,6 +633,40 @@ def predict(
             targets_template=t_batches,
             forcings=f_batches,
         )
+
+        # postprocess predictions the same way as done during training
+        for var in predictions:
+            if "landsea_mask" in i_batches:
+                landseamask = i_batches["landsea_mask"]
+                if "z_l" in predictions[var].dims:
+                    predictions[var] = predictions[var]*landseamask
+
+                elif var.lower() == "SSH".lower():
+                    predictions[var] = predictions[var]*landseamask.isel(z_l=0)
+
+                elif var.lower() == "land".lower():
+                    predictions[var]= predictions[var].round()
+
+                elif var.startswith("ice"):
+                    if "land" in predictions:
+                        mask = predictions["land"].round()
+                        icemask = xarray.where(mask==2, 1, 0) # ice=2 in the mask
+                        predictions[var] = predictions[var]*icemask
+                    else:
+                        predictions[var] = predictions[var]*landseamask.isel(z_l=0)
+
+                elif var.startswith("soil"):
+                    if "land" in predictions:
+                        mask = predictions["land"].round()
+                        landmask = xarray.where(mask==1, 1, 0) # land=1 in the mask
+                        predictions[var] = predictions[var]*landmask
+                    # Below is supposed to work, but the static landsea mask omits a few land
+                    # locations and treats them as ocean. This leads to huge errors in the soilm
+                    # which has significantly high values in those locations. It is therefore wiser
+                    # to not exclude anything at all rather than excluding a few but important locs.
+                    #else:
+                    #    landmask = 1 - landseamask.isel(z_l=0)
+                    #    predictions[var] = predictions[var]*landmask
 
         all_predictions.append(predictions)
 

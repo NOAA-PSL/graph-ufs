@@ -11,6 +11,8 @@ except ImportError:
     _has_xesmf = False
     warnings.warn("graphufs.evaluation: could not import xesmf")
 
+from .emulator import ReplayEmulator
+from .coupledemulator import ReplayCoupledEmulator
 
 def convert_wb2_format(gufs, ds, inittimes) -> xr.Dataset:
     """Convert a dataset into weatherbench2 compatible format. Details can be
@@ -63,7 +65,13 @@ def convert_wb2_format(gufs, ds, inittimes) -> xr.Dataset:
     ds_out = ds_out.rename_vars(rename_dict)
 
     # fix pressure levels to match obs
-    ds_out["level"] = np.array(list(gufs.pressure_levels), dtype=np.float32)
+    if isinstance(gufs, ReplayEmulator):
+        levels = list(gufs.pressure_levels)
+    elif isinstance(gufs, ReplayCoupledEmulator):
+        levels = list(gufs.atm_pressure_levels)
+    else:
+        raise NotImplementedError
+    ds_out["level"] = np.array(levels, dtype=np.float32)
 
     # remove batch dimension
     ds_out = ds_out.rename({"optim_step": "o", "time": "t", "batch": "b"})
