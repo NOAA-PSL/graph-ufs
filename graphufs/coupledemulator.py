@@ -15,7 +15,6 @@ from jax import tree_util
 from ufs2arco.regrid.ufsregridder import UFSRegridder
 from graphcast import checkpoint
 from graphcast.graphcast import ModelConfig, TaskConfig, CheckPoint
-from graphcast.data_utils import extract_inputs_targets_forcings_coupled
 from graphcast import data_utils
 from graphcast.model_utils import dataset_to_stacked
 from graphcast.losses import normalized_level_weights, normalized_latitude_weights
@@ -144,8 +143,8 @@ class ReplayCoupledEmulator:
         "soilm"         : 0.1,
     }
     loss_weights_per_variable = {}
-    loss_weights_per_variable.update(atm_loss_weights_per_variable) 
-    loss_weights_per_variable.update(ocn_loss_weights_per_variable) 
+    loss_weights_per_variable.update(atm_loss_weights_per_variable)
+    loss_weights_per_variable.update(ocn_loss_weights_per_variable)
     loss_weights_per_variable.update(ice_loss_weights_per_variable)
     loss_weights_per_variable.update(land_loss_weights_per_variable)
     input_transforms = None
@@ -165,14 +164,14 @@ class ReplayCoupledEmulator:
 
         if self.local_store_path is None:
             warnings.warn("ReplayCoupledEmulator.__init__: no local_store_path set, data will always be accessed remotely. Proceed with patience.")
-        
+
         # make sure target_variables is a subset of input_variables
         if any(x not in self.atm_input_variables for x in self.atm_target_variables):
             raise NotImplementedError(f"GraphUFS cannot predict atm target variables that are not also inputs")
-        
+
         if any(x not in self.ocn_input_variables for x in self.ocn_target_variables):
             raise NotImplementedError(f"GraphUFS cannot predict ocn target variables that are not also inputs")
-       
+
         if any(x not in self.ice_input_variables for x in self.ice_target_variables):
             raise NotImplementedError(f"GraphUFS cannot predict ice target variables that are not also inputs")
 
@@ -247,7 +246,7 @@ class ReplayCoupledEmulator:
                     self.target_variables +
                     self.forcing_variables)
             )
-        
+
         # convert some types
         self.delta_t = pd.Timedelta(self.delta_t)
         self.input_duration = pd.Timedelta(self.input_duration)
@@ -316,11 +315,11 @@ class ReplayCoupledEmulator:
     def open_atm_dataset(self, **kwargs):
         xds = xr.open_zarr(self.data_url["atm"], storage_options={"token": "anon"}, **kwargs)
         return xds
-    
+
     def open_ocn_dataset(self, **kwargs):
         xds = xr.open_zarr(self.data_url["ocn"], storage_options={"token": "anon"}, **kwargs)
         return xds
-    
+
     def open_ice_dataset(self, **kwargs):
         xds = xr.open_zarr(self.data_url["ice"], storage_options={"token": "anon"}, **kwargs)
         return xds
@@ -389,7 +388,7 @@ class ReplayCoupledEmulator:
 
         if new_time is not None:
             xds = xds.sel(time=new_time)
-        
+
         # mask nans in ocean target variables
         if es_comp.lower() == "ocn".lower() or es_comp.lower() == "ice" or es_comp.lower() == "land":
             xds = xds.fillna(0)
@@ -493,7 +492,7 @@ class ReplayCoupledEmulator:
                 # land
                 missing_xds_land = self.open_land_dataset()
                 missing_xds_land = self.subsample_dataset(missing_xds_land, new_time=list(missing_dates), es_comp="land")
-                
+
                 missing_xds = xr.merge([missing_xds_atm, missing_xds_ocn, missing_xds_ice, missing_xds_land])
                 missing_xds.to_zarr(self.local_data_path, append_dim="time")
                 # now that the data on disk is complete, reopen the dataset from disk
@@ -582,7 +581,7 @@ class ReplayCoupledEmulator:
         # split dataset into chunks
         n_chunks = self.chunks_per_epoch
         has_preprocessed = False
-        
+
         if self.use_preprocessed:
             # chunks zarr datasets
             xds_chunks = {
@@ -659,7 +658,7 @@ class ReplayCoupledEmulator:
                         continue
                     else:
                         logging.debug(f"\nOpening {mode} chunk {chunk_id} from scratch.")
-                
+
                 # chunk start and end times
                 new_time = all_new_time_chunks[chunk_id]
                 start = new_time[0]
@@ -752,7 +751,7 @@ class ReplayCoupledEmulator:
                         xds.sel(datetime=timestamps_in_this_forecast),
                         batch_index=b,
                     )
-                    this_input, this_target, this_forcing = extract_inputs_targets_forcings_coupled(
+                    this_input, this_target, this_forcing = data_utils.extract_inputs_targets_forcings_coupled(
                         batch,
                         **self.extract_kwargs,
                     )
@@ -830,7 +829,7 @@ class ReplayCoupledEmulator:
                 vars_ocn = list(x for x in self.all_variables if x in xds_ocn)
                 vars_ice = list(x for x in self.all_variables if x in xds_ice)
                 vars_land = list(x for x in self.all_variables if x in xds_land)
-                
+
                 # keep attributes in order to distinguish static from time varying components
                 with xr.set_options(keep_attrs=True):
 
@@ -1023,7 +1022,7 @@ class ReplayCoupledEmulator:
             with open(z_l_path, "r") as f:
                 z_l = yaml.safe_load(f)["z_l"]
             return xr.DataArray(z_l, coords={"z_l": z_l}, dims="z_l")
-        
+
         else:
             raise ValueError("only atm and ocn are supported in 3D")
 
@@ -1101,7 +1100,7 @@ class ReplayCoupledEmulator:
                 license="Public domain",
             )
             checkpoint.dump(f, ckpt)
-        
+
         # Check the total number of trainable parameters in this checkpoint
         print("Total number of trainable parameters:", get_num_params(ckpt))
 
