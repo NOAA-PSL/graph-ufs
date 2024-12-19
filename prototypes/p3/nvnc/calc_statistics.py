@@ -7,7 +7,7 @@ import xarray as xr
 from graphufs.log import setup_simple_log
 from graphufs.fvstatistics import FVStatisticsComputer
 
-from config import P3Trainer as Emulator
+from config import P2PTrainer as Emulator
 
 
 def submit_slurm_job(varname, partition="compute", n_cpus=30):

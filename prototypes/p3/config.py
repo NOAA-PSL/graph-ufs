@@ -17,7 +17,7 @@ def exp(xda):
 
 _scratch = "/pscratch/sd/t/timothys"
 
-class BaseP3Trainer(FVEmulator):
+class BaseP2PTrainer(FVEmulator):
 
     # paths
     data_url = "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.zarr"
@@ -132,7 +132,7 @@ class BaseP3Trainer(FVEmulator):
 
 
 tree_util.register_pytree_node(
-    BaseP3Trainer,
-    BaseP3Trainer._tree_flatten,
-    BaseP3Trainer._tree_unflatten
+    BaseP2PTrainer,
+    BaseP2PTrainer._tree_flatten,
+    BaseP2PTrainer._tree_unflatten
 )

@@ -10,7 +10,7 @@ if __name__ == "__main__":
     plt.style.use("graphufs.plotstyle")
 
     dsdict = {
-        key: xr.load_dataset(f"/global/cfs/cdirs/m4718/timothys/p3/{key}/loss.nc")
+        key: xr.load_dataset(f"/global/cfs/cdirs/m4718/timothys/p2p/{key}/loss.nc")
         for key in ["uvwc", "uvnc", "uvncbs32", "nvnc", "uvwcsic"]
     }
 

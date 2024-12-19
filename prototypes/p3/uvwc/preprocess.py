@@ -14,7 +14,7 @@ from graphufs.progress import ProgressTracker
 from graphufs.mpi import MPITopology
 
 # in the future this could be generalized to where it just takes the following as inputs
-from config import P3Preprocessor as Emulator
+from config import P2PPreprocessor as Emulator
 _n_jobs = 1
 _n_tasks = Emulator.batch_size
 _n_cpus_per_task = 256 // _n_tasks

@@ -17,7 +17,7 @@ from graphufs.mpi import MPITopology
 
 from ufs2arco import Timer
 
-from config import P3Trainer as Emulator
+from config import P2PTrainer as Emulator
 
 def print_time(batch_size, avg_time, work="read", topo=None):
 

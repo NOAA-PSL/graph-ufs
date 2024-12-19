@@ -1,8 +1,8 @@
 #!/bin/bash
 
-#SBATCH -J eval-p3-nvnc
-#SBATCH -o /pscratch/sd/t/timothys/p3/nvnc/slurm/evaluation.%j.out
-#SBATCH -e /pscratch/sd/t/timothys/p3/nvnc/slurm/evaluation.%j.err
+#SBATCH -J eval-p2p-nvnc
+#SBATCH -o /pscratch/sd/t/timothys/p2p/nvnc/slurm/evaluation.%j.out
+#SBATCH -e /pscratch/sd/t/timothys/p2p/nvnc/slurm/evaluation.%j.err
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=256
@@ -12,7 +12,7 @@
 #SBATCH -t 03:00:00
 
 conda activate graphufs-cpu
-cd /global/common/software/m4718/timothys/graph-ufs/prototypes/p3/nvnc
+cd /global/common/software/m4718/timothys/graph-ufs/prototypes/p2p/nvnc
 
 python postprocess_inference.py
 . ./evaluate_with_wb2.sh

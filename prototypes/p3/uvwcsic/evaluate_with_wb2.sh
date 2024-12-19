@@ -2,7 +2,7 @@
 
 # Note that we have to have pip install --no-deps weatherbench2 as in the README
 
-output_dir=/pscratch/sd/t/timothys/p3/uvwcsic/inference/validation
+output_dir=/pscratch/sd/t/timothys/p2p/uvwcsic/inference/validation
 wb2_dir=$COMMON/graph-ufs/weatherbench2
 forecast_duration="240h"
 time_start="2022-01-01T00"

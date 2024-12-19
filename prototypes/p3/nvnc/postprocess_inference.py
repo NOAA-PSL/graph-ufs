@@ -1,6 +1,6 @@
-from prototypes.p3.postprocess_inference import main
+from prototypes.p2p.postprocess_inference import main
 
-from config import P3Evaluator
+from config import P2PEvaluator
 
 if __name__ == "__main__":
-    main(P3Evaluator)
+    main(P2PEvaluator)

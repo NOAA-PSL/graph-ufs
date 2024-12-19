@@ -8,7 +8,7 @@ import graphufs
 from graphufs.spatialmap import SpatialMap
 from graphufs.utils import open_zarr
 
-_scratch = "/pscratch/sd/t/timothys/p3/uvwc"
+_scratch = "/pscratch/sd/t/timothys/p2p/uvwc"
 _date = "2022-12-11T09"
 _fhr = 24
 

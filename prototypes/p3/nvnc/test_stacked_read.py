@@ -14,7 +14,7 @@ from graphufs.log import setup_simple_log
 
 from ufs2arco import Timer
 
-from config import P3Trainer as Emulator
+from config import P2PTrainer as Emulator
 
 def print_time(batch_size, avg_time, work="read"):
     print(f" --- Time to {work} batch_size = {batch_size} --- ")
