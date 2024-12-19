@@ -15,7 +15,13 @@ case:
 module load cudatoolkit
 ```
 
-Or similarly with `cpu.yaml`.
+Or similarly with `cpu.yaml`. Note for the CPU environment, fix the jax and
+jaxlib versions to
+
+```yaml
+  - jax=0.4.26
+  - jaxlib=0.4.26
+```
 
 ## Perlmutter MPI installation
 
