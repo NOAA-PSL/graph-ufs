@@ -92,7 +92,10 @@ class FVStatisticsComputer(StatisticsComputer):
                 if do_transformed_var and original_var_not_in_list:
                     local_data_vars.append(key)
 
-            xds = xds[[x for x in local_data_vars + ["delz"] if x in xds]]
+            if "pfull" in xds[local_data_vars].dims:
+                xds = xds[local_data_vars+["delz"]]
+            else:
+                xds = xds[local_data_vars]
 
         # regrid in the vertical
         if "pfull" in xds[local_data_vars].dims:
@@ -107,9 +110,9 @@ class FVStatisticsComputer(StatisticsComputer):
         
         if data_vars is not None:
             selvars = data_vars
-        for key in ["phalf", "ak", "bk"]:
-            if key in xds:
-                selvars.append(key)
-        xds = xds[selvars]
+            for key in ["phalf", "ak", "bk"]:
+                if key in xds:
+                    selvars.append(key)
+            xds = xds[selvars]
 
         return xds

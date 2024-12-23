@@ -1,7 +1,16 @@
+import logging
 import numpy as np
-import xesmf as xe
 import xarray as xr
 import pandas as pd
+import warnings
+
+try:
+    import xesmf as xe
+    _has_xesmf = True
+except ImportError:
+    _has_xesmf = False
+    warnings.warn("graphufs.evaluation: could not import xesmf")
+
 from .emulator import ReplayEmulator
 from .coupledemulator import ReplayCoupledEmulator
 
@@ -15,6 +24,7 @@ def convert_wb2_format(gufs, ds, inittimes) -> xr.Dataset:
         inittimes (xr.Dataset): a dataset that contains "inititime", forecast
                 initialization time, and lead time coordinate "time".
     """
+    assert _has_xesmf, f"evaluation.convert_wb2_format: could not import xesmf"
 
     # regrid to the obs coordinates
     ds_obs = xr.open_zarr(

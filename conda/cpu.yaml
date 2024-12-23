@@ -15,6 +15,7 @@ dependencies:
     - zarr
     - cftime
     - flox
+    - cf_xarray
 # jupyter etc
     - jupyter
     - ipython

@@ -4,7 +4,6 @@ Same as training.py, but for StackedGraphCast
 
 import os
 import logging
-import warnings
 from functools import partial
 import numpy as np
 import xarray as xr
@@ -13,16 +12,8 @@ from jax import (
     jit,
     value_and_grad,
     tree_util,
-    local_devices,
-    devices,
-    local_device_count,
-    device_count,
-    print_environment_info,
-    distributed,
     block_until_ready,
 )
-from graphcast.xarray_jax import pmap
-from jax.lax import pmean
 from jax.sharding import NamedSharding, Mesh, PartitionSpec as P
 from jax.sharding import PositionalSharding
 from jax.experimental import mesh_utils
@@ -30,24 +21,12 @@ from jax.random import PRNGKey
 import jax.numpy as jnp
 import optax
 import haiku as hk
-import xarray as xr
-from math import ceil
 
-from graphcast.checkpoint import dump
 from graphcast.stacked_graphcast import StackedGraphCast
 from graphcast.stacked_casting import StackedBfloat16Cast
-from graphcast.xarray_tree import map_structure
 from graphcast.stacked_normalization import StackedInputsAndResiduals
-from graphcast.xarray_jax import unwrap_data
-from graphcast import rollout
 
 from tqdm import tqdm
-
-try:
-    from mpi4py import MPI
-    import mpi4jax
-except:
-    warnings.warn("Import failed for either mpi4py or mpi4jax.")
 
 
 def construct_wrapped_graphcast(emulator, last_input_channel_mapping):
@@ -58,7 +37,8 @@ def construct_wrapped_graphcast(emulator, last_input_channel_mapping):
     # handle inputs/outputs float32 <-> BFloat16
     # ... and so that this happens after applying
     # normalization to inputs & targets
-    predictor = StackedBfloat16Cast(predictor)
+    if emulator.use_half_precision:
+        predictor = StackedBfloat16Cast(predictor)
     predictor = StackedInputsAndResiduals(
         predictor,
         diffs_stddev_by_level=emulator.stacked_norm["stddiff"],
@@ -79,7 +59,7 @@ def init_model(emulator, inputs, last_input_channel_mapping):
         predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping)
         return predictor(inputs)
 
-    devices = jax.devices()
+    devices = jax.devices()[:emulator.num_gpus]
     sharding = PositionalSharding(devices)
     sharding = sharding.reshape((emulator.num_gpus, 1, 1, 1))
 
@@ -101,7 +81,15 @@ def add_trees(tree1, tree2):
     return tree1
 
 def optimize(
-    params, state, optimizer, emulator, trainer, validator, weights, last_input_channel_mapping, opt_state=None
+    params,
+    state,
+    optimizer,
+    emulator,
+    trainer,
+    validator,
+    weights,
+    last_input_channel_mapping,
+    opt_state=None,
 ):
     """Optimize the model parameters by running through all optim_steps in data
 
@@ -123,7 +111,7 @@ def optimize(
     mpi_size = emulator.mpi_size
     use_jax_distributed = emulator.use_jax_distributed
 
-    devices = jax.devices()
+    devices = jax.devices()[:emulator.num_gpus]
     sharding = PositionalSharding(devices)
     sharding = sharding.reshape((emulator.num_gpus, 1, 1, 1))
     all_gpus = sharding.replicate()
@@ -366,6 +354,31 @@ def optimize(
     )
 
     # save losses for each batch
+    loss_ds = store_loss(
+        emulator=emulator,
+        optim_steps=optim_steps,
+        loss_values=loss_values,
+        loss_by_channel=loss_by_channel,
+        loss_valid_avg=loss_valid_avg,
+        loss_by_channel_valid=loss_by_channel_valid,
+        learning_rates=learning_rates,
+        gradient_norms=gradient_norms,
+        mean_grad=mean_grad,
+    )
+    return params, loss_ds, opt_state
+
+def store_loss(
+    emulator,
+    optim_steps,
+    loss_values,
+    loss_by_channel,
+    loss_valid_avg,
+    loss_by_channel_valid,
+    learning_rates,
+    gradient_norms,
+    mean_grad,
+
+):
 
     loss_ds = xr.Dataset()
     loss_fname = os.path.join(emulator.local_store_path, "loss.nc")
@@ -376,7 +389,7 @@ def optimize(
         previous_optim_steps = len(stored_loss_ds.optim_step)
         previous_epochs = len(stored_loss_ds["epoch"])
 
-    n_channels = target_batch.shape[-1]
+    n_channels = len(loss_by_channel[0])
     loss_by_channel = np.vstack(loss_by_channel)
     loss_by_channel_valid = np.vstack(loss_by_channel_valid).mean(axis=0, keepdims=True)
 
@@ -451,5 +464,5 @@ def optimize(
     else:
         stored_loss_ds = loss_ds
     stored_loss_ds.to_netcdf(loss_fname)
+    return loss_ds
 
-    return params, loss_ds, opt_state

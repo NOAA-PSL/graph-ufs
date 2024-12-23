@@ -61,8 +61,8 @@ class StatisticsComputer:
         self.time_skip = time_skip
         self.open_zarr_kwargs = open_zarr_kwargs if open_zarr_kwargs is not None else dict()
         self.to_zarr_kwargs = to_zarr_kwargs if to_zarr_kwargs is not None else dict()
-        self.load_full_dataset = load_full_dataset 
-        if self.comp in ["atm", "ice", "land"]:
+        self.load_full_dataset = load_full_dataset
+        if self.comp.lower() == "atm".lower():
             self.delta_t = f"{self.time_skip*3} hour" if self.time_skip is not None else "3 hour"
             self.dims = ("time", "grid_yt", "grid_xt")
         elif self.comp.lower() == "ocn".lower():
@@ -336,18 +336,13 @@ def add_derived_vars(
                     xds,
                     **tisr_kwargs
                 )
+            xds = xds.rename({"datetime": "time", "lon": "grid_xt", "lat": "grid_yt", "level": "pfull"})
 
-            if transforms is not None:
-                for key, mapping in transforms.items():
-                    logging.info(f"statistics.add_derived_vars: transforming {key} -> {mapping.__name__}({key})")
-            
-            xds = xds.rename({"datetime": "time", "lon": "grid_xt", "lat": "grid_yt", "level": "pfull"})             
-        
-        elif comp in ["ocean", "ocn"]:
+        elif component.lower() == "ocean".lower():
             xds = xds.rename({"time": "datetime"})
             data_utils.add_derived_vars(xds)
             xds = xds.rename({"datetime": "time"})
-        
+
     return xds
 
 def add_transformed_vars(

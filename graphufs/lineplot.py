@@ -60,13 +60,12 @@ class LinePlotter():
 
         # we can assume it's first
         graphufskey = list(dsdict.keys())[0]
-        xticks = dsdict[graphufskey][truth].fhr.values[3::4]
+        xticks = dsdict[graphufskey].fhr.values[3::4]
 
         for fld, ax in zip(fields, axr):
             sps = ax.get_subplotspec()
             offset = 0
-            for j, (label, xdict) in enumerate(dsdict.items()):
-                xds = xdict[truth]
+            for j, (label, xds) in enumerate(dsdict.items()):
                 kw = {"label": label if sps.is_last_row() and sps.is_first_col() else None}
                 if label == "Replay":
                     kw["color"] = "gray"

@@ -6,6 +6,8 @@ import threading
 import concurrent
 import queue
 
+from .mpi import MPITopology, _has_mpi
+
 class BatchLoader():
     """
 
@@ -49,12 +51,15 @@ class BatchLoader():
         max_queue_size=1,
         rng_seed=None,
         sample_stride=None,
+        start=0,
     ):
 
         self.dataset = dataset
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.drop_last = drop_last
+        self.counter = start
+        self.data_counter = start
 
         self.sample_indices = list(int(idx) for idx in np.arange(len(self.dataset)))
         self.sample_stride = sample_stride
@@ -78,7 +83,7 @@ class BatchLoader():
             self.data_queue = queue.Queue(maxsize=max_queue_size)
             self.stop_event = threading.Event()
 
-        self.restart()
+        self.restart(idx=start)
 
     @property
     def initial_times(self) -> list[np.datetime64]:
@@ -100,6 +105,10 @@ class BatchLoader():
     @property
     def xds(self):
         return self.dataset.xds
+
+    @property
+    def name(self):
+        return str(type(self).__name__)
 
     def __len__(self) -> int:
         n_samples = len(self.sample_indices)
@@ -180,7 +189,7 @@ class BatchLoader():
         self.data_queue.task_done()
         logging.debug(f"{self.dataset.mode} BatchLoader: marked task_done")
 
-    def restart(self, cancel=False, **kwargs):
+    def restart(self, idx=0, cancel=False, **kwargs):
         """Restart the :attr:`data_counter` and ThreadPoolExecutor to get ready for the pass through the data
 
         Args:
@@ -190,7 +199,7 @@ class BatchLoader():
 
         if self.shuffle:
             self.rstate.shuffle(self.sample_indices)
-            self.sample_indices = list(int(idx) for idx in self.sample_indices)
+            self.sample_indices = list(int(i) for i in self.sample_indices)
 
         # start filling the queue
         if self.num_workers > 0:
@@ -200,7 +209,7 @@ class BatchLoader():
                 self.stop_event.clear()
 
             with self.data_counter_lock:
-                self.data_counter = 0
+                self.data_counter = idx
 
             with self.executor_lock:
                 self.executor = concurrent.futures.ThreadPoolExecutor(
@@ -210,7 +219,7 @@ class BatchLoader():
                     self.executor.submit(self.generate) for _ in range(self.num_workers)
                 ]
         else:
-            self.data_counter = 0
+            self.data_counter = idx
 
 
     def cancel(self):
@@ -276,4 +285,101 @@ class ExpandedBatchLoader(BatchLoader):
             return (d.load() for d in data)
         else:
             logging.debug(f"{self.mode} BatchLoader.__next__: counter > len(self)")
+            raise StopIteration
+
+class MPIBatchLoader(BatchLoader):
+    """Make sure mpi4py and mpi4jax is installed
+    """
+    def __init__(
+        self,
+        dataset,
+        batch_size,
+        shuffle,
+        mpi_topo,
+        drop_last=True,
+        num_workers=0,
+        max_queue_size=1,
+        rng_seed=None,
+        sample_stride=None,
+        start=0,
+    ):
+        assert _has_mpi, f"{self.name}.__init__: Unable to import mpi4py or mpi4jax, cannot use this class"
+
+        self.topo = mpi_topo
+        self.data_per_device = batch_size // self.topo.size
+        self.local_batch_index = self.topo.rank*self.data_per_device
+        super().__init__(
+            dataset=dataset,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            drop_last=drop_last,
+            num_workers=num_workers,
+            max_queue_size=max_queue_size,
+            rng_seed=rng_seed,
+            sample_stride=sample_stride,
+            start=start,
+        )
+        logging.info(str(self))
+        if shuffle:
+            assert rng_seed is not None, f"{self.name}.__init__: need to set rng_seed in order for processes to be in sync without collectives"
+
+        if self.data_per_device*self.topo.size != batch_size:
+            logging.warning(f"{self.name}.__init__: batch_size = {batch_size} not divisible by MPI Size = {self.topo.size}")
+            logging.warning(f"{self.name}.__init__: some data will be skipped in each batch")
+
+        if batch_size > 1 and not drop_last:
+            logging.warning(f"{self.name}.__init__: with batch_size>1 and drop_last=False, some MPI processes may grab incorrect indices in last batch. Expect an error at the end of the dataset")
+
+    def __str__(self):
+        myname = f"{__name__}.{self.name}"
+        underline = "".join(["-" for _ in range(len(myname))])
+        msg = f"\n{myname}\n{underline}\n" +\
+            f"{'mode':<18s}: {self.mode}\n"
+
+        for key in ["local_batch_index", "data_per_device", "batch_size"]:
+            msg += f"{key:<18s}: {getattr(self, key):02d}\n"
+        return msg
+
+
+    def _next_data(self):
+        if self.data_counter < len(self):
+            st = (self.data_counter * self.batch_size) + self.local_batch_index
+            ed = st + self.data_per_device
+            batch_indices = self.sample_indices[st:ed]
+            x, y = self.dataset[batch_indices]
+            return x.values, y.values
+        else:
+            raise StopIteration
+
+class MPIXBatchLoader(MPIBatchLoader):
+    def _next_data(self):
+        if self.data_counter < len(self):
+            st = (self.data_counter * self.batch_size) + self.local_batch_index
+            ed = st + self.data_per_device
+            batch_indices = self.sample_indices[st:ed]
+
+            if len(batch_indices) > 0:
+                x, y = self.dataset[batch_indices]
+                return x.load(), y.load()
+            elif len(batch_indices) == 0 and not self.drop_last:
+                return None, None
+            else:
+                raise IndexError(f"[Rank {self.topo.rank}] {self.name}._next_data: looking for indices [{st}:{ed}], but len(sample_indices) = {len(self.sample_indices)}")
+        else:
+            raise StopIteration
+
+class MPIExpandedBatchLoader(MPIBatchLoader):
+    def _next_data(self):
+        if self.data_counter < len(self):
+            st = (self.data_counter * self.batch_size) + self.local_batch_index
+            ed = st + self.data_per_device
+            batch_indices = self.sample_indices[st:ed]
+            if len(batch_indices) > 0:
+                data = self.dataset.get_batch_of_xarrays(batch_indices)
+                return (d.load() for d in data)
+            elif len(batch_indices) == 0 and not self.drop_last:
+                return None, None, None
+            else:
+                raise IndexError(f"[Rank {self.topo.rank}] {self.name}._next_data: looking for indices [{st}:{ed}], but len(sample_indices) = {len(self.sample_indices)}")
+        else:
             raise StopIteration

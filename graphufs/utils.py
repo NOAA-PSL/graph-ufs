@@ -153,10 +153,10 @@ class DataGenerator:
 
         # initialize batch generator
         logging.info(f"graphufs.utils.get_chunk_data: Starting to get {mode} batches")
-        
+
         self.load_chunk = emulator.load_chunk
         self.shuffle = (mode != "testing") and emulator.use_preprocessed
-        
+
         self.gen = emulator.get_batches(
             n_optim_steps=n_optim_steps,
             mode=mode,

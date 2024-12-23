@@ -1,0 +1,37 @@
+name: graphufs
+channels:
+    - conda-forge
+dependencies:
+    - python=3.11
+# Basics
+    - numpy
+    - matplotlib
+# xarray et al
+    - xarray
+    - netCDF4
+    - h5netcdf
+    - bottleneck
+    - dask[complete]
+    - zarr
+    - cftime
+    - flox
+    - cf_xarray
+# jupyter etc
+    - jupyter
+    - ipython
+    - ipykernel
+# filesystem
+    - fsspec
+    - gcsfs
+# graphcast
+    - cartopy
+    - rtree
+    - dm-tree
+    - trimesh
+    - typing_extensions
+# legit progress bar
+    - tqdm
+# StackedGraphCast
+    - xbatcher
+    - pytest
+    - xarray-tensorstore

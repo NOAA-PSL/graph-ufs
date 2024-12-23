@@ -15,6 +15,7 @@ from graphufs.tensorstore import PackedDataset as TSPackedDataset, BatchLoader a
 from graphufs.batchloader import BatchLoader
 from graphufs.log import setup_simple_log
 
+from graphufs.optim import clipped_cosine_adamw
 from graphufs.utils import get_last_input_mapping
 from graphufs import init_devices
 
@@ -75,7 +76,7 @@ if __name__ == "__main__":
     n_total = emulator.num_epochs * steps_in_epoch
     n_linear = 1_000
     n_cosine = n_total - n_linear
-    optimizer = graphufs_optimizer(
+    optimizer = clipped_cosine_adamw(
         n_linear=n_linear,
         n_total=n_total,
         peak_value=1e-3,

@@ -67,7 +67,8 @@ def construct_wrapped_graphcast(emulator):
     # handle inputs/outputs float32 <-> BFloat16
     # ... and so that this happens after applying
     # normalization to inputs & targets
-    predictor = Bfloat16Cast(predictor)
+    if emulator.use_half_precision:
+        predictor = Bfloat16Cast(predictor)
     predictor = InputsAndResiduals(
         predictor,
         diffs_stddev_by_level=emulator.norm["stddiff"],
@@ -100,7 +101,7 @@ def init_model(emulator, data: dict):
         return predictor(inputs, targets_template=targets_template, forcings=forcings)
 
     init_jitted = jit(run_forward.init)
-    
+
     inputs=data["inputs"].isel(optim_step=0)
     targets=data["targets"].isel(optim_step=0)
     forcings=data["forcings"].isel(optim_step=0)
@@ -632,7 +633,7 @@ def predict(
             targets_template=t_batches,
             forcings=f_batches,
         )
-        
+
         # postprocess predictions the same way as done during training
         for var in predictions:
             if "landsea_mask" in i_batches:
@@ -659,16 +660,16 @@ def predict(
                         mask = predictions["land"].round()
                         landmask = xarray.where(mask==1, 1, 0) # land=1 in the mask
                         predictions[var] = predictions[var]*landmask
-                    # Below is supposed to work, but the static landsea mask omits a few land 
+                    # Below is supposed to work, but the static landsea mask omits a few land
                     # locations and treats them as ocean. This leads to huge errors in the soilm
                     # which has significantly high values in those locations. It is therefore wiser
-                    # to not exclude anything at all rather than excluding a few but important locs. 
+                    # to not exclude anything at all rather than excluding a few but important locs.
                     #else:
                     #    landmask = 1 - landseamask.isel(z_l=0)
-                    #    predictions[var] = predictions[var]*landmask  
-        
+                    #    predictions[var] = predictions[var]*landmask
+
         all_predictions.append(predictions)
-        
+
         progress_bar.update(1)
 
     progress_bar.close()
