@@ -212,7 +212,7 @@ def fv_vertical_regrid(xds, interfaces):
 
     if vars3d:
         if vars3d["atm"]:
-            logging.info(f"3D atmospheric variable detected:{vars3d} ")
+            logging.info(f"3D atmospheric variable detected: {vars3d} ")
             # create a new dataset with the new vertical grid 
             nds = get_new_vertical_grid(interfaces, "atm")
 
