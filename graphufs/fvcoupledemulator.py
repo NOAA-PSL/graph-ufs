@@ -197,7 +197,7 @@ def _get_ocn_xds(
         else:
             raise ValueError("Both z_i and z_l are empty")
 
-def fv_vertical_regrid(xds, interfaces):
+def fv_vertical_regrid(xds, interfaces, keep_delz=False):
     """Vertically regrid a dataset based on approximately located interfaces
     by "approximately" we mean to grab the nearest neighbor to the values in interfaces
 
