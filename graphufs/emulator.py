@@ -19,6 +19,7 @@ from graphcast import data_utils
 from graphcast.model_utils import dataset_to_stacked
 from graphcast.losses import normalized_level_weights, normalized_latitude_weights
 
+from . import stacked_diagnostics
 from .utils import (
     get_channel_index, get_last_input_mapping,
     add_emulator_arguments, set_emulator_options
@@ -121,6 +122,7 @@ class ReplayEmulator:
     }
     input_transforms = None
     output_transforms = None
+    diagnostics = None
 
     # this is used for initializing the state in the gradient computation
     grad_rng_seed = None
@@ -690,6 +692,8 @@ class ReplayEmulator:
             if os.path.isdir(local_path):
                 xds = xr.open_zarr(local_path)
                 myvars = list(x for x in self.all_variables if x in xds)
+                if self.diagnostics is not None:
+                    myvars += list(x for x in self.diagnostics if x in xds)
                 xds = xds[myvars]
                 xds = xds.load()
                 foundit = True
@@ -698,6 +702,9 @@ class ReplayEmulator:
                 kwargs = {"storage_options": {"token": "anon"}} if any(x in self.norm_urls[component] for x in ["gs://", "gcs://"]) else {}
                 xds = xr.open_zarr(self.norm_urls[component], **kwargs)
                 myvars = list(x for x in self.all_variables if x in xds)
+                if self.diagnostics is not None:
+                    myvars += list(x for x in self.diagnostics if x in xds)
+
                 # keep attributes in order to distinguish static from time varying components
                 with xr.set_options(keep_attrs=True):
 
@@ -739,23 +746,21 @@ class ReplayEmulator:
         def open_normalization(component):
 
             # try to read locally first
-            inputs_path = os.path.join(
-                self.local_store_path,
-                "stacked-normalization",
-                "inputs",
-                os.path.basename(self.norm_urls[component]),
-            )
-            targets_path = os.path.join(
-                self.local_store_path,
-                "stacked-normalization",
-                "targets",
-                os.path.basename(self.norm_urls[component]),
-            )
+            paths = {
+                itd_key: os.path.join(
+                    "stacked-normalization",
+                    itd_key,
+                    os.path.basename(self.norm_urls[component]),
+                )
+                for itd_key in ["inputs", "targets", "diagnostics"]
+            }
 
-            if os.path.isdir(inputs_path) and os.path.isdir(targets_path):
-                inputs = xr.open_zarr(inputs_path)
+            raise NotImplementedError("This is where diagnostics normalization needs attention")
+
+            if os.path.isdir(paths["inputs"]) and os.path.isdir(paths["targets"]):
+                inputs = xr.open_zarr(paths["inputs"])
                 inputs = inputs["inputs"].load()
-                targets = xr.open_zarr(targets_path)
+                targets = xr.open_zarr(paths["targets"])
                 targets = targets["targets"].load()
 
             else:
@@ -763,14 +768,26 @@ class ReplayEmulator:
                 ds = xr.Dataset()
                 inputs = inputs.load()
                 targets = targets.load()
-                inputs.to_dataset(name="inputs").to_zarr(inputs_path)
-                targets.to_dataset(name="targets").to_zarr(targets_path)
-            return inputs.data, targets.data
+                inputs.to_dataset(name="inputs").to_zarr(paths["inputs"])
+                targets.to_dataset(name="targets").to_zarr(paths["targets"])
+
+            if self.diagnostics is not None:
+                if os.path.isdir(paths["diagnostics"]):
+                    diagnostics = xr.open_zarr(paths["diagnostics"]).load().data
+
+                else:
+
+            else:
+                diagnostics = None
+
+            return inputs.data, targets.data, diagnostics
 
         for key in self.norm.keys():
             self.stacked_norm[key] = dict()
-            input_norms, target_norms = open_normalization(key)
+            input_norms, target_norms, diagnostic_norms = open_normalization(key)
             self.stacked_norm[key] = {"inputs": input_norms, "targets": target_norms}
+            if self.diagnostics is not None:
+                self.stacked_norm[key]["diagnostics"] = diagnostic_norms
 
 
     def normalization_to_stacked(self, xds, **kwargs):
@@ -807,14 +824,33 @@ class ReplayEmulator:
 
     def calc_loss_weights(self, gds):
 
-        _, xtargets, _ = gds.get_xarrays(0)
-        _, targets = gds[0]
+        # get arrays for shapes and sizes
+        xinputs, xtargets, _ = gds.get_xarrays(0)
+        inputs, targets = gds[0]
 
-        if targets.ndim == 3:
-            weights = np.ones_like(targets)
-        else:
-            weights = np.ones_like(targets[0])
-            weights = weights[None]
+        # get meta information, like varname/level/timeslot for each channel
+        input_meta = get_channel_index(xinputs)
+        output_meta = get_channel_index(xtargets)
+
+        # create loss_weights with shape:
+        # [n_samples_per_batch, n_lat, n_lon, n_channels]
+        # if computing diagnostics, create more channels for the diagnostics
+        weights = np.ones_like(targets[0])
+        weights = weights[None]
+
+        # figure out diagnostics
+        n_prediction_channels = targets.shape[-1]
+        if self.diagnostics is not None:
+            masks, mappings, shapes = stacked_diagnostics.prepare_diagnostic_functions(
+                input_meta=input_meta,
+                output_meta=output_meta,
+                function_names=self.diagnostics,
+            )
+            n_diagnostic_channels = np.sum(list(shapes.values()))
+            diagnostic_weights = np.ones(
+                shape=weights.shape[:-1]+(n_diagnostic_channels,),
+            )
+            weights = np.concatenate([weights, diagnostic_weights], axis=-1)
 
         # 1. compute latitude weighting
         if self.weight_loss_per_latitude:
@@ -840,24 +876,24 @@ class ReplayEmulator:
 
         # 2. compute per variable weighting
         # Either do this per channel, or per variable as in GraphCast
-        n_channels = targets.shape[-1]
+        n_channels = weights.shape[-1]
         if self.weight_loss_per_channel:
             for ichannel in range(n_channels):
                 weights[..., ichannel] /= n_channels
 
         else:
             #   a. incorporate user-specified variable weights
-            target_idx = get_channel_index(xtargets)
+
             var_count = {k: 0 for k in self.target_variables}
             for ichannel in range(targets.shape[-1]):
-                varname = target_idx[ichannel]["varname"]
+                varname = output_meta[ichannel]["varname"]
                 var_count[varname] += 1
                 if varname in self.loss_weights_per_variable:
                     weights[..., ichannel] *= self.loss_weights_per_variable[varname]
 
             #   b. take average within variable, so if we have 3 levels of 1 var, divide by 3*n_latitude*n_longitude
             for ichannel in range(targets.shape[-1]):
-                varname = target_idx[ichannel]["varname"]
+                varname = output_meta[ichannel]["varname"]
                 weights[..., ichannel] /= var_count[varname]
 
 
@@ -865,11 +901,10 @@ class ReplayEmulator:
         if self.weight_loss_per_level:
             level_weights = normalized_level_weights(xtargets)
             for ichannel in range(targets.shape[-1]):
-                if "level" in target_idx[ichannel].keys():
-                    ilevel = target_idx[ichannel]["level"]
+                if "level" in output_meta[ichannel].keys():
+                    ilevel = output_meta[ichannel]["level"]
                     weights[..., ichannel] *= level_weights.isel(level=ilevel).data
 
-        # do we need to put this on the device(s)?
         return weights
 
 
