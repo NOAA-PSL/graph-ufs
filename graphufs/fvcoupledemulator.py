@@ -16,6 +16,10 @@ from graphcast.graphcast import ModelConfig, TaskConfig
 from graphcast import data_utils
 
 from .coupledemulator import ReplayCoupledEmulator
+from .fvemulator import (
+    get_new_vertical_grid as get_new_atm_vertical_grid,
+    fv_vertical_regrid as atm_fv_vertical_regrid,
+)
 
 class FVCoupledEmulator(ReplayCoupledEmulator):
     interfaces = None # Note the these values can be approximate, we'll grab nearest neighbors to Replay dataset
