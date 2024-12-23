@@ -80,9 +80,6 @@ class FVStatisticsComputer(StatisticsComputer):
                 data_vars = [data_vars]
                 local_data_vars = [local_data_vars]
 
-            if self.comp.lower() == "atm".lower() and "delz" not in data_vars:
-                data_vars.append("delz")
-
             # if the transformed variables are desired, need to hang onto
             # the original, not transformed variable, since we vertically average then transform
             for key, mapping in self.transforms.items():
@@ -95,7 +92,7 @@ class FVStatisticsComputer(StatisticsComputer):
                 if do_transformed_var and original_var_not_in_list:
                     local_data_vars.append(key)
 
-            xds = xds[local_data_vars+["delz"]]
+            xds = xds[[x for x in local_data_vars + ["delz"] if x in xds]]
 
         # regrid in the vertical
         logging.info(f"{self.name}: starting vertical regridding")
@@ -106,8 +103,12 @@ class FVStatisticsComputer(StatisticsComputer):
             xds,
             transforms=self.transforms,
         )
-
+        
         if data_vars is not None:
-            xds = xds[data_vars+["phalf", "ak", "bk"]]
+            selvars = data_vars
+        for key in ["phalf", "ak", "bk"]:
+            if key in xds:
+                selvars.append(key)
+        xds = xds[selvars]
 
         return xds
