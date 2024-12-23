@@ -136,16 +136,7 @@ def get_new_vertical_grid(interfaces, comp):
 
     # Create the parent vertical grid via layers2pressure object
     if comp.lower()=="atm".lower():
-        replay_layers = Layers2Pressure()
-        phalf = replay_layers.phalf.sel(phalf=interfaces, method="nearest")
-
-        # Make a new Layers2Pressure object, which has the subsampled vertical grid
-        # note that pfull gets defined internally
-        child_layers = Layers2Pressure(
-                ak=replay_layers.xds["ak"].sel(phalf=phalf),
-                bk=replay_layers.xds["bk"].sel(phalf=phalf),
-        )
-        nds = child_layers.xds.copy(deep=True)
+        nds = get_new_atm_vertical_grid(interfaces)
     
     elif comp.lower()=="ocn".lower():
         vcoord_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "replay_vertical_levels.yaml")
