@@ -218,43 +218,7 @@ def fv_vertical_regrid(xds, interfaces, keep_delz=False):
         if vars3d["atm"]:
             logging.info(f"3D atmospheric variable detected: {vars3d} ")
             # create a new dataset with the new vertical grid 
-            nds = get_new_vertical_grid(interfaces, "atm")
-
-            # if the dataset has somehow already renamed pfull -> level, rename to pfull for Layers2Pressure computations
-            has_level_not_pfull = False 
-            if "level" in xds.dims and "pfull" not in xds.dims:
-                with xr.set_options(keep_attrs=True):
-                    xds = xds.rename({"level": "pfull"}) 
-
-            # Regrid vertical distance, and get weighting
-            nds["delz"] = xds["delz"].groupby_bins(
-                "pfull",
-                bins=nds["phalf"],
-            ).sum()
-            new_delz_inverse = 1/nds["delz"]
-
-            for key in vars3d["atm"]:
-                # Regrid the variable
-                with xr.set_options(keep_attrs=True):
-                    nds[key] = new_delz_inverse * (
-                        (
-                            xds[key]*xds["delz"]
-                        ).groupby_bins(
-                            "pfull",
-                            bins=nds["phalf"],
-                        ).sum()
-                    )
-                nds[key].attrs = xds[key].attrs.copy()
-            
-                # set the coordinates
-                nds = nds.set_coords("pfull")
-                nds["pfull_bins"] = nds["pfull_bins"].swap_dims({"pfull_bins": "pfull"})
-                with xr.set_options(keep_attrs=True):
-                    nds[key] = nds[key].swap_dims({"pfull_bins": "pfull"})
-
-                nds[key].attrs["regridding"] = "delz weighted average in vertical,new coordinate bounds represented by 'pfull_bins'"
-                # unfortunately, cannot store the pfull_bins due to this issue: https://github.com/pydata/xarray/issues/2847  
-                nds = nds.drop_vars("pfull_bins")
+            nds = atm_fv_vertical_regrid(xds, interfaces, keep_delz=keep_delz)
 
         if vars3d["ocn"]:
             logging.info(f"3D ocean variable detected:{vars3d} ")
