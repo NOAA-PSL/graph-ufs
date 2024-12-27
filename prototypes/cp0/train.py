@@ -5,15 +5,9 @@ import shutil
 from functools import partial
 
 import optax
-from graphufs import (
-    optimize,
-    predict,
-    DataGenerator,
-    init_model,
-    convert_wb2_format,
-    compute_rmse_bias,
-    init_devices,
-)
+from graphufs.training import optimize, predict, init_model, init_devices 
+from graphufs.utils import DataGenerator
+from graphufs.evaluation import convert_wb2_format, compute_rmse_bias
 
 from mini_coupled_emulator import CP0Emulator
 
@@ -50,6 +44,7 @@ if __name__ == "__main__":
         mode="testing" if args.test else "training",
     )
     data_train = generator.get_data()
+    print("data_train:", data_train)
 
     # validation
     if not args.test:
@@ -61,6 +56,7 @@ if __name__ == "__main__":
             mode="validation",
         )
         data_valid = validator.get_data()
+        print("data_valid:", data_valid)
 
     # load weights or initialize a random model
     if gufs.checkpoint_exists(args.id) and args.id >= 0:

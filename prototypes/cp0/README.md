@@ -50,8 +50,10 @@ Then training can be executed with [train.py](train.py) as
 ```bash
 $ python -W ignore train.py --num-epochs 2 --chunks-per-epoch 1 --latent-size 32 --training-dates "1994-01-01T00" "1994-01-31T18"
 ```
-
-which shows a quick example of executing two epochs over 1 month of data, where
+CAUTION: BEFORE RUNNING ABOVE, MAKE SURE THAT THE TARGET LEAD TIME IS CONSTANT 
+AND NOT AN ARRAY(possible during inference).
+ 
+The above command shows a quick example of executing two epochs over 1 month of data, where
 the month of data is contained in a single chunk. Change this value in order to 
 distribute the data over multiple chunks.The first epoch caches the data on disk 
 for the second epoch onwards so training should be faster from 2nd+ epochs. If 

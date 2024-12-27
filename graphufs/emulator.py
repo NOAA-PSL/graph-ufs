@@ -493,7 +493,6 @@ class ReplayEmulator:
 
             # download the data
             all_xds = self.get_the_data(all_new_time=all_new_time, mode=mode)
-
             # split dataset into chunks
             slices = self.divide_into_slices(len(all_new_time), n_chunks)
             all_new_time_chunks = []
