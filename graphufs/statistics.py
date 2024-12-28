@@ -338,7 +338,7 @@ def add_derived_vars(
                 )
             xds = xds.rename({"datetime": "time", "lon": "grid_xt", "lat": "grid_yt", "level": "pfull"})
 
-        elif component.lower() == "ocean".lower():
+        elif comp.lower() == "ocean".lower():
             xds = xds.rename({"time": "datetime"})
             data_utils.add_derived_vars(xds)
             xds = xds.rename({"datetime": "time"})
