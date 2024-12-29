@@ -190,8 +190,7 @@ def _get_ocn_xds(
 
 def fv_vertical_regrid(xds, interfaces, keep_delz=False):
     """Vertically regrid a dataset based on approximately located interfaces
-    by "approximately" we mean to grab the nearest neighbor to the values in interfaces
-
+    by "approximately" we mean to grab the nearest neighbor to the values in interfaces 
     Args:
         xds (xr.Dataset)
         interfaces (array_like)
