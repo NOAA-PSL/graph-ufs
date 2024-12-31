@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 import dask
 import xarray as xr
@@ -76,6 +77,7 @@ def regrid_and_rename(xds, truth):
         is_gaussian=False,
     )
     if "lat_b" not in xds and "lon_b" not in xds:
+        logging.info(f"{__name__}.regrid_and_rename: did not find lat_b or lon_b in xds, computing bounds.")
         xds = get_bounds(xds, is_gaussian=True)
 
     regridder = xesmf.Regridder(
@@ -108,17 +110,89 @@ def regrid_and_rename(xds, truth):
     ds_out = ds_out.drop_vars(["lat_b", "lon_b"])
     return ds_out
 
+def calc_diagnostics(xds, varlist):
 
-def interp2pressure(xds, plevels):
+    recognized = ("delz", "geopotential", "prsl")
+    calc_delz = False
+    calc_geopotential = False
+    calc_prsl = False
+    for key in varlist:
+        if key not in recognized:
+            logging.warning(f"{__name__}.calc_diagnostics: skipping unrecognized diagnostic variable {key}")
+            varlist.remove(key)
+
+        elif key == "delz":
+            calc_delz = True
+        elif key == "geopotential":
+            calc_delz = "delz" not in xds
+            calc_geopotential = True
+        elif key == "prsl":
+            calc_prsl = True
+
+    logging.info(f"{__name__}.calc_diagnostics: computing {varlist}")
+    kw = dict()
+    if "ak" in xds and "bk" in xds:
+        kw = {"ak": xds.ak.values, "bk": xds.bk.values}
+    lp = Layers2Pressure(level_name="level", **kw)
+
+    results = {}
+    if calc_delz:
+        results["delz"] = lp.calc_delz(xds["pressfc"], xds["tmp"], xds["spfh"])
+
+    if calc_geopotential:
+        if calc_delz:
+            delz = results["delz"]
+        else:
+            delz = xds["delz"]
+        results["geopotential"] = lp.calc_geopotential(xds["hgtsfc_static"], delz)
+
+    if calc_prsl:
+        if calc_delz:
+            delz = results["delz"]
+        else:
+            delz = xds["delz"]
+        results["prsl"] = lp.calc_layer_mean_pressure(xds["pressfc"], xds["tmp"], xds["spfh"], delz)
+
+    results = xr.Dataset({key: results[key] for key in varlist})
+    for key in ["phalf", "ak", "bk"]:
+        results[key] = lp.xds[key]
+    return results
+
+
+def interp2pressure(xds, plevels, diagnose_geopotential=False):
     """Assume plevels is in hPa"""
 
-    lp = Layers2Pressure(level_name="level")
-    if "delz" not in xds:
-        xds["delz"] = lp.calc_delz(xds["pressfc"], xds["tmp"], xds["spfh"])
-    prsl = lp.calc_layer_mean_pressure(xds["pressfc"], xds["tmp"], xds["spfh"], xds["delz"])
+    kw = dict()
+    if "ak" in xds and "bk" in xds:
+        kw = {"ak": xds.ak.values, "bk": xds.bk.values}
+    lp = Layers2Pressure(level_name="level", **kw)
+
+    # compute some diagnostics
+    varlist = list()
+
+    # only keep delz if it's in the dataset
+    keep_delz = "delz" in xds
+
+    # only diagnose prsl if it's not in the dataset
+    if "prsl" not in xds:
+        varlist.append("prsl")
+
+    if diagnose_geopotential:
+        if "geopotential" in xds:
+            raise ValueError(f"Geopotential already exists")
+        varlist.append("geopotential")
+        if "delz" not in xds:
+            varlist.append("delz")
+
+    if len(varlist) > 0:
+        dds = calc_diagnostics(xds, varlist)
+    else:
+        dds = xr.Dataset({"prsl": xds["prsl"]})
+    if diagnose_geopotential:
+        xds["geopotential"] = dds["geopotential"]
 
     vars2d = [f for f in xds.keys() if "level" not in xds[f].dims]
-    vars3d = [f for f in xds.keys() if "level" in xds[f].dims]
+    vars3d = [f for f in xds.keys() if "level" in xds[f].dims and f != "prsl"]
     pds = xr.Dataset({f: xds[f] for f in vars2d})
     plevels = np.array(list(plevels))
     pds["level"] = xr.DataArray(
@@ -131,12 +205,14 @@ def interp2pressure(xds, plevels):
         },
     )
     results = {k: list() for k in vars3d}
+    logging.info(f"{__name__}.interp2pressure: interpolating {vars3d}")
+    logging.info(f"{__name__}.interp2pressure: to {plevels} hPa")
     for p in plevels:
 
-        cds = lp.get_interp_coefficients(p*100, prsl)
+        cds = lp.get_interp_coefficients(p*100, dds["prsl"])
         mask = (cds["is_right"].sum("level") > 0) & (cds["is_left"].sum("level") > 0)
         for key in vars3d:
-            interpolated = lp.interp2pressure(xds[key], p*100, prsl, cds)
+            interpolated = lp.interp2pressure(xds[key], p*100, dds["prsl"], cds)
             interpolated = interpolated.expand_dims({"level": [p]})
             interpolated = interpolated.where(mask)
             results[key].append(interpolated)

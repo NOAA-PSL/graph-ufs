@@ -15,7 +15,6 @@ from jax import tree_util
 from ufs2arco.regrid.ufsregridder import UFSRegridder
 from graphcast import checkpoint
 from graphcast.graphcast import ModelConfig, TaskConfig, CheckPoint
-from graphcast.data_utils import extract_inputs_targets_forcings_coupled
 from graphcast import data_utils
 from graphcast.model_utils import dataset_to_stacked
 from graphcast.losses import normalized_level_weights, normalized_latitude_weights
@@ -144,8 +143,8 @@ class ReplayCoupledEmulator:
         "soilm"         : 0.1,
     }
     loss_weights_per_variable = {}
-    loss_weights_per_variable.update(atm_loss_weights_per_variable) 
-    loss_weights_per_variable.update(ocn_loss_weights_per_variable) 
+    loss_weights_per_variable.update(atm_loss_weights_per_variable)
+    loss_weights_per_variable.update(ocn_loss_weights_per_variable)
     loss_weights_per_variable.update(ice_loss_weights_per_variable)
     loss_weights_per_variable.update(land_loss_weights_per_variable)
     input_transforms = None
@@ -169,10 +168,10 @@ class ReplayCoupledEmulator:
         # make sure target_variables is a subset of input_variables
         if any(x not in self.atm_input_variables for x in self.atm_target_variables):
             raise NotImplementedError(f"GraphUFS cannot predict atm target variables that are not also inputs")
-        
+
         if any(x not in self.ocn_input_variables for x in self.ocn_target_variables):
             raise NotImplementedError(f"GraphUFS cannot predict ocn target variables that are not also inputs")
-       
+
         if any(x not in self.ice_input_variables for x in self.ice_target_variables):
             raise NotImplementedError(f"GraphUFS cannot predict ice target variables that are not also inputs")
 
@@ -316,11 +315,11 @@ class ReplayCoupledEmulator:
     def open_atm_dataset(self, **kwargs):
         xds = xr.open_zarr(self.data_url["atm"], storage_options={"token": "anon"}, **kwargs)
         return xds
-    
+
     def open_ocn_dataset(self, **kwargs):
         xds = xr.open_zarr(self.data_url["ocn"], storage_options={"token": "anon"}, **kwargs)
         return xds
-    
+
     def open_ice_dataset(self, **kwargs):
         xds = xr.open_zarr(self.data_url["ice"], storage_options={"token": "anon"}, **kwargs)
         return xds
@@ -752,7 +751,8 @@ class ReplayCoupledEmulator:
                         xds.sel(datetime=timestamps_in_this_forecast),
                         batch_index=b,
                     )
-                    this_input, this_target, this_forcing = extract_inputs_targets_forcings_coupled(
+                    
+                    this_input, this_target, this_forcing = data_utils.extract_inputs_targets_forcings_coupled(
                         batch,
                         **self.extract_kwargs,
                     )
@@ -830,7 +830,6 @@ class ReplayCoupledEmulator:
                 vars_ocn = list(x for x in self.all_variables if x in xds_ocn)
                 vars_ice = list(x for x in self.all_variables if x in xds_ice)
                 vars_land = list(x for x in self.all_variables if x in xds_land)
-                
                 # keep attributes in order to distinguish static from time varying components
                 with xr.set_options(keep_attrs=True):
 
@@ -840,7 +839,7 @@ class ReplayCoupledEmulator:
                             # make sure e.g. log_spfh is in the dataset
                             transformed_key = f"{transform_function.__name__}_{key}" # e.g. log_spfh
                             assert transformed_key in xds, \
-                                f"Emulator.set_normalization: couldn't find {transformed_key} in {component} normalization dataset"
+                                    f"Emulator.set_normalization: couldn't find {transformed_key} in {moment} normalization dataset"
                             # there's a chance the original, e.g. spfh, is not in the dataset
                             # if it is, replace it with e.g. log_spfh
                             if key in myvars:
@@ -873,20 +872,20 @@ class ReplayCoupledEmulator:
 
         assert len(self.norm["mean"]) > 0, "normalization not set, call Emulator.set_normalization()"
 
-        def open_normalization(component):
+        def open_normalization(moment):
 
             # try to read locally first
             inputs_path = os.path.join(
                 self.local_store_path,
                 "stacked-normalization",
                 "inputs",
-                os.path.basename(self.norm_urls["atm"][component]),
+                os.path.basename(self.norm_urls["atm"][moment]),
             )
             targets_path = os.path.join(
                 self.local_store_path,
                 "stacked-normalization",
                 "targets",
-                os.path.basename(self.norm_urls["atm"][component]),
+                os.path.basename(self.norm_urls["atm"][moment]),
             )
 
             if os.path.isdir(inputs_path) and os.path.isdir(targets_path):
@@ -896,7 +895,7 @@ class ReplayCoupledEmulator:
                 targets = targets["targets"].load()
 
             else:
-                inputs, targets = self.normalization_to_stacked(self.norm[component], preserved_dims=tuple())
+                inputs, targets = self.normalization_to_stacked(self.norm[moment], preserved_dims=tuple())
                 ds = xr.Dataset()
                 inputs = inputs.load()
                 targets = targets.load()
@@ -1023,7 +1022,6 @@ class ReplayCoupledEmulator:
             with open(z_l_path, "r") as f:
                 z_l = yaml.safe_load(f)["z_l"]
             return xr.DataArray(z_l, coords={"z_l": z_l}, dims="z_l")
-        
         else:
             raise ValueError("only atm and ocn are supported in 3D")
 
@@ -1101,7 +1099,6 @@ class ReplayCoupledEmulator:
                 license="Public domain",
             )
             checkpoint.dump(f, ckpt)
-        
         # Check the total number of trainable parameters in this checkpoint
         print("Total number of trainable parameters:", get_num_params(ckpt))
 

@@ -1,8 +1,18 @@
+import logging
 import numpy as np
-import xesmf as xe
 import xarray as xr
 import pandas as pd
+import warnings
 
+try:
+    import xesmf as xe
+    _has_xesmf = True
+except ImportError:
+    _has_xesmf = False
+    warnings.warn("graphufs.evaluation: could not import xesmf")
+
+from .emulator import ReplayEmulator
+from .coupledemulator import ReplayCoupledEmulator
 
 def convert_wb2_format(gufs, ds, inittimes) -> xr.Dataset:
     """Convert a dataset into weatherbench2 compatible format. Details can be
@@ -14,6 +24,7 @@ def convert_wb2_format(gufs, ds, inittimes) -> xr.Dataset:
         inittimes (xr.Dataset): a dataset that contains "inititime", forecast
                 initialization time, and lead time coordinate "time".
     """
+    assert _has_xesmf, f"evaluation.convert_wb2_format: could not import xesmf"
 
     # regrid to the obs coordinates
     ds_obs = xr.open_zarr(
@@ -54,7 +65,13 @@ def convert_wb2_format(gufs, ds, inittimes) -> xr.Dataset:
     ds_out = ds_out.rename_vars(rename_dict)
 
     # fix pressure levels to match obs
-    ds_out["level"] = np.array(list(gufs.atm_pressure_levels), dtype=np.float32)
+    if isinstance(gufs, ReplayEmulator):
+        levels = list(gufs.pressure_levels)
+    elif isinstance(gufs, ReplayCoupledEmulator):
+        levels = list(gufs.atm_pressure_levels)
+    else:
+        raise NotImplementedError
+    ds_out["level"] = np.array(levels, dtype=np.float32)
 
     # remove batch dimension
     ds_out = ds_out.rename({"optim_step": "o", "time": "t", "batch": "b"})

@@ -67,7 +67,8 @@ def construct_wrapped_graphcast(emulator):
     # handle inputs/outputs float32 <-> BFloat16
     # ... and so that this happens after applying
     # normalization to inputs & targets
-    # predictor = Bfloat16Cast(predictor)
+    if emulator.use_half_precision:
+        predictor = Bfloat16Cast(predictor)
     predictor = InputsAndResiduals(
         predictor,
         diffs_stddev_by_level=emulator.norm["stddiff"],
@@ -149,7 +150,7 @@ def optimize(
     emulator,
     training_data,
     validation_data,
-    weights,
+    per_variable_weights,
     opt_state=None,
     compute_mean_grad=False,
 ):
@@ -177,7 +178,7 @@ def optimize(
     @hk.transform_with_state
     def loss_fn(emulator, inputs, targets, forcings):
         predictor = construct_wrapped_graphcast(emulator)
-        loss, diagnostics = predictor.loss(inputs, targets, forcings, weights)
+        loss, diagnostics = predictor.loss(inputs, targets, forcings, per_variable_weights)
         return map_structure(
             lambda x: unwrap_data(x.mean(), require_jax=True), (loss, diagnostics)
         )
@@ -640,6 +641,13 @@ def predict(
                 if "z_l" in predictions[var].dims:
                     predictions[var] = predictions[var]*landseamask
 
+        # postprocess predictions the same way as done during training
+        for var in predictions:
+            if "landsea_mask" in i_batches:
+                landseamask = i_batches["landsea_mask"]
+                if "z_l" in predictions[var].dims:
+                    predictions[var] = predictions[var]*landseamask
+
                 elif var.lower() == "SSH".lower():
                     predictions[var] = predictions[var]*landseamask.isel(z_l=0)
 
@@ -659,14 +667,14 @@ def predict(
                         mask = predictions["land"].round()
                         landmask = xarray.where(mask==1, 1, 0) # land=1 in the mask
                         predictions[var] = predictions[var]*landmask
-                    # Below is supposed to work, but the static landsea mask omits a few land 
+                    # Below is supposed to work, but the static landsea mask omits a few land
                     # locations and treats them as ocean. This leads to huge errors in the soilm
                     # which has significantly high values in those locations. It is therefore wiser
-                    # to not exclude anything at all rather than excluding a few but important locs. 
+                    # to not exclude anything at all rather than excluding a few but important locs.
                     #else:
                     #    landmask = 1 - landseamask.isel(z_l=0)
-                    #    predictions[var] = predictions[var]*landmask  
-        
+                    #    predictions[var] = predictions[var]*landmask
+
         all_predictions.append(predictions)
         
         progress_bar.update(1)

@@ -4,7 +4,6 @@ Same as training.py, but for StackedGraphCast
 
 import os
 import logging
-import warnings
 from functools import partial
 import numpy as np
 import xarray as xr
@@ -13,16 +12,8 @@ from jax import (
     jit,
     value_and_grad,
     tree_util,
-    local_devices,
-    devices,
-    local_device_count,
-    device_count,
-    print_environment_info,
-    distributed,
     block_until_ready,
 )
-from graphcast.xarray_jax import pmap
-from jax.lax import pmean
 from jax.sharding import NamedSharding, Mesh, PartitionSpec as P
 from jax.sharding import PositionalSharding
 from jax.experimental import mesh_utils
@@ -30,24 +21,12 @@ from jax.random import PRNGKey
 import jax.numpy as jnp
 import optax
 import haiku as hk
-import xarray as xr
-from math import ceil
 
-from graphcast.checkpoint import dump
 from graphcast.stacked_graphcast import StackedGraphCast
 from graphcast.stacked_casting import StackedBfloat16Cast
-from graphcast.xarray_tree import map_structure
 from graphcast.stacked_normalization import StackedInputsAndResiduals
-from graphcast.xarray_jax import unwrap_data
-from graphcast import rollout
 
 from tqdm import tqdm
-
-try:
-    from mpi4py import MPI
-    import mpi4jax
-except:
-    warnings.warn("Import failed for either mpi4py or mpi4jax.")
 
 
 def construct_wrapped_graphcast(emulator, last_input_channel_mapping):
@@ -58,7 +37,8 @@ def construct_wrapped_graphcast(emulator, last_input_channel_mapping):
     # handle inputs/outputs float32 <-> BFloat16
     # ... and so that this happens after applying
     # normalization to inputs & targets
-    predictor = StackedBfloat16Cast(predictor)
+    if emulator.use_half_precision:
+        predictor = StackedBfloat16Cast(predictor)
     predictor = StackedInputsAndResiduals(
         predictor,
         diffs_stddev_by_level=emulator.stacked_norm["stddiff"],
@@ -79,7 +59,7 @@ def init_model(emulator, inputs, last_input_channel_mapping):
         predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping)
         return predictor(inputs)
 
-    devices = jax.devices()
+    devices = jax.devices()[:emulator.num_gpus]
     sharding = PositionalSharding(devices)
     sharding = sharding.reshape((emulator.num_gpus, 1, 1, 1))
 
@@ -101,7 +81,15 @@ def add_trees(tree1, tree2):
     return tree1
 
 def optimize(
-    params, state, optimizer, emulator, trainer, validator, weights, last_input_channel_mapping, opt_state=None
+    params,
+    state,
+    optimizer,
+    emulator,
+    trainer,
+    validator,
+    weights,
+    last_input_channel_mapping,
+    opt_state=None,
 ):
     """Optimize the model parameters by running through all optim_steps in data
 
@@ -123,7 +111,7 @@ def optimize(
     mpi_size = emulator.mpi_size
     use_jax_distributed = emulator.use_jax_distributed
 
-    devices = jax.devices()
+    devices = jax.devices()[:emulator.num_gpus]
     sharding = PositionalSharding(devices)
     sharding = sharding.reshape((emulator.num_gpus, 1, 1, 1))
     all_gpus = sharding.replicate()
@@ -132,7 +120,19 @@ def optimize(
         raise NotImplementedError
 
     @hk.transform_with_state
-    def loss_fn(inputs, targets):
+    def sample_loss_fn(inputs, targets):
+        """Note that this is only valid for a single sample, and if a batch of samples is passed,
+        a batch of losses will be returned
+        """
+        predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping)
+        return predictor.loss(inputs, targets, weights=weights)
+
+
+    @hk.transform_with_state
+    def batch_loss_fn(inputs, targets):
+        """Note that this is only valid for a single sample, and if a batch of samples is passed,
+        a batch of losses will be returned
+        """
         predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping)
         loss, diagnostics = predictor.loss(inputs, targets, weights=weights)
         return loss.mean(), diagnostics.mean(axis=0)
@@ -150,7 +150,7 @@ def optimize(
         # NOTE I think this can be deleted and we can just use loss_fn.apply directly
         def _aux(params, state, i, t):
 
-            (loss, diagnostics), next_state = loss_fn.apply(
+            (loss, diagnostics), next_state = sample_loss_fn.apply(
                 inputs=i,
                 targets=t,
                 params=params,
@@ -182,7 +182,7 @@ def optimize(
                 else:
                     loss += local_loss / batch_size
                     add_trees(grads, local_grads)
-                    add_trees(diagnostics, local_diagnostics)
+                    diagnostics += local_diagnostics / batch_size
                     add_trees(next_state, local_next_state)
 
             return (loss, (diagnostics, next_state)), grads
@@ -242,7 +242,7 @@ def optimize(
         first_input = jax.device_put(first_input, sharding)
         first_target = jax.device_put(first_target, sharding)
 
-        optimize.vloss_jitted = jit(loss_fn.apply)
+        optimize.vloss_jitted = jit(batch_loss_fn.apply)
         (x, _), _ = optimize.vloss_jitted(
             params=params,
             state=state,
@@ -260,7 +260,9 @@ def optimize(
     optim_steps = []
     loss_values = []
     learning_rates = []
+    gradient_norms = []
     lr = np.nan
+    g_norm = np.nan
     loss_by_channel = []
     n_steps = len(trainer)
 
@@ -288,19 +290,27 @@ def optimize(
             target_batch=target_batch,
         )
 
+
         # update progress bar from rank 0
         optim_steps.append(k)
         loss_values.append(loss)
         loss_by_channel.append(diagnostics)
+        msg = f"loss = {loss:.5f}"
+        try:
+            g_norm = opt_state[0].inner_state["g_norm"]
+            msg += f", g_norm = {g_norm:1.2e}"
+        except:
+            pass
+        gradient_norms.append(g_norm)
+
         try:
             lr = opt_state[1].hyperparams["learning_rate"]
+            msg += f", LR = {lr:.2e}"
         except:
             pass
         learning_rates.append(lr)
 
-        progress_bar.set_description(
-            f"loss = {loss:.5f}, LR = {lr:.2e}",
-        )
+        progress_bar.set_description(msg)
         progress_bar.update()
 
     progress_bar.close()
@@ -308,6 +318,7 @@ def optimize(
 
     # validation
     loss_valid_values = []
+    loss_by_channel_valid = []
     n_steps_valid = len(validator)
     progress_bar = tqdm(total=n_steps_valid, ncols=100, desc="Processing")
     for input_batch, target_batch in validator:
@@ -315,7 +326,7 @@ def optimize(
         input_batch = jax.device_put(input_batch, sharding)
         target_batch = jax.device_put(target_batch, sharding)
 
-        (loss_valid, _), _ = optimize.vloss_jitted(
+        (loss_valid, diagnostics_valid), _ = optimize.vloss_jitted(
             params=params,
             state=state,
             inputs=input_batch,
@@ -323,6 +334,7 @@ def optimize(
             rng=PRNGKey(0),
         )
         loss_valid_values.append(loss_valid)
+        loss_by_channel_valid.append(diagnostics_valid)
         progress_bar.set_description(
             f"validation loss = {loss_valid:.5f}"
         )
@@ -334,7 +346,40 @@ def optimize(
     progress_bar.close()
     validator.restart()
 
+    # Compute gradient avg absolute value after each epoch
+    mean_grad = np.mean(
+        tree_util.tree_flatten(
+            tree_util.tree_map(lambda x: np.abs(x).mean(), grads)
+        )[0]
+    )
+
     # save losses for each batch
+    loss_ds = store_loss(
+        emulator=emulator,
+        optim_steps=optim_steps,
+        loss_values=loss_values,
+        loss_by_channel=loss_by_channel,
+        loss_valid_avg=loss_valid_avg,
+        loss_by_channel_valid=loss_by_channel_valid,
+        learning_rates=learning_rates,
+        gradient_norms=gradient_norms,
+        mean_grad=mean_grad,
+    )
+    return params, loss_ds, opt_state
+
+def store_loss(
+    emulator,
+    optim_steps,
+    loss_values,
+    loss_by_channel,
+    loss_valid_avg,
+    loss_by_channel_valid,
+    learning_rates,
+    gradient_norms,
+    mean_grad,
+
+):
+
     loss_ds = xr.Dataset()
     loss_fname = os.path.join(emulator.local_store_path, "loss.nc")
     previous_optim_steps = 0
@@ -344,14 +389,17 @@ def optimize(
         previous_optim_steps = len(stored_loss_ds.optim_step)
         previous_epochs = len(stored_loss_ds["epoch"])
 
+    n_channels = len(loss_by_channel[0])
     loss_by_channel = np.vstack(loss_by_channel)
+    loss_by_channel_valid = np.vstack(loss_by_channel_valid).mean(axis=0, keepdims=True)
+
     loss_ds["optim_step"] = [x + previous_optim_steps for x in optim_steps]
     loss_ds["epoch"] = [1 + previous_epochs]
     loss_ds.attrs["batch_size"] = emulator.batch_size
-    loss_ds["channels"] = xr.DataArray(
-        np.arange(loss_by_channel.shape[-1]),
-        coords={"channels": np.arange(loss_by_channel.shape[-1])},
-        dims=("channels",),
+    loss_ds["channel"] = xr.DataArray(
+        np.arange(n_channels),
+        coords={"channel": np.arange(n_channels)},
+        dims=("channel",),
     )
     loss_ds["loss"] = xr.DataArray(
         loss_values,
@@ -361,7 +409,11 @@ def optimize(
     )
     loss_ds["loss_by_channel"] = xr.DataArray(
         loss_by_channel,
-        dims=("optim_step", "channels"),
+        dims=("optim_step", "channel"),
+    )
+    loss_ds["loss_by_channel_valid"] = xr.DataArray(
+        loss_by_channel_valid,
+        dims=("epoch", "channel"),
     )
     loss_ds["loss_avg"] = xr.DataArray(
         [np.mean(loss_values)],
@@ -381,6 +433,24 @@ def optimize(
             "description": "averaged over validation data once per epoch",
         },
     )
+    loss_ds["mgrad"] = xr.DataArray(
+        [mean_grad],
+        coords={"epoch": loss_ds["epoch"]},
+        dims=("epoch",),
+        attrs={
+            "long_name": "mean absolute value of loss function gradient w.r.t. parameters",
+            "description": "np.abs(x).mean() applied to grads after each epoch",
+        },
+    )
+    loss_ds["g_norm"] = xr.DataArray(
+        gradient_norms,
+        coords={"optim_step": loss_ds["optim_step"]},
+        dims=("optim_step",),
+        attrs={
+            "long_name": "global norm of gradient",
+            "description": "global gradient norm taken before clipping",
+        },
+    )
     loss_ds["learning_rate"] = xr.DataArray(
         learning_rates,
         dims=("optim_step",),
@@ -394,5 +464,5 @@ def optimize(
     else:
         stored_loss_ds = loss_ds
     stored_loss_ds.to_netcdf(loss_fname)
+    return loss_ds
 
-    return params, loss_ds, opt_state
