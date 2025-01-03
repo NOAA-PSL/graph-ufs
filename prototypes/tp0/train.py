@@ -23,7 +23,6 @@ from graphufs import (
 )
 import jax
 
-from config import TP0Emulator
 from graphufs.optim import clipped_cosine_adamw
 
 def calc_stats(Emulator):
@@ -144,17 +143,3 @@ def train(Emulator):
 
     trainer.shutdown(cancel=True)
     validator.shutdown(cancel=True)
-
-if __name__ == "__main__":
-
-    # logging isn't working for me on PSL, no idea why
-    setup_simple_log()
-
-    stats_path = os.path.dirname(TP0Emulator.norm_urls["mean"])
-    if not os.path.isdir(stats_path):
-        logging.info(f"Could not find {stats_path}, computing statistics...")
-        calc_stats(TP0Emulator)
-
-    train(TP0Emulator)
-
-

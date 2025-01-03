@@ -19,7 +19,7 @@ def log(xda):
 def exp(xda):
     return np.exp(xda)
 
-class TP0Emulator(FVEmulator):
+class BaseTP0Emulator(FVEmulator):
 
     data_url = "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.zarr"
     norm_urls = {
@@ -29,8 +29,7 @@ class TP0Emulator(FVEmulator):
     }
     wb2_obs_url = "gs://weatherbench2/datasets/era5/1959-2022-6h-64x32_equiangular_conservative.zarr"
 
-    local_store_path = f"{tp0_path}/local-output"
-    cache_data = True
+    local_store_path = None
 
     # these could be moved to a yaml file later
     # task config options
@@ -91,7 +90,6 @@ class TP0Emulator(FVEmulator):
 
     # training protocol
     batch_size = 16
-    num_batch_splits = 1
     num_epochs = 50
 
     # model config options
@@ -121,33 +119,12 @@ class TP0Emulator(FVEmulator):
     training_batch_rng_seed = 100
 
     # data chunking options
-    chunks_per_epoch = 1
-    steps_per_chunk = None
-    checkpoint_chunks = 1
     max_queue_size = 1
     num_workers = 1
-    load_chunk = True
-    store_loss = True
-    use_preprocessed = True
-
-    # others
-    num_gpus = 1
-    log_only_rank0 = False
-    use_jax_distributed = False
-    use_xla_flags = False
     dask_threads = 8
 
-class TP0Tester(TP0Emulator):
-    target_lead_time = ["3h", "6h", "9h", "12h", "15h", "18h", "21h", "24h"]
-
 tree_util.register_pytree_node(
-    TP0Emulator,
-    TP0Emulator._tree_flatten,
-    TP0Emulator._tree_unflatten
-)
-
-tree_util.register_pytree_node(
-    TP0Tester,
-    TP0Tester._tree_flatten,
-    TP0Tester._tree_unflatten
+    BaseTP0Emulator,
+    BaseTP0Emulator._tree_flatten,
+    BaseTP0Emulator._tree_unflatten
 )

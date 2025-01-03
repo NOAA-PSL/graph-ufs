@@ -2,9 +2,10 @@ from jax import tree_util
 
 from graphufs import ReplayEmulator
 
+from prototypes.tp0.config import tp0_path
+
 class P0Emulator(ReplayEmulator):
 
-    data_url = "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.zarr"
     norm_urls = {
         "mean": "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.statistics.1993-2019/mean_by_level.zarr",
         "std": "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.statistics.1993-2019/stddev_by_level.zarr",
@@ -12,8 +13,7 @@ class P0Emulator(ReplayEmulator):
     }
     wb2_obs_url = "gs://weatherbench2/datasets/era5/1959-2022-6h-64x32_equiangular_conservative.zarr"
 
-    local_store_path = "./local-output-baseline"
-    cache_data = True
+    local_store_path = "{tp0_path}/p0"
 
     # these could be moved to a yaml file later
     # task config options
@@ -66,7 +66,6 @@ class P0Emulator(ReplayEmulator):
 
     # training protocol
     batch_size = 16
-    num_batch_splits = 1
     num_epochs = 50
 
     # model config options
@@ -80,13 +79,7 @@ class P0Emulator(ReplayEmulator):
     # loss weighting, defaults to GraphCast implementation
     weight_loss_per_latitude = True
     weight_loss_per_level = False
-    loss_weights_per_variable = {
-        "pressfc"   : 1.0,
-        "tmp2m"     : 1.0,
-        "spfh2m"    : 1.0,
-        "tmp"       : 1.0,
-        "spfh"      : 1.0,
-    }
+    loss_weights_per_variable = dict()
 
     # this is used for initializing the state in the gradient computation
     grad_rng_seed = 0
@@ -94,24 +87,22 @@ class P0Emulator(ReplayEmulator):
     training_batch_rng_seed = 100
 
     # data chunking options
-    chunks_per_epoch = 1
-    steps_per_chunk = None
-    checkpoint_chunks = 1
     max_queue_size = 1
     num_workers = 1
-    load_chunk = True
-    store_loss = True
-    use_preprocessed = True
-
-    # others
-    num_gpus = 1
-    log_only_rank0 = False
-    use_jax_distributed = False
-    use_xla_flags = False
     dask_threads = 8
+
+
+class P0Tester(P0Emulator):
+    target_lead_time = ["3h", "6h", "9h", "12h", "15h", "18h", "21h", "24h"]
 
 tree_util.register_pytree_node(
     P0Emulator,
     P0Emulator._tree_flatten,
     P0Emulator._tree_unflatten
+)
+
+tree_util.register_pytree_node(
+    P0Tester,
+    P0Tester._tree_flatten,
+    P0Tester._tree_unflatten
 )
