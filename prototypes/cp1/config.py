@@ -43,7 +43,7 @@ class CP1Emulator(ReplayCoupledEmulator):
         "std": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/06h-freq/zarr/fv3.fvstatistics.trop16.1993-2019/stddev_by_level.zarr",
         "stddiff": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/06h-freq/zarr/fv3.fvstatistics.trop16.1993-2019/diffs_stddev_by_level.zarr",
     }
-    
+
     wb2_obs_url = "gs://weatherbench2/datasets/era5/1959-2022-6h-64x32_equiangular_conservative.zarr"
 
     local_store_path = "./zarr-stores"
@@ -53,25 +53,31 @@ class CP1Emulator(ReplayCoupledEmulator):
     # task config options
     # make sure that atm_inputs and ocn_inputs are mutually exclusive sets
     atm_input_variables = (
+        # Surface Variables
         "pressfc",
         "ugrd10m",
         "vgrd10m",
         "tmp2m",
         "spfh2m",
+        # 3D Variables
         "tmp",
         "spfh",
         "ugrd",
         "vgrd",
         "dzdt",
+        # Forcing Variables at input time
+        "dswrf_avetoa",
         "year_progress_sin",
         "year_progress_cos",
         "day_progress_sin",
         "day_progress_cos",
     )
     ocn_input_variables = (
+        # Surface Variables
         "SSH",
         "LW",
         "SW",
+        # 3D Variables
         "so",
         "temp",
         "uo",
@@ -79,7 +85,7 @@ class CP1Emulator(ReplayCoupledEmulator):
         #"landsea_mask",
     )
     ice_input_variables = (
-        "icec",
+	"icec",
         #"icetk",
     )
     land_input_variables = (
@@ -88,11 +94,13 @@ class CP1Emulator(ReplayCoupledEmulator):
         #"tmpsfc",
     )
     atm_target_variables = (
+        # Surface Variables
         "pressfc",
         "ugrd10m",
         "vgrd10m",
         "tmp2m",
         "spfh2m",
+        # 3D Variables
         "tmp",
         "spfh",
         "ugrd",
@@ -100,9 +108,11 @@ class CP1Emulator(ReplayCoupledEmulator):
         "dzdt",
     )
     ocn_target_variables = (
+        # Surface Variables
         "SSH",
         "LW",
         "SW",
+        # 3D Variables
         "so",
         "temp",
         "uo",
@@ -114,8 +124,8 @@ class CP1Emulator(ReplayCoupledEmulator):
     )
     land_target_variables = (
         "soilm",
-        "soilt1",
-        "tmpsfc",
+        #"soilt1",
+        #"tmpsfc",
     )
     atm_forcing_variables = (
         "dswrf_avetoa",
@@ -134,14 +144,14 @@ class CP1Emulator(ReplayCoupledEmulator):
     interfaces["ocn"] = (
         0,
         1,
-        5, 
-        10, 
-        20, 
-        40, 
-        70, 
-        120, 
-        200, 
-        350, 
+        5,
+        10,
+        20,
+        40,
+        70,
+        120,
+        200,
+        350,
         500,
     )
     interfaces["ice"] = ()
@@ -156,15 +166,15 @@ class CP1Emulator(ReplayCoupledEmulator):
     #target_lead_time = [f"{n}h" for n in range(6, 6*4*1+1, 6)]
     training_dates = (          # bounds of training data (inclusive)
         "1993-12-31T18",        # start
-        "2019-12-31T18"         # stop
+        "1994-12-31T18"         # stop
     )
     testing_dates = (           # bounds of testing data (inclusive)
         "2020-01-01T00",        # start
-        "2021-12-31T18"         # stop
+        "2020-12-31T18"         # stop
     )
     validation_dates = (        # bounds of validation data (inclusive)
         "2022-01-01T00",        # start
-        "2023-10-13T18"         # stop
+        "2022-10-13T18"         # stop
     )
 
     # training protocol
@@ -182,59 +192,61 @@ class CP1Emulator(ReplayCoupledEmulator):
     #mesh2grid_edge_normalization_factor = 0.6180338738074472
 
     # loss weighting, defaults to GraphCast implementation
+    weight_loss_per_channel = True
     weight_loss_per_latitude = True
     weight_loss_per_level = True
-    atm_loss_weights_per_variable = {
-        "tmp"           : 1.0,
-        "ugrd10m"       : 0.1,
-        "vgrd10m"       : 0.1,
-        "pressfc"       : 0.1,
-        "prateb_ave"    : 0.1,
-    }
-    ocn_loss_weights_per_variable = {
-        "SSH"           : 0.1,
-        "so"            : 1.0,
-        "temp"          : 1.0,
-    }
-    ice_loss_weights_per_variable = {
-        "icec"          : 1.0,
-        "icetk"         : 0.1,
-    }
-    land_loss_weights_per_variable = {
-        "soilm"         : 0.1,
-    }
-    
-    input_transforms = {
-        "spfh": log,
-        "spfh2m": log,
-    }
-    output_transforms = {
-        "spfh": exp,
-        "spfh2m": exp,
-    }
+    loss_weights_per_variable = dict() # weight all of them equally
+    #atm_loss_weights_per_variable = {
+    #    "tmp"           : 1.0,
+    #    "ugrd10m"       : 0.1,
+    #    "vgrd10m"       : 0.1,
+    #    "pressfc"       : 0.1,
+    #    "prateb_ave"    : 0.1,
+    #}
+    #ocn_loss_weights_per_variable = {
+    #    "SSH"           : 0.1,
+    #    "so"            : 1.0,
+    #    "temp"          : 1.0,
+    #}
+    #ice_loss_weights_per_variable = {
+    #    "icec"          : 1.0,
+    #    "icetk"         : 0.1,
+    #}
+    #land_loss_weights_per_variable = {
+    #    "soilm"         : 0.1,
+    #}
+    # 
+    #input_transforms = {
+    #    "spfh": log,
+    #    "spfh2m": log,
+    #}
+    #output_transforms = {
+    #    "spfh": exp,
+    #    "spfh2m": exp,
+    #}
 
     # this is used for initializing the state in the gradient computation
     grad_rng_seed = 0
     init_rng_seed = 0
     training_batch_rng_seed = 100
 
-    # data chunking options
-    chunks_per_epoch = 1
-    steps_per_chunk = None
-    checkpoint_chunks = 1
+    # data loading options
+    #chunks_per_epoch = 1
+    #steps_per_chunk = None
+    #checkpoint_chunks = 1
     max_queue_size = 1
     num_workers = 1
-    load_chunk = True
+    #load_chunk = True
     #no_load_chunks = False
-    store_loss = True
-    use_preprocessed = True
+    #store_loss = True
+    #use_preprocessed = True
 
     # others
-    num_gpus = 1
-    log_only_rank0 = False
-    use_jax_distributed = False
-    use_xla_flags = False
-    dask_threads = None
+    #num_gpus = 1
+    #log_only_rank0 = False
+    #use_jax_distributed = False
+    #use_xla_flags = False
+    #dask_threads = None
 
 tree_util.register_pytree_node(
     CP1Emulator,
