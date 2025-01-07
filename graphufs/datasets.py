@@ -13,7 +13,7 @@ from graphcast.data_utils import extract_inputs_targets_forcings, extract_inputs
 from graphcast.model_utils import dataset_to_stacked
 
 from .emulator import ReplayEmulator
-from .coupledemulator import CoupledReplayEmulator
+from .coupledemulator import ReplayCoupledEmulator
 
 class Dataset():
     """
