@@ -18,9 +18,9 @@ from graphufs.batchloader import BatchLoader
 from graphufs.log import setup_simple_log
 from graphufs.utils import get_last_input_mapping
 from graphufs.fvstatistics import FVStatisticsComputer
-from graphufs import (
-    init_devices,
-)
+from graphufs.training import init_devices
+from graphufs import stacked_diagnostics
+from graphufs import utils
 import jax
 
 from graphufs.optim import clipped_cosine_adamw
@@ -46,7 +46,7 @@ def calc_stats(Emulator):
     ))
     all_variables.append("log_spfh")
     all_variables.append("log_spfh2m")
-    fvstats(all_variables, integration_period=pd.Timedelta(hours=3))
+    fvstats(all_variables, diagnostics=Emulator.diagnostics, integration_period=pd.Timedelta(hours=3))
 
 def train(Emulator):
 
@@ -91,7 +91,18 @@ def train(Emulator):
     # load weights or initialize a random model
     logging.info("Initializing Optimizer and Parameters")
     inputs, _ = trainer.get_data()
-    params, state = init_model(gufs, inputs, last_input_channel_mapping)
+    diagnostic_kw = {}
+    if gufs.diagnostics is not None:
+        xinputs, xtargets, _ = training_data.get_xarrays(0)
+        input_meta = utils.get_channel_index(xinputs)
+        output_meta = utils.get_channel_index(xtargets)
+        diagnostic_kw["diagnostic_masks"], diagnostic_kw["diagnostic_mappings"], _ = stacked_diagnostics.prepare_diagnostic_functions(
+            input_meta=input_meta,
+            output_meta=output_meta,
+            function_names=gufs.diagnostics,
+        )
+
+    params, state = init_model(gufs, inputs, last_input_channel_mapping, **diagnostic_kw)
     gufs.save_checkpoint(params, id=0)
 
     loss_name = f"{gufs.local_store_path}/loss.nc"
@@ -134,6 +145,7 @@ def train(Emulator):
             weights=weights,
             last_input_channel_mapping=last_input_channel_mapping,
             opt_state=opt_state,
+            **diagnostic_kw,
         )
 
         logging.info(f"Done with epoch {e}")

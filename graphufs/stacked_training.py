@@ -25,11 +25,12 @@ import haiku as hk
 from graphcast.stacked_graphcast import StackedGraphCast
 from graphcast.stacked_casting import StackedBfloat16Cast
 from graphcast.stacked_normalization import StackedInputsAndResiduals
+from graphcast.stacked_diagnostics import StackedInputsResidualsDiagnostics
 
 from tqdm import tqdm
 
 
-def construct_wrapped_graphcast(emulator, last_input_channel_mapping):
+def construct_wrapped_graphcast(emulator, last_input_channel_mapping, diagnostic_mappings=None, diagnostic_masks=None):
     """Constructs and wraps the GraphCast Predictor object"""
 
     predictor = StackedGraphCast(emulator.model_config, emulator.task_config)
@@ -39,24 +40,36 @@ def construct_wrapped_graphcast(emulator, last_input_channel_mapping):
     # normalization to inputs & targets
     if emulator.use_half_precision:
         predictor = StackedBfloat16Cast(predictor)
-    predictor = StackedInputsAndResiduals(
-        predictor,
-        diffs_stddev_by_level=emulator.stacked_norm["stddiff"],
-        mean_by_level=emulator.stacked_norm["mean"],
-        stddev_by_level=emulator.stacked_norm["std"],
-        last_input_channel_mapping=last_input_channel_mapping,
-    )
+    if emulator.diagnostics is None:
+        predictor = StackedInputsAndResiduals(
+            predictor,
+            diffs_stddev_by_level=emulator.stacked_norm["stddiff"],
+            mean_by_level=emulator.stacked_norm["mean"],
+            stddev_by_level=emulator.stacked_norm["std"],
+            last_input_channel_mapping=last_input_channel_mapping,
+        )
+    else:
+        predictor = StackedInputsResidualsDiagnostics(
+            predictor,
+            diffs_stddev_by_level=emulator.stacked_norm["stddiff"],
+            mean_by_level=emulator.stacked_norm["mean"],
+            stddev_by_level=emulator.stacked_norm["std"],
+            last_input_channel_mapping=last_input_channel_mapping,
+            mappings=diagnostic_mappings,
+            masks=diagnostic_masks,
+
+        )
     # multi step rollout is not implemented yet
     return predictor
 
 
-def init_model(emulator, inputs, last_input_channel_mapping):
+def init_model(emulator, inputs, last_input_channel_mapping, diagnostic_mappings=None, diagnostic_masks=None):
     """Initialize model with random weights.
     """
 
     @hk.transform_with_state
     def run_forward(inputs):
-        predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping)
+        predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping, diagnostic_mappings=diagnostic_mappings, diagnostic_masks=diagnostic_masks)
         return predictor(inputs)
 
     devices = jax.devices()[:emulator.num_gpus]
@@ -90,6 +103,8 @@ def optimize(
     weights,
     last_input_channel_mapping,
     opt_state=None,
+    diagnostic_mappings=None,
+    diagnostic_masks=None,
 ):
     """Optimize the model parameters by running through all optim_steps in data
 
@@ -124,7 +139,7 @@ def optimize(
         """Note that this is only valid for a single sample, and if a batch of samples is passed,
         a batch of losses will be returned
         """
-        predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping)
+        predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping, diagnostic_mappings=diagnostic_mappings, diagnostic_masks=diagnostic_masks)
         return predictor.loss(inputs, targets, weights=weights)
 
 
@@ -133,7 +148,7 @@ def optimize(
         """Note that this is only valid for a single sample, and if a batch of samples is passed,
         a batch of losses will be returned
         """
-        predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping)
+        predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping, diagnostic_mappings=diagnostic_mappings, diagnostic_masks=diagnostic_masks)
         loss, diagnostics = predictor.loss(inputs, targets, weights=weights)
         return loss.mean(), diagnostics.mean(axis=0)
 

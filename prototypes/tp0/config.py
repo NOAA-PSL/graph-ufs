@@ -122,6 +122,7 @@ class BaseTP0Emulator(FVEmulator):
     max_queue_size = 1
     num_workers = 1
     dask_threads = 8
+    num_gpus = 1
 
 tree_util.register_pytree_node(
     BaseTP0Emulator,

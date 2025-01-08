@@ -54,7 +54,7 @@ class FVStatisticsComputer(StatisticsComputer):
         )
         self.interfaces = interfaces
 
-    def open_dataset(self, data_vars=None, **tisr_kwargs):
+    def open_dataset(self, data_vars=None, diagnostics=None, **tisr_kwargs):
         xds = xr.open_zarr(self.path_in, **self.open_zarr_kwargs)
 
         # subsample in time
@@ -62,11 +62,15 @@ class FVStatisticsComputer(StatisticsComputer):
             xds = self.subsample_time(xds)
 
         logging.info(f"{self.name}: Adding any derived variables")
+        logging.info(f"{self.name}: diagnostics = {diagnostics}")
         xds = add_derived_vars(
             xds,
+            diagnostics=diagnostics,
             compute_tisr=data_utils.TISR in data_vars if data_vars is not None else False,
             **tisr_kwargs,
         )
+        for key in diagnostics:
+            data_vars.append(key)
 
         # select variables, keeping delz
         if data_vars is not None:

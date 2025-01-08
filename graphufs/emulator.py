@@ -745,7 +745,7 @@ class ReplayEmulator:
 
         def open_normalization(component):
 
-            # try to read locally first
+
             paths = {
                 itd_key: os.path.join(
                     "stacked-normalization",
@@ -754,34 +754,41 @@ class ReplayEmulator:
                 )
                 for itd_key in ["inputs", "targets", "diagnostics"]
             }
+            normers = {}
 
-            raise NotImplementedError("This is where diagnostics normalization needs attention")
-
+            # try to read locally first
             if os.path.isdir(paths["inputs"]) and os.path.isdir(paths["targets"]):
-                inputs = xr.open_zarr(paths["inputs"])
-                inputs = inputs["inputs"].load()
-                targets = xr.open_zarr(paths["targets"])
-                targets = targets["targets"].load()
-
-            else:
-                inputs, targets = self.normalization_to_stacked(self.norm[component], preserved_dims=tuple())
-                ds = xr.Dataset()
-                inputs = inputs.load()
-                targets = targets.load()
-                inputs.to_dataset(name="inputs").to_zarr(paths["inputs"])
-                targets.to_dataset(name="targets").to_zarr(paths["targets"])
-
-            if self.diagnostics is not None:
-                if os.path.isdir(paths["diagnostics"]):
-                    diagnostics = xr.open_zarr(paths["diagnostics"]).load().data
-
+                normers = {key: xr.open_zarr(paths[key])[key] for key in ["inputs", "targets"]}
+                if self.diagnostics is not None:
+                    if os.path.isdir(paths["diagnostics"]):
+                        normers["diagnostics"] = xr.open_zarr(paths["diagnostics"])["diagnostics"]
+                    else:
+                        raise ValueError(f"{self.name}.set_normalization: we have stored inputs and targets normalizationlocally, but not diagnostics")
                 else:
+                    normers["diagnostics"] = None
 
+            # otherwise read from GCS
+            else:
+                normers["inputs"], normers["targets"], normers["diagnostics"] = self.normalization_to_stacked(
+                    self.norm[component],
+                    preserved_dims=tuple(),
+                )
+                for key, xda in normers.items():
+                    if xda is not None:
+                        xda = xda.load()
+                        xda.to_dataset(name=key).to_zarr(paths[key])
+
+            # Now return a loaded array (numpy)
+            inputs = normers["inputs"].load().data
+            targets = normers["targets"].load().data
+            if normers["diagnostics"] is not None:
+                diagnostics = normers["diagnostics"].load().data
             else:
                 diagnostics = None
 
-            return inputs.data, targets.data, diagnostics
+            return inputs, targets, diagnostics
 
+        # loop through mean, std, etc and get each inputs, targets, diagnostics
         for key in self.norm.keys():
             self.stacked_norm[key] = dict()
             input_norms, target_norms, diagnostic_norms = open_normalization(key)
@@ -812,6 +819,11 @@ class ReplayEmulator:
         input_norms = stackit(xds, self.input_variables, n_time=self.n_input, **kwargs)
         forcing_norms = stackit(xds, self.forcing_variables, n_time=self.n_target, **kwargs)
         target_norms = stackit(xds, self.target_variables, n_time=self.n_target, **kwargs)
+        if self.diagnostics is not None:
+            diagnostic_norms = stackit(xds, self.diagnostics, n_time=self.n_target, **kwargs)
+        else:
+            diagnostic_norms = None
+
         input_norms = xr.concat(
             [
                 input_norms,
@@ -819,7 +831,7 @@ class ReplayEmulator:
             ],
             dim="channels",
         )
-        return input_norms, target_norms
+        return input_norms, target_norms, diagnostic_norms
 
 
     def calc_loss_weights(self, gds):

@@ -5,6 +5,7 @@ TODO:
 """
 
 import numpy as np
+import jax.numpy as jnp
 
 
 def prepare_diagnostic_functions(input_meta, output_meta, function_names):
@@ -35,18 +36,21 @@ def prepare_diagnostic_functions(input_meta, output_meta, function_names):
 
     function_mapping = {
         "wind_speed": _wind_speed,
+        "horizontal_wind_speed": _horizontal_wind_speed,
     }
 
     n_levels = 1 + np.max([val.get("level", 0) for val in output_meta.values()])
     shapes = {
         "wind_speed": n_levels,
+        "horizontal_wind_speed": n_levels,
     }
     recognized_names = list(function_mapping.keys())
     for name in function_names:
-        assert name in recognized_names,
+        assert name in recognized_names, \
             f"{__name__}.prepare_diagnostic_functions: did not recognize {name}, has to be one of {recognized_names}"
     # filter to only return what user wants
     function_mapping = {key: val for key, val in function_mapping.items() if key in function_names}
+    shapes = {key: val for key, val in shapes.items() if key in function_names}
     return masks, function_mapping, shapes
 
 
@@ -62,4 +66,9 @@ def _wind_speed(inputs, outputs, masks):
     u = outputs[..., masks["outputs"]["ugrd"]]
     v = outputs[..., masks["outputs"]["vgrd"]]
     w = outputs[..., masks["outputs"]["dzdt"]]
-    return np.sqrt(u**2 + v**2 + w**2)
+    return jnp.sqrt(u**2 + v**2 + w**2)
+
+def _horizontal_wind_speed(inputs, outputs, masks):
+    u = outputs[..., masks["outputs"]["ugrd"]]
+    v = outputs[..., masks["outputs"]["vgrd"]]
+    return jnp.sqrt(u**2 + v**2)
