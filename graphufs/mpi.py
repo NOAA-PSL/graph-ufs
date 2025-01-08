@@ -1,3 +1,7 @@
+import os
+import logging
+import jax
+
 try:
     from mpi4py import MPI
     import mpi4jax
@@ -5,11 +9,7 @@ try:
 
 except:
     _has_mpi = False
-    logging.warning(f"graphufs.mpi: Unable to import mpi4py or mpi4jax, cannot use this module")
 
-import os
-import logging
-import jax
 
 from graphufs.log import SimpleFormatter
 
