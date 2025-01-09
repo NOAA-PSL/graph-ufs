@@ -310,7 +310,15 @@ class ReplayCoupledEmulator:
     @property
     def checkpoint_dir(self):
         return os.path.join(self.local_store_path, "models")
+    
+    def open_dataset(self, **kwargs):
+        xds_atm = self.open_atm_dataset(**kwargs)
+        xds_ocn = self.open_ocn_dataset(**kwargs)
+        xds_ice = self.open_ice_dataset(**kwargs)
+        xds_land = self.open_land_dataset(**kwargs)
+        xds = xr.merge([xds_atm, xds_ocn, xds_ice, xds_land])
 
+        return xds
 
     def open_atm_dataset(self, **kwargs):
         xds = xr.open_zarr(self.data_url["atm"], storage_options={"token": "anon"}, **kwargs)
