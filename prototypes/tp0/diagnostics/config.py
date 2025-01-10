@@ -10,7 +10,7 @@ class TP0Emulator(BaseTP0Emulator):
         "std": f"{tp0_path}/diagnostics/fvstatistics/stddev_by_level.zarr",
         "stddiff": f"{tp0_path}/diagnostics/fvstatistics/diffs_stddev_by_level.zarr",
     }
-    diagnostics = ("horizontal_wind_speed", "layer_thickness")
+    diagnostics = ("horizontal_wind_speed", "hydrostatic_layer_thickness", "hydrostatic_geopotential")
     training_dates = (          # bounds of training data (inclusive)
         "1994-01-01T00",        # start
         "1994-01-05T21"         # stop
@@ -19,8 +19,7 @@ class TP0Emulator(BaseTP0Emulator):
         "1996-01-01T00",        # start
         "1996-01-05T21"         # stop
     )
-    input_transforms = dict()
-    output_transforms = dict()
+    num_epochs = 10
 
 class TP0Tester(TP0Emulator):
     target_lead_time = ["3h", "6h", "9h", "12h", "15h", "18h", "21h", "24h"]

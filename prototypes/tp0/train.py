@@ -44,8 +44,8 @@ def calc_stats(Emulator):
     all_variables = list(set(
         Emulator.input_variables + Emulator.forcing_variables + Emulator.target_variables
     ))
-    #all_variables.append("log_spfh")
-    #all_variables.append("log_spfh2m")
+    all_variables.append("log_spfh")
+    all_variables.append("log_spfh2m")
     fvstats(all_variables, diagnostics=Emulator.diagnostics, integration_period=pd.Timedelta(hours=3))
 
 def train(Emulator):
@@ -103,6 +103,8 @@ def train(Emulator):
             extra={
                 "ak": gufs.ak,
                 "bk": gufs.bk,
+                "input_transforms": gufs.compilable_input_transforms,
+                "output_transforms": gufs.compilable_output_transforms,
             },
         )
 

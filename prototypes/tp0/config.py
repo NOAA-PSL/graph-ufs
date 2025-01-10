@@ -1,6 +1,6 @@
 import os
 import xarray as xr
-from jax import tree_util
+from jax import tree_util, numpy as jnp
 import numpy as np
 
 from graphufs import FVEmulator
@@ -16,8 +16,21 @@ def log(xda):
         0.,
     )
 
+def jlog(array):
+    cond = array > 0
+    masked = jnp.where(cond, array, 1.)
+    return jnp.log(masked)
+
 def exp(xda):
     return np.exp(xda)
+
+def jexp(array):
+    cond = array != 0
+    return jnp.where(
+        cond,
+        jnp.exp(array),
+        0.
+    )
 
 class BaseTP0Emulator(FVEmulator):
 
@@ -111,6 +124,14 @@ class BaseTP0Emulator(FVEmulator):
     output_transforms = {
         "spfh": exp,
         "spfh2m": exp,
+    }
+    compilable_input_transforms = {
+        "spfh": jlog,
+        "spfh2m": jlog,
+    }
+    compilable_output_transforms = {
+        "spfh": jexp,
+        "spfh2m": jexp,
     }
 
     # this is used for initializing the state in the gradient computation

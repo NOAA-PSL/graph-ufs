@@ -27,13 +27,15 @@ def prepare_diagnostic_functions(function_names):
     function_mapping = {
         "wind_speed": _wind_speed,
         "horizontal_wind_speed": _horizontal_wind_speed,
-        "layer_thickness": _layer_thickness,
+        "hydrostatic_layer_thickness": _hydrostatic_layer_thickness,
+        "hydrostatic_geopotential": _hydrostatic_geopotential,
     }
 
     required_variables = {
         "wind_speed": ("ugrd", "vgrd", "dzdt"),
         "horizontal_wind_speed": ("ugrd", "vgrd"),
-        "layer_thickness": ("pressfc", "tmp", "spfh"), # ak, bk are already present ... should be at least
+        "hydrostatic_layer_thickness": ("pressfc", "tmp", "spfh"), # ak, bk are already present ... should be at least
+        "hydrostatic_geopotential": ("pressfc", "tmp", "spfh", "hgtsfc_static"), # ak, bk are already present ... should be at least
     }
 
     recognized_names = list(function_mapping.keys())
@@ -72,7 +74,13 @@ def _pressure_interfaces(xds):
     lp = _get_l2p(xds)
     return lp.calc_pressure_interfaces(xds["pressfc"])
 
-def _layer_thickness(xds):
+def _hydrostatic_layer_thickness(xds):
     lp = _get_l2p(xds)
     # TODO: potentially remap spfh
     return lp.calc_delz(xds["pressfc"], xds["tmp"], xds["spfh"])
+
+def _hydrostatic_geopotential(xds):
+    lp = _get_l2p(xds)
+    # TODO: potentially remap spfh
+    delz = lp.calc_delz(xds["pressfc"], xds["tmp"], xds["spfh"])
+    return lp.calc_geopotential(xds["hgtsfc_static"], delz)

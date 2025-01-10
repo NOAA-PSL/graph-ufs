@@ -122,6 +122,8 @@ class ReplayEmulator:
     }
     input_transforms = None
     output_transforms = None
+    compilable_input_transforms = None
+    compilable_output_transforms = None
     diagnostics = None
 
     # this is used for initializing the state in the gradient computation
@@ -862,6 +864,8 @@ class ReplayEmulator:
                 extra={
                     "ak": self.ak,
                     "bk": self.bk,
+                    "input_transforms": self.compilable_input_transforms,
+                    "output_transforms": self.compilable_output_transforms,
                 },
             )
             n_diagnostic_channels = np.sum(list(diagnostic_mappings["shapes"].values()))
