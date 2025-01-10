@@ -39,6 +39,7 @@ def optimize(
     weights,
     last_input_channel_mapping,
     opt_state=None,
+    diagnostic_mappings=None,
 ):
     """Optimize the model parameters by running through all optim_steps in data
 
@@ -73,7 +74,7 @@ def optimize(
         """Note that this is only valid for a single sample, and if a batch of samples is passed,
         a batch of losses will be returned
         """
-        predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping)
+        predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping, diagnostic_mappings=diagnostic_mappings)
         return predictor.loss(inputs, targets, weights=weights)
 
 
@@ -82,7 +83,7 @@ def optimize(
         """Note that this is only valid for a single sample, and if a batch of samples is passed,
         a batch of losses will be returned
         """
-        predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping)
+        predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping, diagnostic_mappings=diagnostic_mappings)
         loss, diagnostics = predictor.loss(inputs, targets, weights=weights)
         return loss.mean(), diagnostics.mean(axis=0)
 

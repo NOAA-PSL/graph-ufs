@@ -23,12 +23,12 @@ from graphufs.stacked_training import (
 from graphufs.mpi import MPITopology, _has_mpi
 
 
-def init_model(emulator, inputs, last_input_channel_mapping, mpi_topo):
+def init_model(emulator, inputs, last_input_channel_mapping, mpi_topo, diagnostic_mappings=None):
     """Initialize model with random weights.
     """
     @hk.transform_with_state
     def run_forward(local_inputs):
-        predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping)
+        predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping, diagnostic_mappings=diagnostic_mappings)
         return predictor(local_inputs)
 
     inputs = mpi_topo.device_put(inputs)
@@ -51,6 +51,7 @@ def optimize(
     last_input_channel_mapping,
     mpi_topo,
     opt_state=None,
+    diagnostic_mappings=None,
 ):
     """Optimize the model parameters by running through all optim_steps in data
 
@@ -76,7 +77,7 @@ def optimize(
         """Note that this is only valid for a single sample, and if a batch of samples is passed,
         a batch of losses will be returned
         """
-        predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping)
+        predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping, diagnostic_mappings=diagnostic_mappings)
         loss, diagnostics = predictor.loss(inputs, targets, weights=weights)
         return loss.mean(), diagnostics.mean(axis=0)
 

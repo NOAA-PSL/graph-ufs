@@ -69,7 +69,6 @@ class FVStatisticsComputer(StatisticsComputer):
             **tisr_kwargs,
         )
 
-
         if diagnostics is not None:
             diagnostic_mappings = prepare_diagnostic_functions(diagnostics)
 
