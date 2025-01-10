@@ -10,7 +10,12 @@ class TP0Emulator(BaseTP0Emulator):
         "std": f"{tp0_path}/diagnostics/fvstatistics/stddev_by_level.zarr",
         "stddiff": f"{tp0_path}/diagnostics/fvstatistics/diffs_stddev_by_level.zarr",
     }
-    diagnostics = ("horizontal_wind_speed", "hydrostatic_layer_thickness", "hydrostatic_geopotential")
+    diagnostics = (
+        "10m_horizontal_wind_speed",
+        "horizontal_wind_speed",
+        "hydrostatic_layer_thickness",
+        "hydrostatic_geopotential",
+    )
     training_dates = (          # bounds of training data (inclusive)
         "1994-01-01T00",        # start
         "1994-01-05T21"         # stop

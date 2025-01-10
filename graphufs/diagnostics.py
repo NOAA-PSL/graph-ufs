@@ -25,6 +25,7 @@ def prepare_diagnostic_functions(function_names):
         function_mapping (dict): with {"function_name": (*args)}
     """
     function_mapping = {
+        "10m_horizontal_wind_speed": _10m_horizontal_wind_speed,
         "wind_speed": _wind_speed,
         "horizontal_wind_speed": _horizontal_wind_speed,
         "hydrostatic_layer_thickness": _hydrostatic_layer_thickness,
@@ -32,6 +33,7 @@ def prepare_diagnostic_functions(function_names):
     }
 
     required_variables = {
+        "10m_horizontal_wind_speed": ("ugrd10m", "vgrd10m"),
         "wind_speed": ("ugrd", "vgrd", "dzdt"),
         "horizontal_wind_speed": ("ugrd", "vgrd"),
         "hydrostatic_layer_thickness": ("pressfc", "tmp", "spfh"), # ak, bk are already present ... should be at least
@@ -58,6 +60,11 @@ def _wind_speed(xds):
 def _horizontal_wind_speed(xds):
     u = xds["ugrd"]
     v = xds["vgrd"]
+    return np.sqrt(u**2 + v**2)
+
+def _10m_horizontal_wind_speed(xds):
+    u = xds["ugrd10m"]
+    v = xds["vgrd10m"]
     return np.sqrt(u**2 + v**2)
 
 def _get_l2p(xds):

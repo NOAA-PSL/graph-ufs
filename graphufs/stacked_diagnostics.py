@@ -37,6 +37,7 @@ def prepare_diagnostic_functions(input_meta, output_meta, function_names, extra)
     }
 
     function_mapping = {
+        "10m_horizontal_wind_speed": _10m_horizontal_wind_speed,
         "wind_speed": _wind_speed,
         "horizontal_wind_speed": _horizontal_wind_speed,
         "hydrostatic_layer_thickness": _hydrostatic_layer_thickness,
@@ -45,7 +46,6 @@ def prepare_diagnostic_functions(input_meta, output_meta, function_names, extra)
 
     n_levels = 1 + np.max([val.get("level", 0) for val in output_meta.values()])
     shapes = {
-        "10m_wind_speed": 1,
         "10m_horizontal_wind_speed": 1,
         "wind_speed": n_levels,
         "horizontal_wind_speed": n_levels,
@@ -99,6 +99,11 @@ def _wind_speed(inputs, outputs, masks, extra):
 def _horizontal_wind_speed(inputs, outputs, masks, extra):
     u = outputs[..., masks["outputs"]["ugrd"]]
     v = outputs[..., masks["outputs"]["vgrd"]]
+    return jnp.sqrt(u**2 + v**2)
+
+def _10m_horizontal_wind_speed(inputs, outputs, masks, extra):
+    u = outputs[..., masks["outputs"]["ugrd10m"]]
+    v = outputs[..., masks["outputs"]["vgrd10m"]]
     return jnp.sqrt(u**2 + v**2)
 
 def _pressure_interfaces(inputs, outputs, masks, extra):
