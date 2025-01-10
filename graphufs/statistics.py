@@ -125,25 +125,28 @@ class StatisticsComputer:
         logging.info(f"{self.name}: Adding any derived variables")
         xds = add_derived_vars(
             xds,
-            diagnostics=diagnostics,
             compute_tisr=data_utils.TISR in data_vars if data_vars is not None else False,
             **tisr_kwargs,
         )
-        # TODO:  but we might not want this
-        for key in diagnostics:
-            data_vars.append(key)
-
-        # select variables
-        if data_vars is not None:
-            if isinstance(data_vars, str):
-                data_vars = [data_vars]
-            xds = xds[data_vars]
 
         logging.info(f"{self.name}: Adding any transformed variables")
         xds = add_transformed_vars(
             xds,
             transforms=self.transforms,
         )
+
+        if diagnostics is not None:
+            logging.info("{self.name}: computing diagnostics {diagnostics}")
+            mappings = prepare_diagnostic_functions(diagnostics)
+            for key, func in mappings["functions"].items():
+                xds[key] = func(xds)
+            data_vars += list(diagnostics)
+
+        # select variables
+        if data_vars is not None:
+            if isinstance(data_vars, str):
+                data_vars = [data_vars]
+            xds = xds[data_vars]
         return xds
 
     def subsample_time(self, xds):
@@ -298,7 +301,6 @@ class StatisticsComputer:
 def add_derived_vars(
     xds: xr.Dataset,
     component: str = "atm",
-    diagnostics: Optional[list[str]] = None,
     compute_tisr: Optional[bool]=False,
     **tisr_kwargs,
 ) -> xr.Dataset:
@@ -331,13 +333,6 @@ def add_derived_vars(
             xds = xds.rename({"time": "datetime"})
             data_utils.add_derived_vars(xds)
             xds = xds.rename({"datetime": "time"})
-
-        # now add any of our own diagnostic quantities if desired
-        if diagnostics is not None:
-            logging.info("{__name__}.add_derived_vars: computing diagnostics {diagnostics}")
-            mappings = prepare_diagnostic_functions(diagnostics)
-            for key, func in mappings.items():
-                xds[key] = func(xds)
 
     return xds
 

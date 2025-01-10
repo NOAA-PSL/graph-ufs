@@ -156,6 +156,8 @@ class ReplayEmulator:
                 method="nearest",
             ).values
         )
+        self.ak = None
+        self.bk = None
         self.model_config = ModelConfig(
             resolution=self.resolution,
             mesh_size=self.mesh_size,
@@ -853,12 +855,16 @@ class ReplayEmulator:
         # figure out diagnostics
         n_prediction_channels = targets.shape[-1]
         if self.diagnostics is not None:
-            masks, mappings, shapes = stacked_diagnostics.prepare_diagnostic_functions(
+            diagnostic_mappings = stacked_diagnostics.prepare_diagnostic_functions(
                 input_meta=input_meta,
                 output_meta=output_meta,
                 function_names=self.diagnostics,
+                extra={
+                    "ak": self.ak,
+                    "bk": self.bk,
+                },
             )
-            n_diagnostic_channels = np.sum(list(shapes.values()))
+            n_diagnostic_channels = np.sum(list(diagnostic_mappings["shapes"].values()))
             diagnostic_weights = np.ones(
                 shape=weights.shape[:-1]+(n_diagnostic_channels,),
             )

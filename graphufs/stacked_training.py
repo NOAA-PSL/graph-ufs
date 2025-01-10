@@ -30,7 +30,7 @@ from graphcast.stacked_diagnostics import StackedInputsResidualsDiagnostics
 from tqdm import tqdm
 
 
-def construct_wrapped_graphcast(emulator, last_input_channel_mapping, diagnostic_mappings=None, diagnostic_masks=None):
+def construct_wrapped_graphcast(emulator, last_input_channel_mapping, diagnostic_mappings=None):
     """Constructs and wraps the GraphCast Predictor object"""
 
     predictor = StackedGraphCast(emulator.model_config, emulator.task_config)
@@ -56,20 +56,19 @@ def construct_wrapped_graphcast(emulator, last_input_channel_mapping, diagnostic
             stddev_by_level=emulator.stacked_norm["std"],
             last_input_channel_mapping=last_input_channel_mapping,
             mappings=diagnostic_mappings,
-            masks=diagnostic_masks,
 
         )
     # multi step rollout is not implemented yet
     return predictor
 
 
-def init_model(emulator, inputs, last_input_channel_mapping, diagnostic_mappings=None, diagnostic_masks=None):
+def init_model(emulator, inputs, last_input_channel_mapping, diagnostic_mappings=None):
     """Initialize model with random weights.
     """
 
     @hk.transform_with_state
     def run_forward(inputs):
-        predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping, diagnostic_mappings=diagnostic_mappings, diagnostic_masks=diagnostic_masks)
+        predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping, diagnostic_mappings=diagnostic_mappings)
         return predictor(inputs)
 
     devices = jax.devices()[:emulator.num_gpus]
@@ -104,7 +103,6 @@ def optimize(
     last_input_channel_mapping,
     opt_state=None,
     diagnostic_mappings=None,
-    diagnostic_masks=None,
 ):
     """Optimize the model parameters by running through all optim_steps in data
 
@@ -139,7 +137,7 @@ def optimize(
         """Note that this is only valid for a single sample, and if a batch of samples is passed,
         a batch of losses will be returned
         """
-        predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping, diagnostic_mappings=diagnostic_mappings, diagnostic_masks=diagnostic_masks)
+        predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping, diagnostic_mappings=diagnostic_mappings)
         return predictor.loss(inputs, targets, weights=weights)
 
 
@@ -148,7 +146,7 @@ def optimize(
         """Note that this is only valid for a single sample, and if a batch of samples is passed,
         a batch of losses will be returned
         """
-        predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping, diagnostic_mappings=diagnostic_mappings, diagnostic_masks=diagnostic_masks)
+        predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping, diagnostic_mappings=diagnostic_mappings)
         loss, diagnostics = predictor.loss(inputs, targets, weights=weights)
         return loss.mean(), diagnostics.mean(axis=0)
 

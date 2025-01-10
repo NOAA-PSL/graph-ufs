@@ -44,8 +44,8 @@ def calc_stats(Emulator):
     all_variables = list(set(
         Emulator.input_variables + Emulator.forcing_variables + Emulator.target_variables
     ))
-    all_variables.append("log_spfh")
-    all_variables.append("log_spfh2m")
+    #all_variables.append("log_spfh")
+    #all_variables.append("log_spfh2m")
     fvstats(all_variables, diagnostics=Emulator.diagnostics, integration_period=pd.Timedelta(hours=3))
 
 def train(Emulator):
@@ -96,10 +96,14 @@ def train(Emulator):
         xinputs, xtargets, _ = training_data.get_xarrays(0)
         input_meta = utils.get_channel_index(xinputs)
         output_meta = utils.get_channel_index(xtargets)
-        diagnostic_kw["diagnostic_masks"], diagnostic_kw["diagnostic_mappings"], _ = stacked_diagnostics.prepare_diagnostic_functions(
+        diagnostic_kw["diagnostic_mappings"] = stacked_diagnostics.prepare_diagnostic_functions(
             input_meta=input_meta,
             output_meta=output_meta,
             function_names=gufs.diagnostics,
+            extra={
+                "ak": gufs.ak,
+                "bk": gufs.bk,
+            },
         )
 
     params, state = init_model(gufs, inputs, last_input_channel_mapping, **diagnostic_kw)

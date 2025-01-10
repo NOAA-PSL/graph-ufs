@@ -6,6 +6,8 @@ TODO:
 
 import numpy as np
 
+from ufs2arco import Layers2Pressure
+
 def prepare_diagnostic_functions(function_names):
     """Make a dictionary that has the function handles and inputs
     so that evaluation can happen very fast during the loss function.
@@ -25,6 +27,13 @@ def prepare_diagnostic_functions(function_names):
     function_mapping = {
         "wind_speed": _wind_speed,
         "horizontal_wind_speed": _horizontal_wind_speed,
+        "layer_thickness": _layer_thickness,
+    }
+
+    required_variables = {
+        "wind_speed": ("ugrd", "vgrd", "dzdt"),
+        "horizontal_wind_speed": ("ugrd", "vgrd"),
+        "layer_thickness": ("pressfc", "tmp", "spfh"), # ak, bk are already present ... should be at least
     }
 
     recognized_names = list(function_mapping.keys())
@@ -32,8 +41,10 @@ def prepare_diagnostic_functions(function_names):
         assert name in recognized_names, \
             f"{__name__}.prepare_diagnostic_functions: did not recognize {name}, has to be one of {recognized_names}"
     # filter to only return what user wants
-    function_mapping = {key: val for key, val in function_mapping.items() if key in function_names}
-    return function_mapping
+    return {
+        "functions": {key: val for key, val in function_mapping.items() if key in function_names},
+        "required_variables": {key: val for key, val in required_variables.items() if key in function_names},
+    }
 
 
 def _wind_speed(xds):
@@ -46,3 +57,22 @@ def _horizontal_wind_speed(xds):
     u = xds["ugrd"]
     v = xds["vgrd"]
     return np.sqrt(u**2 + v**2)
+
+def _get_l2p(xds):
+    kw = {}
+    if "ak" in xds and "bk" in xds:
+        kw["ak"] = xds["ak"]
+        kw["bk"] = xds["bk"]
+    if "pfull" not in xds:
+        kw["level_name"] = "level"
+    return Layers2Pressure(**kw)
+
+
+def _pressure_interfaces(xds):
+    lp = _get_l2p(xds)
+    return lp.calc_pressure_interfaces(xds["pressfc"])
+
+def _layer_thickness(xds):
+    lp = _get_l2p(xds)
+    # TODO: potentially remap spfh
+    return lp.calc_delz(xds["pressfc"], xds["tmp"], xds["spfh"])

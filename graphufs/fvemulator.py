@@ -41,6 +41,8 @@ class FVEmulator(ReplayEmulator):
         nds = get_new_vertical_grid(list(self.interfaces))
         self.levels = list(nds["pfull"].values)
         self.pressure_levels = tuple(nds["pfull"].values)
+        self.ak = nds["ak"]
+        self.bk = nds["bk"]
 
         self.model_config = ModelConfig(
             resolution=self.resolution,
