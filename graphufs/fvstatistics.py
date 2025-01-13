@@ -70,6 +70,8 @@ class FVStatisticsComputer(StatisticsComputer):
         )
 
         if diagnostics is not None:
+            if isinstance(diagnostics, str):
+                diagnostics = [diagnostics]
             diagnostic_mappings = prepare_diagnostic_functions(diagnostics)
 
         # select variables, keeping delz
@@ -77,8 +79,6 @@ class FVStatisticsComputer(StatisticsComputer):
         # transformations and diagnostics, but we don't want to create the regridding task graph
         # for ALL the variables in the dataset (which would be the case if we simply grabbed the variables
         # after transformations/diagnostics), because that could be HUUUUGE
-
-
         if data_vars is not None:
             local_data_vars = copy(data_vars)
             if isinstance(data_vars, str):
@@ -100,7 +100,7 @@ class FVStatisticsComputer(StatisticsComputer):
             # now if we want diagnostics, make sure the required variables are there
             if diagnostics is not None:
                 for key, required_variables in diagnostic_mappings["required_variables"].items():
-                    do_this_diagnostic = any(key == dv for dv in local_data_vars)
+                    do_this_diagnostic = any(key == dv for dv in diagnostics)
                     if do_this_diagnostic:
                         for required_var in required_variables:
                             if required_var not in local_data_vars:
@@ -112,7 +112,7 @@ class FVStatisticsComputer(StatisticsComputer):
                 xds = xds[local_data_vars]
 
         # regrid in the vertical
-        if "pfull" in xds[local_data_vars].dims:
+        if "pfull" in xds.dims:
             logging.info(f"{self.name}: starting vertical regridding")
             xds = fv_vertical_regrid(xds, interfaces=list(self.interfaces))
 

@@ -137,17 +137,21 @@ class StatisticsComputer:
         )
 
         if diagnostics is not None:
+            if isinstance(diagnostics, str):
+                diagnostics = [diagnostics]
             logging.info("{self.name}: computing diagnostics {diagnostics}")
             mappings = prepare_diagnostic_functions(diagnostics)
             for key, func in mappings["functions"].items():
                 xds[key] = func(xds)
-            data_vars += list(diagnostics)
+        else:
+            diagnostics = []
 
         # select variables
         if data_vars is not None:
             if isinstance(data_vars, str):
                 data_vars = [data_vars]
-            xds = xds[data_vars]
+            sel_vars = data_vars + diagnostics
+            xds = xds[sel_vars]
         return xds
 
     def subsample_time(self, xds):

@@ -15,6 +15,10 @@ out that this improves prediction skill quite a bit.
   Inference.
 - `uvwcsicsp` = `uvwc` + Single Initial Condition, use Single Precision during
   Training and Inference.
+- `dlwsltgh` = `uvwc` + Diagnosed Loss with
+    * Wind Speed (10m horizontal and 3D 3 component)
+    * Layer Thickness
+    * Geopotential Height
 
 ## Preprocessing
 
