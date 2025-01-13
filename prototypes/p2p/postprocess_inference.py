@@ -21,10 +21,11 @@ def open_predictions_and_truth(emulator):
     gds = xr.open_zarr(f"{emulator.local_store_path}/inference/validation/graphufs.{duration}.zarr")
 
     # add vertical coordinate stuff
-    nds = xr.open_zarr(emulator.norm_urls["mean"], storage_options={"token": "anon"})
-    gds["ak"] = nds["ak"]
-    gds["bk"] = nds["bk"]
-    gds = gds.set_coords(["ak", "bk"])
+    if "ak" not in gds and "bk" not in gds:
+        nds = xr.open_zarr(emulator.norm_urls["mean"], storage_options={"token": "anon"})
+        gds["ak"] = nds["ak"]
+        gds["bk"] = nds["bk"]
+        gds = gds.set_coords(["ak", "bk"])
 
     # add static hgtsfc for geopotential
     if "hgtsfc_static" not in gds:
@@ -76,7 +77,7 @@ def postproc(emulator, xds, truth, name, plevels=(250, 500, 850)):
     pds = interp2pressure(
         xds,
         plevels,
-        diagnose_geopotential= name!="replay",
+        diagnose_geopotential= name!="replay" and "hydrostatic_geopotential" not in xds,
     )
     logging.info(f"Done forming interpolation operations...")
 

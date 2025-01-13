@@ -16,6 +16,7 @@ from graphufs.batchloader import MPIExpandedBatchLoader
 from graphufs.datasets import Dataset
 from graphufs.inference import swap_batch_time_dims, store_container
 from graphufs.mpi import MPITopology
+from graphufs import diagnostics
 
 def predict(
     params,
@@ -43,6 +44,12 @@ def predict(
     hours = int(emulator.forecast_duration.value / 1e9 / 3600)
     pname = f"{emulator.local_store_path}/inference/{batchloader.dataset.mode}/graphufs.{hours}h.zarr"
     tname = f"{emulator.local_store_path}/inference/{batchloader.dataset.mode}/replay.{hours}h.zarr"
+
+    # prepare diagnostics if desired
+    diagnostic_mappings = dict()
+    if emulator.diagnostics is not None:
+        diagnostic_mappings, _ = diagnostics.prepare_diagnostic_functions(emulator.diagnostics)
+
 
     n_steps = len(batchloader)
     with open(mpi_topo.progress_file, "a") as f:
@@ -79,6 +86,11 @@ def predict(
                 # swap dims to be [time (aka initial condition time), lead_time (aka forecast_time), level, lat, lon]
                 predictions = swap_batch_time_dims(predictions, inittimes)
                 targets = swap_batch_time_dims(targets, inittimes)
+
+                # compute diagnostics if desired
+                for key, func in diagnostic_mappings.items():
+                    predictions[key] = func(predictions)
+                    targets[key] = func(targets)
 
                 # Store to zarr one batch at a time
                 if k == 0:

@@ -16,3 +16,23 @@ cd /global/common/software/m4718/timothys/graph-ufs/prototypes/p2p/uvwc
 
 python postprocess_inference.py
 . ./evaluate_with_wb2.sh
+
+# cleanup, copy to community
+mywork=$WORK/p2p/uvwc
+mycommunity=$COMMUNITY/p2p/uvwc
+mkdir -p $mycommunity/inference/validation
+mkdir -p $mycommunity/logs/training
+mkdir -p $mycommunity/logs/inference
+
+cp $mywork/loss.nc $mycommunity
+cp -r $mywork/models $mycommunity
+cp $mywork/logs/training/*.00.*.* $mycommunity/logs/training
+cp $mywork/logs/inference/*.00.*.* $mycommunity/logs/inference
+cp $mywork/inference/validation/*.nc $mycommunity/inference/validation
+cp -r $mywork/inference/validation/graphufs*.zarr $mycommunity/inference/validation
+
+cd $mycommunity/inference/validation
+mkdir to-psl
+cp *.nc to-psl/
+cp -r graphufs.240h.spectra.zarr to-psl/
+tar -zcvf to-psl.tar.gz to-psl/

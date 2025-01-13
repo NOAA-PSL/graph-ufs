@@ -101,9 +101,12 @@ def regrid_and_rename(xds, truth):
         "prateb_ave": "total_precipitation_3hr",
         "lat": "latitude",
         "lon": "longitude",
+        "hydrostatic_geopotenital": "geopotential",
     }
-    rename_dict = {k: v for k,v in rename_dict.items() if k in ds_out}
-    ds_out = ds_out.rename(rename_dict)
+    for k, v in rename_dict.items():
+        if k in ds_out:
+            logging.info(f"{__name__}.regrid_and_rename: renaming {k} -> {v}")
+            ds_out = ds_out.rename({k: v})
 
     # ds_out has the lat/lon boundaries from input dataset
     # remove these because it doesn't make sense anymore
@@ -178,6 +181,7 @@ def interp2pressure(xds, plevels, diagnose_geopotential=False):
         varlist.append("prsl")
 
     if diagnose_geopotential:
+        logging.info(f"{__name__}.interp2pressure: diagnose_geopotential = True")
         if "geopotential" in xds:
             raise ValueError(f"Geopotential already exists")
         varlist.append("geopotential")

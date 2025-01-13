@@ -13,7 +13,8 @@ from graphufs.stacked_mpi_training import (
 )
 
 from graphufs.optim import clipped_cosine_adamw
-from graphufs.utils import get_last_input_mapping
+from graphufs import utils
+from graphufs import stacked_diagnostics
 
 def train(RemoteEmulator, PackedEmulator):
 
@@ -51,7 +52,27 @@ def train(RemoteEmulator, PackedEmulator):
     logging.info("Initializing Loss Function Weights and Stacked Mappings")
     # compute loss function weights once
     loss_weights = remote_emulator.calc_loss_weights(tds)
-    last_input_channel_mapping = get_last_input_mapping(tds)
+    last_input_channel_mapping = utils.get_last_input_mapping(tds)
+
+
+    # diagnostics
+    diagnostic_mappings = None
+    if emulator.diagnostics is not None:
+        logging.info("Preparing Diagnostic Mappings")
+        xinputs, xtargets, _ = training_data.get_xarrays(0)
+        input_meta = utils.get_channel_index(xinputs)
+        output_meta = utils.get_channel_index(xtargets)
+        diagnostic_mappings = stacked_diagnostics.prepare_diagnostic_functions(
+            input_meta=input_meta,
+            output_meta=output_meta,
+            function_names=emulator.diagnostics,
+            extra={
+                "ak": emulator.ak,
+                "bk": emulator.bk,
+                "input_transforms": emulator.compilable_input_transforms,
+                "output_transforms": emulator.compilable_output_transforms,
+            },
+        )
 
     # initialize a random model
     logging.info("Initializing Optimizer and Parameters")
@@ -61,6 +82,7 @@ def train(RemoteEmulator, PackedEmulator):
         inputs=inputs,
         last_input_channel_mapping=last_input_channel_mapping,
         mpi_topo=topo,
+        diagnostic_mappings=diagnostic_mappings,
     )
 
     loss_name = f"{emulator.local_store_path}/loss.nc"
@@ -106,6 +128,7 @@ def train(RemoteEmulator, PackedEmulator):
             last_input_channel_mapping=last_input_channel_mapping,
             opt_state=opt_state,
             mpi_topo=topo,
+            diagnostic_mappings=diagnostic_mappings,
         )
 
         # save weights
