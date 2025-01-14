@@ -44,7 +44,7 @@ def main(varname):
 
     # if it's a surface variable, then read it from existing stats and use that
     # otherwise, 3D, need to calculate the FV version
-    path_out = "./diagnostic-statistics"
+    path_out = os.path.dirname(Emulator.norm_urls["mean"])
     gcs_stats = lambda prefix : f"gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.statistics.1993-2019/{prefix}_by_level.zarr"
 
     open_zarr_kwargs = {
@@ -53,7 +53,7 @@ def main(varname):
 
     to_zarr_kwargs = {
         "mode": "a",
-#        "storage_options": {"token": "/contrib/Tim.Smith/.gcs/replay-service-account.json"},
+        "storage_options": {"token": "/contrib/Tim.Smith/.gcs/replay-service-account.json"},
     }
 
     ds = xr.open_zarr(gcs_stats("mean"), **open_zarr_kwargs)
@@ -64,17 +64,19 @@ def main(varname):
 
     if do_fv_calc:
         logging.info(f"Need to calculate statistics for {varname}")
+        end_date = "2019-12-31T18"
+        logging.warning(f"{__name__}.calc_statistics.main: note a detail here, P2P script used up to Dec 31 2019 @ 18z for stats, but this is just 3h shy of what we use for training. So the end_date is hard coded in this script.\n\nI am keeping this hard coded date so that we can continue to append to that same zarr store without error.")
         fvstats = FVStatisticsComputer(
             path_in=Emulator.data_url,
             path_out=path_out,
             interfaces=Emulator.interfaces,
             start_date=None,
-            end_date=Emulator.training_dates[-1],
+            end_date=end_date,
             time_skip=None,
             load_full_dataset=False,
             transforms=Emulator.input_transforms,
             open_zarr_kwargs=open_zarr_kwargs,
-            to_zarr_kwargs=to_zarr_kwargs
+            to_zarr_kwargs=to_zarr_kwargs,
         )
 
         fvstats(data_vars=list(), diagnostics=varname)
@@ -93,5 +95,4 @@ def main(varname):
 if __name__ == "__main__":
 
     for key in Emulator.diagnostics:
-    #for key in ["wind_speed"]:
         submit_slurm_job(key)
