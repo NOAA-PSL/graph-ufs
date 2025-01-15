@@ -1,7 +1,7 @@
 from jax import tree_util
 import numpy as np
 import xarray as xr
-from graphufs import ReplayCoupledEmulator
+from graphufs import FVCoupledEmulator
 
 def log(xda):
     cond = xda > 0
@@ -14,7 +14,9 @@ def log(xda):
 def exp(xda):
     return np.exp(xda)
 
-class CP1Emulator(ReplayCoupledEmulator):
+_scratch = "/pscratch/sd/n/nagarwal"
+
+class BaseCP1Trainer(FVCoupledEmulator):
 
     data_url = {}
     norm_urls = {}
@@ -45,8 +47,6 @@ class CP1Emulator(ReplayCoupledEmulator):
     }
 
     wb2_obs_url = "gs://weatherbench2/datasets/era5/1959-2022-6h-64x32_equiangular_conservative.zarr"
-
-    local_store_path = "./zarr-stores"
     no_cache_data = False
 
     # these could be moved to a yaml file later
@@ -85,13 +85,13 @@ class CP1Emulator(ReplayCoupledEmulator):
         #"landsea_mask",
     )
     ice_input_variables = (
-	"icec",
-        #"icetk",
+        "icec",
+        "icetk",
     )
     land_input_variables = (
         "soilm",
-        #"soilt1",
-        #"tmpsfc",
+        "soilt1",
+        "tmpsfc",
     )
     atm_target_variables = (
         # Surface Variables
@@ -120,12 +120,12 @@ class CP1Emulator(ReplayCoupledEmulator):
     )
     ice_target_variables = (
         "icec",
-        #"icetk",
+        "icetk",
     )
     land_target_variables = (
         "soilm",
-        #"soilt1",
-        #"tmpsfc",
+        "soilt1",
+        "tmpsfc",
     )
     atm_forcing_variables = (
         "dswrf_avetoa",
@@ -140,7 +140,7 @@ class CP1Emulator(ReplayCoupledEmulator):
 
     all_variables = tuple() # this is created in __init__
     interfaces = {}
-    interfaces["atm"] = tuple(x for x in range(200, 1001, 100))
+    interfaces["atm"] = tuple(x for x in range(200, 1001, 50))
     interfaces["ocn"] = (
         0,
         1,
@@ -166,15 +166,15 @@ class CP1Emulator(ReplayCoupledEmulator):
     #target_lead_time = [f"{n}h" for n in range(6, 6*4*1+1, 6)]
     training_dates = (          # bounds of training data (inclusive)
         "1993-12-31T18",        # start
-        "1994-12-31T18"         # stop
+        "2019-12-31T21"         # stop
+    )
+    validation_dates = (        # bounds of validation data (inclusive)  
+        "2022-01-01T00",        # start
+        "2023-10-13T03",        # stop 
     )
     testing_dates = (           # bounds of testing data (inclusive)
         "2020-01-01T00",        # start
-        "2020-12-31T18"         # stop
-    )
-    validation_dates = (        # bounds of validation data (inclusive)
-        "2022-01-01T00",        # start
-        "2022-10-13T18"         # stop
+        "2021-12-31T21"         # stop
     )
 
     # training protocol
@@ -216,14 +216,14 @@ class CP1Emulator(ReplayCoupledEmulator):
     #    "soilm"         : 0.1,
     #}
     # 
-    #input_transforms = {
-    #    "spfh": log,
-    #    "spfh2m": log,
-    #}
-    #output_transforms = {
-    #    "spfh": exp,
-    #    "spfh2m": exp,
-    #}
+    input_transforms = {
+        "spfh": log,
+        "spfh2m": log,
+    }
+    output_transforms = {
+        "spfh": exp,
+        "spfh2m": exp,
+    }
 
     # this is used for initializing the state in the gradient computation
     grad_rng_seed = 0
@@ -249,8 +249,8 @@ class CP1Emulator(ReplayCoupledEmulator):
     #dask_threads = None
 
 tree_util.register_pytree_node(
-    CP1Emulator,
-    CP1Emulator._tree_flatten,
-    CP1Emulator._tree_unflatten
+    BaseCP1Trainer,
+    BaseCP1Trainer._tree_flatten,
+    BaseCP1Trainer._tree_unflatten
 )
 

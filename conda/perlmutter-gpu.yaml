@@ -1,4 +1,4 @@
-name: graphufs
+name: graphufs-mpi
 channels:
     - conda-forge
 dependencies:

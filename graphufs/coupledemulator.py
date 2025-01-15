@@ -60,9 +60,9 @@ class ReplayCoupledEmulator:
     land_target_variables = tuple()
     land_forcing_variables = tuple()
     all_variables = tuple()     # this is created in __init__
-    atm_pressure_levels = tuple()
-    ocn_vert_levels = tuple()
-    levels = list()             # created in __init__, has exact pfull level values
+    atm_levels = tuple()
+    ocn_levels = tuple()
+    #levels = list()             # created in __init__, has exact pfull level values
     latitude = tuple()
     longitude = tuple()
     tisr_integration_period = None  # TOA Incident Solar Radiation, integration period used in the function:
@@ -190,13 +190,13 @@ class ReplayCoupledEmulator:
         self.longitude = tuple(float(x) for x in longitude)
         self.atm_levels = list(
             pfull.sel(
-                pfull=list(self.atm_pressure_levels),
+                pfull=list(self.vert_levels["atm"]),
                 method="nearest",
             ).values
         )
         self.ocn_levels = list(
             z_l.sel(
-                z_l=list(self.ocn_vert_levels),
+                z_l=list(self.vert_levels["ocn"]),
                 method="nearest",
             ).values
         )
@@ -311,15 +311,6 @@ class ReplayCoupledEmulator:
     def checkpoint_dir(self):
         return os.path.join(self.local_store_path, "models")
     
-    def open_dataset(self, **kwargs):
-        xds_atm = self.open_atm_dataset(**kwargs)
-        xds_ocn = self.open_ocn_dataset(**kwargs)
-        xds_ice = self.open_ice_dataset(**kwargs)
-        xds_land = self.open_land_dataset(**kwargs)
-        xds = xr.merge([xds_atm, xds_ocn, xds_ice, xds_land])
-
-        return xds
-
     def open_atm_dataset(self, **kwargs):
         xds = xr.open_zarr(self.data_url["atm"], storage_options={"token": "anon"}, **kwargs)
         return xds
@@ -376,10 +367,10 @@ class ReplayCoupledEmulator:
 
         # select our vertical levels
         if es_comp.lower() == "atm".lower():
-            xds = xds.sel(pfull=self.atm_levels)
+            xds = xds.sel(pfull=list(self.atm_levels), method="nearest")
             myvars = list(x for x in set(self.atm_input_variables+self.atm_target_variables+self.atm_forcing_variables) if x in xds)
         elif es_comp.lower() == "ocn".lower():
-            xds = xds.sel(z_l=self.ocn_levels)
+            xds = xds.sel(z_l=self.ocn_levels, method="nearest")
             myvars = list(x for x in set(self.ocn_input_variables+self.ocn_target_variables+self.ocn_forcing_variables) if x in xds)
         elif es_comp.lower() == "ice".lower():
             myvars = list(x for x in set(self.ice_input_variables+self.ice_target_variables+self.ice_forcing_variables) if x in xds)
@@ -485,7 +476,7 @@ class ReplayCoupledEmulator:
             missing_dates = set(all_new_time.values) - set(xds_on_disk.time.values)
             if len(missing_dates) > 0:
                 xds_on_disk.close()
-                logging.info(f"Downloading missing {mode} data for {len(missing_dates)} time stamps.")
+                logging.info(f"local data found: downloading missing {mode} data for {len(missing_dates)} time stamps.")
                 # download and write missing dates to disk
                 # atm
                 missing_xds_atm = self.open_atm_dataset()
@@ -511,6 +502,36 @@ class ReplayCoupledEmulator:
         all_xds = self.check_for_ints(all_xds)
         return all_xds
 
+    def open_and_subsample(
+        self,
+        all_new_time=None,
+        mode="training",
+    ):
+        """Open datsets, subsample and return"""
+        all_new_time = all_new_time if all_new_time is not None else self.get_time(mode=mode)
+        
+        # atm
+        xds_atm = xr.open_zarr(self.data_url["atm"], storage_options={"token": "anon"})
+        all_xds_atm = self.subsample_dataset(xds_atm, new_time=all_new_time, es_comp="atm")
+    
+        # ocn
+        xds_ocn = xr.open_zarr(self.data_url["ocn"], storage_options={"token": "anon"})
+        all_xds_ocn = self.subsample_dataset(xds_ocn, new_time=all_new_time, es_comp="ocn")
+        all_xds_ocn = all_xds_ocn.rename({"lat":"grid_yt", "lon":"grid_xt"})
+        
+        # ice
+        xds_ice = xr.open_zarr(self.data_url["ice"], storage_options={"token": "anon"})
+        all_xds_ice = self.subsample_dataset(xds_ice, new_time=all_new_time, es_comp="ice")
+        
+        # land
+        xds_land = xr.open_zarr(self.data_url["land"], storage_options={"token": "anon"})
+        all_xds_land = self.subsample_dataset(xds_land, new_time=all_new_time, es_comp="land")
+
+        all_xds = xr.merge([all_xds_atm, all_xds_ocn, all_xds_ice, all_xds_land])
+        all_xds = self.check_for_ints(all_xds)
+        return all_xds
+    
+    
     @staticmethod
     def divide_into_slices(N, K):
         """
@@ -862,6 +883,8 @@ class ReplayCoupledEmulator:
 
                             # necessary for graphcast.dataset to stacked operations
                             xds = xds.rename({transformed_key: key})
+                    print("self.atm_levels:", self.atm_levels)
+                    print("normalization dataset pfull:", xds_atm.pfull)
                     xds_atm = xds_atm.sel(pfull=self.atm_levels)
                     xds_ocn = xds_ocn[vars_ocn]
                     xds_ocn = xds_ocn.sel(z_l=self.ocn_levels)

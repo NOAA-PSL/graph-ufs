@@ -100,12 +100,13 @@ class CP0Emulator(ReplayCoupledEmulator):
     land_forcing_variables = ()
 
     all_variables = tuple() # this is created in __init__
-    atm_pressure_levels = (
+    vert_levels = {}
+    vert_levels["atm"] = (
         100,
         500,
         1000,
     )
-    ocn_vert_levels = (
+    vert_levels["ocn"] = (
         0.5,
         50,
         200,

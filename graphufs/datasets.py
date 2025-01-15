@@ -41,15 +41,14 @@ class Dataset():
         self.preload_batch = preload_batch
         self.input_chunks = input_chunks
         self.target_chunks = target_chunks
-        xds = self._open_dataset()
-        input_dims={
+        xds, es_comp = self._open_dataset()
+        self.es_comp = es_comp
+        input_dims = {
                 "datetime": emulator.n_forecast,
-                "lon": len(xds["lon"]),
-                "lat": len(xds["lat"]),
-                "level": len(xds["level"]),
-            },
-        if "z_l" in xds.dims:
-            input_dims["z_l"] = len(xds["z_l"])
+            }
+        for key in ["lon", "lat", "level", "z_l"]:
+            if key in xds.dims:
+                input_dims[key] = xds.sizes[key]
         self.sample_generator = BatchGenerator(
             ds=xds,
             input_dims=input_dims,
@@ -83,7 +82,7 @@ class Dataset():
             sample_input, sample_target, sample_forcing = self.get_xarrays(idx)
         else:
             sample_input, sample_target, sample_forcing = self.get_batch_of_xarrays(idx)
-
+            
         x = self._stack(sample_input, sample_forcing)
         y = self._stack(sample_target)
         return x, y
@@ -141,18 +140,27 @@ class Dataset():
         Returns:
             xds (xarray.Dataset): Preprocessed xarray dataset.
         """
-        xds = self.emulator.open_dataset()
         time = self.emulator.get_time(mode=self.mode)
-        xds = self.emulator.subsample_dataset(xds, new_time=time)
-        xds = self.emulator.check_for_ints(xds)
-        xds = xds.rename({
-            "time": "datetime",
-            "pfull": "level",
-            "grid_yt": "lat",
-            "grid_xt": "lon",
-        })
-        xds = xds.drop_vars(["cftime", "ftime"])
-        return xds
+        xds = self.emulator.open_and_subsample(all_new_time=time, mode=self.mode)
+        if "z_l" in xds.dims and ("pfull" in xds.dims or "level" in xds.dims):
+            es_comp = "coupled"
+        elif "z_l" in xds.dims and "level" not in xds.dims and "pfull" not in xds.dims:
+            es_comp = "ocn"
+        else: # this has to be refined in the future to accomodate land- and ice-only models
+            es_comp = "atm"
+        if "time" in xds.dims:
+            xds = xds.rename({"time": "datetime"})
+        if "grid_xt" in xds.dims:
+            xds = xds.rename({"grid_xt": "lon"})
+        if "grid_yt" in xds.dims:
+            xds = xds.rename({"grid_yt": "lat"})
+        if "pfull" in xds.dims:
+            xds = xds.rename({"pfull": "level"})
+        for x in ["cftime", "ftime"]:
+            if x in xds.dims:
+                xds = xds.drop_vars(x) 
+
+        return xds, es_comp
 
     def _preprocess(self, xds: xr.Dataset) -> xr.Dataset:
         """
@@ -194,12 +202,18 @@ class Dataset():
             xinput, xtarget, xforcing (xarray.DataArray): as from graphcast.data_utils.extract_inputs_targets_forcings
         """
         sample = self.get_xds(idx)
-
-        xinput, xtarget, xforcing = extract_inputs_targets_forcings(
-            sample,
-            drop_datetime=False,
-            **self.emulator.extract_kwargs,
-        )
+        if self.es_comp == "coupled":
+            xinput, xtarget, xforcing = extract_inputs_targets_forcings_coupled(
+                sample,
+                drop_datetime=False,
+                **self.emulator.extract_kwargs,
+            )
+        else:
+            xinput, xtarget, xforcing = extract_inputs_targets_forcings(
+                sample,
+                drop_datetime=False,
+                **self.emulator.extract_kwargs,
+            )
         xinput = xinput.expand_dims({"batch": [idx]})
         xtarget = xtarget.expand_dims({"batch": [idx]})
         xforcing = xforcing.expand_dims({"batch": [idx]})

@@ -14,7 +14,6 @@ from typing import Optional
 from ufs2arco import Layers2Pressure
 from graphcast.graphcast import ModelConfig, TaskConfig
 from graphcast import data_utils
-
 from .coupledemulator import ReplayCoupledEmulator
 
 class FVCoupledEmulator(ReplayCoupledEmulator):
@@ -27,24 +26,33 @@ class FVCoupledEmulator(ReplayCoupledEmulator):
             warnings.warn("Could not import flox, install with 'conda install -c conda-forge flox' for faster volume averaging (i.e. groupby operations)")
 
         if self.local_store_path is None:
-            warnings.warn("FVEmulator.__init__: no local_store_path set, data will always be accessed remotely. Proceed with patience.")
+            warnings.warn("FVCoupledEmulator.__init__: no local_store_path set, data will always be accessed remotely. Proceed with patience.")
+       
+        # Combine input and target variables from all components                                                      
+        self.input_variables = tuple(set(self.atm_input_variables+self.ocn_input_variables+                           
+            self.ice_input_variables+self.land_input_variables))                                                      
+        self.target_variables = tuple(set(self.atm_target_variables+self.ocn_target_variables+                        
+            self.ice_target_variables+self.land_target_variables))                                                    
+        self.forcing_variables = tuple(set(self.atm_forcing_variables+self.ocn_forcing_variables+                     
+            self.ice_forcing_variables+self.land_forcing_variables)) 
 
         if any(x not in self.input_variables for x in self.target_variables):
             raise NotImplementedError(f"GraphUFS cannot predict target variables that are not also inputs")
 
         self.mpi_rank = mpi_rank
         self.mpi_size = mpi_size
-        vcoord_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "replay_vertical_levels.yaml")
-        with open(vcoord_path, "r") as f:
-            vcoords = yaml.safe_load(f)
+
         latitude, longitude = self._get_replay_grid(self.resolution)
         self.latitude = tuple(float(x) for x in latitude)
         self.longitude = tuple(float(x) for x in longitude)
 
-        # TODO Here
-        nds = get_new_vertical_grid(list(self.interfaces))
-        self.levels = list(nds["pfull"].values)
-        self.pressure_levels = tuple(nds["pfull"].values)
+        # finite-volume vertical regridding
+        nds_atm = get_new_vertical_grid(list(self.interfaces["atm"]), "atm")
+        self.atm_levels = list(nds_atm["pfull"].values)
+        #self.pressure_levels = tuple(nds_atm["pfull"].values)
+
+        nds_ocn = get_new_vertical_grid(list(self.interfaces["ocn"]), "ocn")
+        self.ocn_levels = list(nds_ocn["z_l"].values)
 
         self.model_config = ModelConfig(
             resolution=self.resolution,
@@ -62,7 +70,8 @@ class FVCoupledEmulator(ReplayCoupledEmulator):
                 input_variables=self.input_variables,
                 target_variables=self.target_variables,
                 forcing_variables=self.forcing_variables,
-                pressure_levels=tuple(self.levels),
+                pressure_levels=tuple(set(self.atm_levels)),
+                ocn_vert_levels=sorted(tuple(set(self.ocn_levels))),
                 input_duration=self.input_duration,
                 longitude=self.longitude,
                 latitude=self.latitude,
@@ -72,7 +81,8 @@ class FVCoupledEmulator(ReplayCoupledEmulator):
                 input_variables=self.input_variables,
                 target_variables=self.target_variables,
                 forcing_variables=self.forcing_variables,
-                pressure_levels=tuple(self.levels),
+                pressure_levels=tuple(set(self.atm_levels)),
+                ocn_vert_levels=sorted(tuple(set(self.ocn_levels))),
                 input_duration=self.input_duration,
             )
 
@@ -103,29 +113,47 @@ class FVCoupledEmulator(ReplayCoupledEmulator):
         self.set_normalization()
         self.set_stacked_normalization()
 
+        # TOA Incident Solar Radiation integration period
+        if self.tisr_integration_period is None:
+            self.tisr_integration_period = self.delta_t
 
-    def subsample_dataset(self, xds, new_time=None):
-
-        # make sure that we have 'delz' for the vertical averaging
-        allvars = list(self.all_variables)
-        if "delz" not in self.all_variables:
-            allvars.append("delz")
-        myvars = list(x for x in allvars if x in xds)
-        xds = xds[myvars]
-
+    def subsample_dataset(self, xds, es_comp="atm", new_time=None):
+    
+        if es_comp=="atm":
+            myvars = list(x for x in list(set(self.atm_input_variables+self.atm_target_variables+self.atm_forcing_variables)) if x in xds)
+            # make sure that we have 'delz' for the vertical averaging
+            if "delz" not in myvars:
+                myvars.append("delz")
+                
+            xds = xds[myvars]
+            xds = fv_vertical_regrid_atm(xds, interfaces=self.interfaces[es_comp])
+            
+            # if we didn't want delz and just kept it for regridding, remove it here
+            xds = xds[[x for x in self.all_variables if x in xds]]
+            
+        elif es_comp=="ocn":
+            myvars = list(x for x in list(set(self.ocn_input_variables+self.ocn_target_variables+self.ocn_forcing_variables)) if x in xds)
+            xds = xds[myvars]
+            xds = fv_vertical_regrid_ocn(xds, interfaces=self.interfaces[es_comp], keep_dz=False)
+        
+        elif es_comp=="ice":
+            myvars = list(x for x in list(set(self.ice_input_variables+self.ice_target_variables+self.ice_forcing_variables)) if x in xds)
+            xds = xds[myvars]
+            xds = fv_vertical_regrid_ice(xds, interfaces=self.interfaces[es_comp])
+        
+        elif es_comp=="land":
+            myvars = list(x for x in list(set(self.land_input_variables+self.land_target_variables+self.land_forcing_variables)) if x in xds)
+            xds = xds[myvars]
+            xds = fv_vertical_regrid_land(xds, interfaces=self.interfaces[es_comp])
+                    
         if new_time is not None:
             xds = xds.sel(time=new_time)
-
-        xds = fv_vertical_regrid(
-            xds,
-            interfaces=list(self.interfaces),
-        )
-
-        # if we didn't want delz and just kept it for regridding, remove it here
-        xds = xds[[x for x in self.all_variables if x in xds]]
-
+        
         # perform transform after vertical averaging, less subsceptible to noisy results
-        xds = self.transform_variables(xds)
+        if es_comp == "atm":
+            xds = self.transform_variables(xds)
+        
+        xds = xds.fillna(0)
         return xds
 
 def get_new_vertical_grid(interfaces, comp):
@@ -151,7 +179,6 @@ def get_new_vertical_grid(interfaces, comp):
                 coords={"z_i":np.array(vcoords["z_i"])},
                 dims=["z_i"],
                 )
-        #replay_mom6_layerinterface = _get_ocn_xds(np.array(vcoords["z_i"]))
         nz_i = replay_mom6_interface.sel(z_i=interfaces, method='nearest').values
         nz_l = (nz_i[1:] + nz_i[:-1])/2
         nds = _get_ocn_xds(nz_i, nz_l)
@@ -192,14 +219,208 @@ def _get_ocn_xds(
         
         else:
             raise ValueError("Both z_i and z_l are empty")
+            
 
-def fv_vertical_regrid(xds, interfaces):
-    """Vertically regrid a dataset based on approximately located interfaces
+def fv_vertical_regrid_ocn(xds, interfaces, keep_dz=False):
+    """Vertically regrid an ocean dataset based on approximately located interfaces
+    by "approximately" we mean to grab the nearest neighbor to the values in interfaces
+    
+    Args:
+        xds (xr.Dataset)
+        interfaces (tuple like interface locations)
+
+    Returns:
+        nds (xr.Dataset): with vertical averaging
+    """
+    
+    vars2d = [x for x in xds.data_vars if not "z_l" in xds[x].dims]
+    vars3d = [x for x in xds.data_vars if "z_l" in xds[x].dims]
+    
+    if vars3d:
+        logging.info(f"3D ocean variable detected:{vars3d} ")
+        nds = get_new_vertical_grid(list(interfaces), "ocn")
+        # Regrid static layer thickness and get weighting
+        vcoord_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"replay_vertical_levels.yaml")
+        with open(vcoord_path, "r") as f:
+            vcoords = yaml.safe_load(f)
+        xa_interface = xr.DataArray(np.array(vcoords["z_i"]),
+                coords={"z_i":np.array(vcoords["z_i"])},
+                dims=["z_i"],
+        )
+
+        xa_dz = xa_interface.diff(dim="z_i")
+        xa_dz = xa_dz.assign_coords({"z_i":xds.coords["z_l"].values})
+        xa_dz = xa_dz.rename({"z_i":"z_l"})
+        nds["dz"] = xa_dz.groupby_bins(
+                "z_l",
+                bins=nds["z_i"],
+        ).sum()
+        dz_inverse = 1/nds["dz"]
+            
+        # do the regridding for all variables now.
+        for key in vars3d:
+            with xr.set_options(keep_attrs=True):
+                weighted_mult = xds[key]*xa_dz
+                nds[key] = dz_inverse*(
+                    weighted_mult.groupby_bins(
+                        "z_l",
+                        bins=nds["z_i"],
+                    ).sum()
+                )
+            nds[key].attrs = xds[key].attrs.copy()
+            # set the coordinates
+            nds = nds.set_coords("z_l")
+            nds["z_l_bins"] = nds["z_l_bins"].swap_dims({"z_l_bins": "z_l"})
+            with xr.set_options(keep_attrs=True):
+                nds[key] = nds[key].swap_dims({"z_l_bins": "z_l"})
+            nds[key].attrs["regridding"] = f"layer thickness weighted average in vertical, new coordinate bounds represented by 'z_l_bins'"
+
+            nds = nds.drop_vars("z_l_bins")
+        nds["dz"] = nds["dz"].swap_dims({"z_l_bins": "z_l"})
+        if not keep_dz:
+            nds = nds.drop_vars("dz")
+        
+    if vars2d:
+        nds2d = no_fvregrid_to_2d(xds, vars2d)
+
+    return xr.merge([nds, nds2d])
+
+
+def fv_vertical_regrid_atm(xds, interfaces):
+    """Vertically regrid an atm dataset based on approximately located interfaces
     by "approximately" we mean to grab the nearest neighbor to the values in interfaces
 
     Args:
         xds (xr.Dataset)
-        interfaces (array_like)
+        interfaces (tuple like interface locations)
+
+    Returns:
+        nds (xr.Dataset): with vertical averaging
+    """
+
+    vars2d = [x for x in xds.data_vars if not "pfull" in xds[x].dims]
+    vars3d = [x for x in xds.data_vars if "pfull" in xds[x].dims]
+    
+    if vars3d:
+        logging.info(f"3D variable detected:{vars3d} ")
+        # create a new dataset with the new vertical grid 
+        nds = get_new_vertical_grid(list(interfaces), "atm")
+
+        # if the dataset has somehow already renamed pfull -> level, rename to pfull for Layers2Pressure computations
+        has_level_not_pfull = False 
+        if "level" in xds.dims and "pfull" not in xds.dims:
+            with xr.set_options(keep_attrs=True):
+                xds = xds.rename({"level": "pfull"}) 
+
+        # Regrid vertical distance, and get weighting
+        nds["delz"] = xds["delz"].groupby_bins(
+            "pfull",
+            bins=nds["phalf"],
+        ).sum()
+        new_delz_inverse = 1/nds["delz"]
+            
+        for key in vars3d:
+            with xr.set_options(keep_attrs=True):
+                nds[key] = new_delz_inverse * (
+                    (
+                        xds[key]*xds["delz"]
+                    ).groupby_bins(
+                        "pfull",
+                        bins=nds["phalf"],
+                    ).sum()
+                )
+            nds[key].attrs = xds[key].attrs.copy()
+            
+            # set the coordinates
+            nds = nds.set_coords("pfull")
+            nds["pfull_bins"] = nds["pfull_bins"].swap_dims({"pfull_bins": "pfull"})
+            with xr.set_options(keep_attrs=True):
+                nds[key] = nds[key].swap_dims({"pfull_bins": "pfull"})
+
+            nds[key].attrs["regridding"] = "delz weighted average in vertical,new coordinate bounds represented by 'pfull_bins'"
+            # unfortunately, cannot store the pfull_bins due to this issue: https://github.com/pydata/xarray/issues/2847  
+        nds = nds.drop_vars("pfull_bins")
+
+    if vars2d:
+        nds2d = no_fvregrid_to_2d(xds, vars2d)
+
+    return xr.merge([nds, nds2d])
+
+
+def fv_vertical_regrid_ice(xds, interfaces):
+    """Vertically regrid an ice dataset based on approximately located interfaces
+    by "approximately" we mean to grab the nearest neighbor to the values in interfaces
+
+    Args:
+        xds (xr.Dataset)
+        interfaces (tuple like interface locations)
+
+    Returns:
+        nds (xr.Dataset): with vertical averaging
+    """
+
+    if interfaces:
+        raise NotImplementedError("Error: non-zero vertical ice interfaces found. 3D ice variable are not supported")
+    else:
+        vars2d = [x for x in xds.data_vars]
+        if vars2d:
+            nds = no_fvregrid_to_2d(xds, vars2d)
+    
+    return nds
+
+def fv_vertical_regrid_land(xds, interfaces):
+    """Vertically regrid a land dataset based on approximately located interfaces
+    by "approximately" we mean to grab the nearest neighbor to the values in interfaces
+
+    Args:
+        xds (xr.Dataset)
+        interfaces (tuple like interface locations)
+
+    Returns:
+        nds (xr.Dataset): with vertical averaging
+    """
+
+    if interfaces:
+        raise NotImplementedError("Error: non-zero vertical land interfaces found. 3D land variable are not supported")
+    else:
+        vars2d = [x for x in xds.data_vars]
+        if vars2d:
+            nds = no_fvregrid_to_2d(xds, vars2d)
+    
+    return nds
+
+
+def no_fvregrid_to_2d(xds, varlist):
+    """No FV vertical regridding is applied to 2D variables
+    
+    Args:
+        xds (xr.Dataset)
+        varlist (list of 2d variables)
+    
+    Returns:
+        nds (xr.Dataset): a copy of the 2D variables
+    """
+    logging.info("2D variable detected: no regridding applied")
+        
+    nds = xr.Dataset(
+            data_vars={}, 
+            attrs=xds.attrs,
+    )
+    for key in varlist:
+        nds[key] = xds[key]
+    
+    return nds
+
+def fv_vertical_regrid(xds, interfaces):
+    """Vertically regrid a dataset based on approximately located interfaces
+    by "approximately" we mean to grab the nearest neighbor to the values in interfaces
+    Note: here the input dataset can have a mix of variables from all earth system components,
+    unlike other earth system component specific functions. This is useful for generating fvstatistics
+    for the coupled configuration.
+    
+    Args:
+        xds (xr.Dataset)
+        interfaces (dictionary with "atm" and "ocn" keys)
 
     Returns:
         nds (xr.Dataset): with vertical averaging
@@ -212,9 +433,10 @@ def fv_vertical_regrid(xds, interfaces):
 
     if vars3d:
         if vars3d["atm"]:
+            #nds = fv_vertical_regrid_atm(xds, interfaces["atm"])
             logging.info(f"3D atmospheric variable detected:{vars3d} ")
             # create a new dataset with the new vertical grid 
-            nds = get_new_vertical_grid(interfaces, "atm")
+            nds = get_new_vertical_grid(list(interfaces["atm"]), "atm")
 
             # if the dataset has somehow already renamed pfull -> level, rename to pfull for Layers2Pressure computations
             has_level_not_pfull = False 
@@ -255,7 +477,7 @@ def fv_vertical_regrid(xds, interfaces):
         if vars3d["ocn"]:
             logging.info(f"3D ocean variable detected:{vars3d} ")
             # create a new dataset with the new vertical grid
-            nds = get_new_vertical_grid(interfaces, "ocn")
+            nds = get_new_vertical_grid(list(interfaces["ocn"]), "ocn")
 
             # Regrid static layer thickness and get weighting
             vcoord_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"replay_vertical_levels.yaml")
@@ -296,7 +518,7 @@ def fv_vertical_regrid(xds, interfaces):
             nds["dz"] = nds["dz"].swap_dims({"z_l_bins": "z_l"})
 
     if vars2d:
-        logging.info("2D atmospheric variable detected: no regridding applied")
+        logging.info("2D variable detected: no regridding applied")
         nds = xr.Dataset(
                 data_vars={}, 
                 coords=xds.coords,
