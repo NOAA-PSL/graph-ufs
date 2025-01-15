@@ -151,6 +151,8 @@ def optimize(
     opt_state = mpi_topo.device_put(opt_state)
     weights = mpi_topo.device_put(weights)
     last_input_channel_mapping = mpi_topo.device_put(last_input_channel_mapping)
+    if diagnostic_mappings is not None:
+        diagnostic_mappings = mpi_topo.device_put(diagnostic_mappings)
 
     if not hasattr(optimize, "optim_step_jitted"):
         # Unclear if it's safe to assume whether we'll have the drop_last attr or not
@@ -215,6 +217,8 @@ def optimize(
     opt_state = mpi_topo.device_put(opt_state)
     weights = mpi_topo.device_put(weights)
     last_input_channel_mapping = mpi_topo.device_put(last_input_channel_mapping)
+    if diagnostic_mappings is not None:
+        diagnostic_mappings = mpi_topo.device_put(diagnostic_mappings)
 
     input_batch = optimize.input_batch
     target_batch = optimize.target_batch

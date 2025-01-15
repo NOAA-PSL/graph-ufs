@@ -59,7 +59,7 @@ def train(RemoteEmulator, PackedEmulator):
     diagnostic_mappings = None
     if emulator.diagnostics is not None:
         logging.info("Preparing Diagnostic Mappings")
-        xinputs, xtargets, _ = training_data.get_xarrays(0)
+        xinputs, xtargets, _ = tds.get_xarrays(0)
         input_meta = utils.get_channel_index(xinputs)
         output_meta = utils.get_channel_index(xtargets)
         diagnostic_mappings = stacked_diagnostics.prepare_diagnostic_functions(

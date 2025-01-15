@@ -749,9 +749,9 @@ class ReplayEmulator:
 
         def open_normalization(component):
 
-
             paths = {
                 itd_key: os.path.join(
+                    self.local_store_path,
                     "stacked-normalization",
                     itd_key,
                     os.path.basename(self.norm_urls[component]),
