@@ -77,7 +77,7 @@ def submit_slurm_job():
         f"#SBATCH --constraint=cpu\n"+\
         f"#SBATCH -t {_walltime}\n\n"+\
         f"conda activate /global/common/software/m4718/timothys/graphufs\n"+\
-        f'python -c "{the_code}"'
+        f'srun python -c "{the_code}"'
 
     script_dir = "job-scripts"
     fname = f"{script_dir}/submit_stacked_preprocess.sh"
