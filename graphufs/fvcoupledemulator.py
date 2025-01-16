@@ -413,10 +413,11 @@ def no_fvregrid_to_2d(xds, varlist):
 
 def fv_vertical_regrid(xds, interfaces):
     """Vertically regrid a dataset based on approximately located interfaces
-    by "approximately" we mean to grab the nearest neighbor to the values in interfaces
-    Note: here the input dataset can have a mix of variables from all earth system components,
-    unlike other earth system component specific functions. This is useful for generating fvstatistics
-    for the coupled configuration.
+    by "approximately" we mean to grab the nearest neighbor to the values in 
+    interfaces. Note: here the input dataset may contain any possible combination 
+    of variables from ocn, atmosphere, ice, and land components, unlike other 
+    earth system component specific functions defined above. This is useful for 
+    generating fvstatistics for the coupled configuration. 
     
     Args:
         xds (xr.Dataset)

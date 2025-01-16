@@ -7,7 +7,7 @@ import xarray as xr
 from graphufs.log import setup_simple_log
 from graphufs.fvstatistics import FVStatisticsComputer
 
-from config import CP1Emulator as Emulator
+from R0.config import CP1Trainer as Emulator
 
 
 def submit_slurm_job(varname, comp="atm", apartition="compute", n_cpus=30):
@@ -17,20 +17,6 @@ def submit_slurm_job(varname, comp="atm", apartition="compute", n_cpus=30):
     for d in [logdir, scriptdir]:
         if not os.path.isdir(d):
             os.makedirs(d)
-
-    #jobscript = f"#!/bin/bash\n\n"+\
-    #    f"#SBATCH -J {varname}_norm\n"+\
-    #    f"#SBATCH -o {logdir}/{varname}.%j.out\n"+\
-    #    f"#SBATCH -e {logdir}/{varname}.%j.err\n"+\
-    #    f"#SBATCH --nodes=1\n"+\
-    #    f"#SBATCH --ntasks=1\n"+\
-    #    f"#SBATCH --cpus-per-task={n_cpus}\n"+\
-    #    f"#SBATCH --partition={apartition}\n"+\
-    #    f"#SBATCH -t 120:00:00\n\n"+\
-    #    f"source /contrib/niraj.agarwal/miniconda3/etc/profile.d/conda.sh\n"+\
-    #    f"conda activate graphufs\n"+\
-    #    f"echo $PYTHONPATH\n"+\
-    #    f"python -c 'from calc_statistics import main ; main(\"{varname}\", \"{comp}\")'"
 
     # On PSL Cluster
     jobscript = f"#!/bin/bash\n\n"+\
@@ -84,10 +70,15 @@ def main(varname, comp):
         ds = xr.open_zarr(gcs_existing_stats("mean"), **open_zarr_kwargs)
     except:
         does_it_exist = False
-    
+   
+    if comp == "atm".lower():
+        vcoord = "pfull"
+    elif comp == "ocn".lower():
+        vcoord = "z_l"
+
     if does_it_exist:
         if varname in ds:
-            if "pfull" not in ds[varname].dims:
+            if vcoord not in ds[varname].dims:
                 do_fv_calc = False
         
         if do_fv_calc:
