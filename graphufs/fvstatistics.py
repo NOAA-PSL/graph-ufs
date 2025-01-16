@@ -7,12 +7,13 @@ import xarray as xr
 
 from graphcast import data_utils
 
+#from .fvcoupledemulator import fv_vertical_regrid
 from .fvemulator import fv_vertical_regrid
 from .statistics import StatisticsComputer, add_derived_vars, add_transformed_vars
 
 class FVStatisticsComputer(StatisticsComputer):
     """Class for computing normalization statistics, using a delz vertical weighted average
-    in the computation.
+    in the computation for the atmosphere and z_l weighting for the oceans.
 
     For other attributes and docs, see :class:`StatisticsComputer`
 
@@ -23,8 +24,8 @@ class FVStatisticsComputer(StatisticsComputer):
 
     Attributes:
         interfaces (array_like): with approximate values of vertical grid interfaces to
-            grab from the parent dataset, using nearest neighbor (i.e., passing 100 will give
-            return the closest value of 101.963245 or whatever it is or whatever it is)
+            grab from the parent dataset, using nearest neighbor (i.e., passing 100 would
+            return the closest value of 101.963245 or whatever it is)
         """
 
 
@@ -32,6 +33,7 @@ class FVStatisticsComputer(StatisticsComputer):
         self,
         path_in: str,
         path_out: str,
+        comp: str,
         interfaces: tuple | list | np.ndarray,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
@@ -44,6 +46,7 @@ class FVStatisticsComputer(StatisticsComputer):
         super().__init__(
             path_in=path_in,
             path_out=path_out,
+            comp=comp,
             start_date=start_date,
             end_date=end_date,
             time_skip=time_skip,
@@ -61,14 +64,16 @@ class FVStatisticsComputer(StatisticsComputer):
         if "time" in xds.dims:
             xds = self.subsample_time(xds)
 
-        logging.info(f"{self.name}: Adding any derived variables")
+        logging.info(f"{self.name}: Adding any derived variables")        
         xds = add_derived_vars(
             xds,
+            comp=self.comp,
+            transforms=self.transforms,
             compute_tisr=data_utils.TISR in data_vars if data_vars is not None else False,
             **tisr_kwargs,
         )
 
-        # select variables, keeping delz
+        # select variables, keeping delz for atmosphere
         if data_vars is not None:
             local_data_vars = copy(data_vars)
             if isinstance(data_vars, str):
@@ -102,7 +107,7 @@ class FVStatisticsComputer(StatisticsComputer):
             xds,
             transforms=self.transforms,
         )
-
+        
         if data_vars is not None:
             selvars = data_vars
             for key in ["phalf", "ak", "bk"]:

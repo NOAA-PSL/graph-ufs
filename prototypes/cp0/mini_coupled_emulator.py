@@ -116,8 +116,8 @@ class CP0Emulator(ReplayCoupledEmulator):
                                 # A more complicated case of diffential time steps and grid size will be 
                                 # developed in the future
     input_duration = "12h"      # time covered by initial condition(s) + delta_t (necessary for GraphCast code)
-    #target_lead_time = "6h"     # how long is the forecast ... at what point do we compare model to targets
-    target_lead_time = [f"{n}h" for n in range(6, 6*4*2+1, 6)]
+    target_lead_time = "6h"     # how long is the forecast ... at what point do we compare model to targets
+    #target_lead_time = [f"{n}h" for n in range(6, 6*4*2+1, 6)]
     training_dates = (          # bounds of training data (inclusive)
         "1994-01-01T00",        # start
         "1994-12-31T18"         # stop
@@ -128,7 +128,7 @@ class CP0Emulator(ReplayCoupledEmulator):
     )
     validation_dates = (        # bounds of validation data (inclusive)
         "1996-01-01T00",        # start
-        "1996-12-31T18"         # stop
+        "1996-01-31T18"         # stop
     )
 
     # training protocol
@@ -144,6 +144,7 @@ class CP0Emulator(ReplayCoupledEmulator):
     hidden_layers = 1
     radius_query_fraction_edge_length = 0.6
     mesh2grid_edge_normalization_factor = 0.6180338738074472
+    use_half_precision = True
 
     # loss weighting, defaults to GraphCast implementation
     weight_loss_per_latitude = True

@@ -30,7 +30,6 @@ def main(varname, comp="atm"):
 
 def compute_stats(varname, comp="atm"):
     
-    
     # On PSL Cluster
     jobscript = f"#!/bin/bash\n\n"+\
             f"source /opt/conda/bin/conda.sh\n"+\

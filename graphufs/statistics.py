@@ -65,11 +65,11 @@ class StatisticsComputer:
         if self.comp.lower() == "atm".lower():
             self.delta_t = f"{self.time_skip*3} hour" if self.time_skip is not None else "3 hour"
             self.dims = ("time", "grid_yt", "grid_xt")
-        elif self.comp.lower() == "ocean".lower():
+        elif self.comp.lower() == "ocn".lower():
             self.delta_t = f"{self.time_skip*6} hour" if self.time_skip is not None else "6 hour"
             self.dims = ("time", "lat", "lon")
         else:
-            raise ValueError("component can only be atm or ocean")
+            raise ValueError("component can only be atm/ocn/ice/land")
         self.transforms = transforms
 
         self.delta_t = f"{self.time_skip*3} hour" if self.time_skip is not None else "3 hour"
@@ -85,8 +85,10 @@ class StatisticsComputer:
         walltime.start()
 
         localtime.start("Setup")
-        ds = self.open_dataset(data_vars=data_vars, **tisr_kwargs)
+        
+        ds = self.open_dataset(data_vars=data_vars, **tisr_kwargs) 
         self._transforms_warning(list(ds.data_vars.keys()))
+        
         localtime.stop()
 
 
@@ -180,6 +182,10 @@ class StatisticsComputer:
             self.path_out,
             "diffs_stddev_by_level.zarr",
         )
+        if "z_i" in xds.dims:
+            interface_ds = xr.Dataset({
+                "z_i":xds["z_i"]}).set_coords(["z_i"])
+            result = xr.merge([result, interface_ds])
         result.to_zarr(this_path_out, **self.to_zarr_kwargs)
         logging.info(f"Stored result: {this_path_out}")
         return result
@@ -208,6 +214,10 @@ class StatisticsComputer:
             self.path_out,
             "stddev_by_level.zarr",
         )
+        if "z_i" in xds.dims:
+            interface_ds = xr.Dataset({
+                "z_i":xds["z_i"]}).set_coords(["z_i"])
+            result = xr.merge([result, interface_ds])
         result.to_zarr(this_path_out, **self.to_zarr_kwargs)
         logging.info(f"Stored result: {this_path_out}")
         return result
@@ -228,13 +238,17 @@ class StatisticsComputer:
                 opstr="mean",
                 description=f"average over ",
             )
-
+        
         result = self._add_coords(result, xds)
 
         this_path_out = os.path.join(
             self.path_out,
             "mean_by_level.zarr",
         )
+        if "z_i" in xds.dims:
+            interface_ds = xr.Dataset({
+                "z_i":xds["z_i"]}).set_coords(["z_i"])
+            result = xr.merge([result, interface_ds])
         result.to_zarr(this_path_out, **self.to_zarr_kwargs)
         logging.info(f"Stored result: {this_path_out}")
         return result
@@ -243,7 +257,7 @@ class StatisticsComputer:
 
         # get appropriate dims, e.g. maybe not time varying
         dims = list(d for d in self.dims if d in xda.dims)
-
+        
         with xr.set_options(keep_attrs=True):
             if opstr == "mean":
                 result = xda.mean(dims)
@@ -292,7 +306,8 @@ class StatisticsComputer:
 
 def add_derived_vars(
     xds: xr.Dataset,
-    component: str = "atm",
+    comp: str = "atm",
+    transforms: Optional[dict]=None,
     compute_tisr: Optional[bool]=False,
     **tisr_kwargs,
 ) -> xr.Dataset:
@@ -312,7 +327,7 @@ def add_derived_vars(
         xds (xr.Dataset): with added variables
     """
     with xr.set_options(keep_attrs=True):
-        if component.lower() == "atm".lower():
+        if comp.lower() == "atm".lower():
             xds = xds.rename({"time": "datetime", "grid_xt": "lon", "grid_yt": "lat", "pfull": "level"})
             data_utils.add_derived_vars(xds)
             if compute_tisr:
@@ -323,7 +338,7 @@ def add_derived_vars(
                 )
             xds = xds.rename({"datetime": "time", "lon": "grid_xt", "lat": "grid_yt", "level": "pfull"})
 
-        elif component.lower() == "ocean".lower():
+        elif comp.lower() == "ocean".lower():
             xds = xds.rename({"time": "datetime"})
             data_utils.add_derived_vars(xds)
             xds = xds.rename({"datetime": "time"})
@@ -355,5 +370,5 @@ def add_transformed_vars(
                     xds[transformed_key].attrs["long_name"] = f"{mapping.__name__} of {xds[key].attrs['long_name']}"
                     xds[transformed_key].attrs["transformation"] = f"this variable shows {mapping.__name__}({key})"
                     xds[transformed_key].attrs["units"] = ""
-
+    
     return xds
