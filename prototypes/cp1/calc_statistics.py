@@ -39,14 +39,14 @@ def main(varname, comp):
     # stats exist, then compute everything. If 3D, compute the FV version.
     
     #path_out = os.path.dirname(Emulator.norm_urls[comp]["mean"])
-    statsdir = "mom6.fvstatistics.l10.1993-2019"
+    statsdir = f"{comp}.fvstatistics.l10.1993-2019"
     if not os.path.isdir(statsdir):
         os.makedirs(statsdir)
     path_out = os.path.abspath(statsdir)
 
     if comp in ["atm", "ice", "land"]:
         gcs_existing_stats = lambda prefix: f"gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/06h-freq/zarr/fv3.statistics.1993-2019/{prefix}_by_level.zarr"
-        time_skip = 2 # everything is in 3 hour time steps in fv3 stats
+        time_skip = 2 # everything is in 3 hour time steps in fv3
 
     elif comp.lower() == "ocn".lower():
         gcs_existing_stats = lambda prefix: f"gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/06h-freq/zarr/mom6.statistics.1993-2019/{prefix}_by_level.zarr"
@@ -127,12 +127,12 @@ def main(varname, comp):
 
 
 if __name__ == "__main__":
-    comp = "ocn"
+    comp = "ice"
     all_variables = list(set(
         # uncomment one of the below lines based on the component chosen. This would be automated in the future.
         #Emulator.atm_input_variables + Emulator.atm_forcing_variables + Emulator.atm_target_variables
-        Emulator.ocn_input_variables + Emulator.ocn_forcing_variables + Emulator.ocn_target_variables
-        #Emulator.ice_input_variables + Emulator.ice_forcing_variables + Emulator.ice_target_variables
+        #Emulator.ocn_input_variables + Emulator.ocn_forcing_variables + Emulator.ocn_target_variables
+        Emulator.ice_input_variables + Emulator.ice_forcing_variables + Emulator.ice_target_variables
         #Emulator.land_input_variables + Emulator.land_forcing_variables + Emulator.land_target_variables
     ))
     

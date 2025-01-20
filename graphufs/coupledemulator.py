@@ -17,7 +17,7 @@ from graphcast import checkpoint
 from graphcast.graphcast import ModelConfig, TaskConfig, CheckPoint
 from graphcast import data_utils
 from graphcast.model_utils import dataset_to_stacked
-from graphcast.losses import normalized_level_weights, normalized_latitude_weights
+from graphcast.losses import normalized_level_weights, normalized_ocn_level_weights, normalized_latitude_weights
 
 from .utils import (
     get_channel_index, get_last_input_mapping,
@@ -840,8 +840,6 @@ class ReplayCoupledEmulator:
                 os.path.basename(self.norm_urls["atm"][moment]),
             )
 
-
-
             if os.path.isdir(local_path):
                 xds = xr.open_zarr(local_path)
                 myvars = list(x for x in self.all_variables if x in xds)
@@ -855,10 +853,12 @@ class ReplayCoupledEmulator:
                 xds_ocn = xr.open_zarr(self.norm_urls["ocn"][moment], **kwargs)
                 xds_ice = xr.open_zarr(self.norm_urls["ice"][moment], **kwargs)
                 xds_land = xr.open_zarr(self.norm_urls["land"][moment], **kwargs)
-                vars_atm = list(x for x in self.all_variables if x in xds_atm)
-                vars_ocn = list(x for x in self.all_variables if x in xds_ocn)
-                vars_ice = list(x for x in self.all_variables if x in xds_ice)
-                vars_land = list(x for x in self.all_variables if x in xds_land)
+                vars_atm = list(x for x in tuple(set(self.atm_input_variables+self.atm_target_variables+self.atm_forcing_variables)) if x in xds_atm)
+                vars_ocn = list(x for x in tuple(set(self.ocn_input_variables+self.ocn_target_variables+self.ocn_forcing_variables)) if x in xds_ocn)
+                vars_ice = list(x for x in tuple(set(self.ice_input_variables+self.ice_target_variables+self.ice_forcing_variables)) if x in xds_ice)
+                vars_land = list(x for x in tuple(set(self.land_input_variables+self.land_target_variables+self.land_forcing_variables)) if x in xds_land)
+                xds = xr.merge([xds_ocn, xds_atm, xds_ice, xds_land])
+                myvars = list(x for x in self.all_variables if x in xds)
                 # keep attributes in order to distinguish static from time varying components
                 with xr.set_options(keep_attrs=True):
 
@@ -874,7 +874,7 @@ class ReplayCoupledEmulator:
                             if key in myvars:
                                 idx = myvars.index(key)
                                 myvars[idx] = transformed_key
-                    xds_atm = xds_atm[vars_atm]
+                    xds = xds[myvars]
                     if self.input_transforms is not None:
                         for key, transform_function in self.input_transforms.items():
                             transformed_key = f"{transform_function.__name__}_{key}" # e.g. log_spfh
@@ -883,8 +883,7 @@ class ReplayCoupledEmulator:
 
                             # necessary for graphcast.dataset to stacked operations
                             xds = xds.rename({transformed_key: key})
-                    print("self.atm_levels:", self.atm_levels)
-                    print("normalization dataset pfull:", xds_atm.pfull)
+                    xds_atm = xds_atm[vars_atm]
                     xds_atm = xds_atm.sel(pfull=self.atm_levels)
                     xds_ocn = xds_ocn[vars_ocn]
                     xds_ocn = xds_ocn.sel(z_l=self.ocn_levels)
@@ -1031,10 +1030,15 @@ class ReplayCoupledEmulator:
         # 3. compute per level weighting
         if self.weight_loss_per_level:
             level_weights = normalized_level_weights(xtargets)
+            ocn_level_weights = normalized_ocn_level_weights(xtargets)
+            target_idx = get_channel_index(xtargets)
             for ichannel in range(targets.shape[-1]):
                 if "level" in target_idx[ichannel].keys():
                     ilevel = target_idx[ichannel]["level"]
                     weights[..., ichannel] *= level_weights.isel(level=ilevel).data
+                if "z_l" in target_idx[ichannel].keys():
+                    iz_l = target_idx[ichannel]["z_l"]
+                    weights[..., ichannel] *= ocn_level_weights.isel(z_l=iz_l).data 
 
         # do we need to put this on the device(s)?
         return weights
