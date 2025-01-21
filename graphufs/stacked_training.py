@@ -138,7 +138,9 @@ def optimize(
         a batch of losses will be returned
         """
         predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping, diagnostic_mappings=diagnostic_mappings)
-        return predictor.loss(inputs, targets, weights=weights)
+        loss, diagnostics = predictor.loss(inputs, targets, weights=weights)
+        return loss.squeeze(), diagnostics.squeeze()
+
 
 
     @hk.transform_with_state
