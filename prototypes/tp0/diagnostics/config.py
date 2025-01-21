@@ -16,14 +16,6 @@ class TP0Emulator(BaseTP0Emulator):
         "hydrostatic_layer_thickness",
         "hydrostatic_geopotential",
     )
-    training_dates = (          # bounds of training data (inclusive)
-        "1994-01-01T00",        # start
-        "1994-01-05T21"         # stop
-    )
-    validation_dates = (        # bounds of validation data (inclusive)
-        "1996-01-01T00",        # start
-        "1996-01-05T21"         # stop
-    )
     num_epochs = 10
 
 class TP0Tester(TP0Emulator):
