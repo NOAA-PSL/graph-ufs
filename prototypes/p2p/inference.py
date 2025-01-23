@@ -105,6 +105,10 @@ def predict(
                     predictions[key] = func(predictions)
                     targets[key] = func(targets)
 
+
+                # now check for static variables, we don't want these in the resulting datasets
+                predictions = predictions[[key for key in list(predictions.coords)+list(predictions.data_vars) if "_static" not in key]]
+                targets = targets[[key for key in list(targets.coords)+list(targets.data_vars) if "_static" not in key]]
                 # Add t0 as new variable, and swap out for logical sample/batch index
                 # swap dims to be [time (aka initial condition time), lead_time (aka forecast_time), level, lat, lon]
                 predictions = swap_batch_time_dims(predictions, inittimes)
