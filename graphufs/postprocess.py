@@ -115,7 +115,7 @@ def regrid_and_rename(xds, truth):
 
 def calc_diagnostics(xds, varlist):
 
-    recognized = ("delz", "geopotential", "prsl")
+    recognized = ("hydrostatic_layer_thickness", "geopotential", "prsl")
     calc_delz = False
     calc_geopotential = False
     calc_prsl = False
@@ -124,10 +124,10 @@ def calc_diagnostics(xds, varlist):
             logging.warning(f"{__name__}.calc_diagnostics: skipping unrecognized diagnostic variable {key}")
             varlist.remove(key)
 
-        elif key == "delz":
+        elif key == "hydrostatic_layer_thickness":
             calc_delz = True
         elif key == "geopotential":
-            calc_delz = "delz" not in xds
+            calc_delz = "delz" not in xds and "hydrostatic_layer_thickness" not in xds
             calc_geopotential = True
         elif key == "prsl":
             calc_prsl = True
@@ -140,20 +140,26 @@ def calc_diagnostics(xds, varlist):
 
     results = {}
     if calc_delz:
-        results["delz"] = lp.calc_delz(xds["pressfc"], xds["tmp"], xds["spfh"])
+        results["hydrostatic_layer_thickness"] = lp.calc_delz(xds["pressfc"], xds["tmp"], xds["spfh"])
 
     if calc_geopotential:
         if calc_delz:
-            delz = results["delz"]
-        else:
+            delz = results["hydrostatic_layer_thickness"]
+        elif "delz" in xds:
             delz = xds["delz"]
+        else:
+            delz = xds["hydrostatic_layer_thickness"]
+        # TODO: Should call geopotential hydrostatic_geopotential
+        # but will do this later because it will mess up WB2
         results["geopotential"] = lp.calc_geopotential(xds["hgtsfc_static"], delz)
 
     if calc_prsl:
         if calc_delz:
-            delz = results["delz"]
-        else:
+            delz = results["hydrostatic_layer_thickness"]
+        elif "delz" in xds:
             delz = xds["delz"]
+        else:
+            delz = xds["hydrostatic_layer_thickness"]
         results["prsl"] = lp.calc_layer_mean_pressure(xds["pressfc"], xds["tmp"], xds["spfh"], delz)
 
     results = xr.Dataset({key: results[key] for key in varlist})
@@ -173,8 +179,11 @@ def interp2pressure(xds, plevels, diagnose_geopotential=False):
     # compute some diagnostics
     varlist = list()
 
+    # If we're diagnosing delz, it's a different quantity. Let's be explicit
+    delz = "delz" if "delz" in xds else "hydrostatic_layer_thickness"
+
     # only keep delz if it's in the dataset
-    keep_delz = "delz" in xds
+    keep_delz = delz in xds
 
     # only diagnose prsl if it's not in the dataset
     if "prsl" not in xds:
@@ -185,8 +194,8 @@ def interp2pressure(xds, plevels, diagnose_geopotential=False):
         if "geopotential" in xds:
             raise ValueError(f"Geopotential already exists")
         varlist.append("geopotential")
-        if "delz" not in xds:
-            varlist.append("delz")
+        if delz not in xds:
+            varlist.append(delz)
 
     if len(varlist) > 0:
         dds = calc_diagnostics(xds, varlist)

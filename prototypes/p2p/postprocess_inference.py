@@ -9,6 +9,7 @@ import pandas as pd
 from ufs2arco.regrid.gaussian_grid import gaussian_latitudes
 from ufs2arco import Layers2Pressure
 
+from graphufs import diagnostics
 from graphufs.log import setup_simple_log
 from graphufs.postprocess import interp2pressure, regrid_and_rename, get_valid_initial_conditions
 from graphufs.fvemulator import fv_vertical_regrid
@@ -55,7 +56,7 @@ def open_predictions_and_truth(emulator):
 def open_targets(emulator, predictions, truth):
     rds = emulator.open_dataset()
     keep_vars = list(predictions.keys()) + ["geopotential", "delz"]
-    rds = rds[keep_vars]
+    rds = rds[[x for x in keep_vars if x in rds]]
     valid_time = predictions["time"] + predictions["lead_time"]
     rds = rds.sel(time=slice(predictions.time.values[0], valid_time.isel(time=-1, lead_time=-1).values))
     time = get_valid_initial_conditions(rds, truth)
@@ -64,6 +65,14 @@ def open_targets(emulator, predictions, truth):
     # Now FV vertical
     rds = fv_vertical_regrid(rds, interfaces=list(emulator.interfaces), keep_delz=True)
     rds = rds.rename({"pfull": "level", "grid_xt": "lon", "grid_yt": "lat"})
+
+    # compute some diagnostics...
+    diagnostic_mappings = dict()
+    if emulator.diagnostics is not None:
+        diagnostic_mappings = diagnostics.prepare_diagnostic_functions(emulator.diagnostics)
+    for key, func in diagnostic_mappings["functions"].items():
+        logging.info(f"{__name__}.open_targets: computing diagnostic {key}")
+        rds[key] = func(rds)
 
     # Store this as is
     replay_path = f"{emulator.local_store_path}/inference/validation/replay.vertical_regrid.zarr"
