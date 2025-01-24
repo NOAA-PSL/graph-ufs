@@ -874,6 +874,7 @@ class ReplayCoupledEmulator:
                             if key in myvars:
                                 idx = myvars.index(key)
                                 myvars[idx] = transformed_key
+                    print("myvars after renaming:", myvars)
                     xds = xds[myvars]
                     if self.input_transforms is not None:
                         for key, transform_function in self.input_transforms.items():
@@ -883,13 +884,7 @@ class ReplayCoupledEmulator:
 
                             # necessary for graphcast.dataset to stacked operations
                             xds = xds.rename({transformed_key: key})
-                    xds_atm = xds_atm[vars_atm]
-                    xds_atm = xds_atm.sel(pfull=self.atm_levels)
-                    xds_ocn = xds_ocn[vars_ocn]
-                    xds_ocn = xds_ocn.sel(z_l=self.ocn_levels)
-                    xds_ice = xds_ice[vars_ice]
-                    xds_land = xds_land[vars_land]
-                    xds = xr.merge([xds_atm, xds_ocn, xds_ice, xds_land])
+                    xds = xds.sel(pfull=self.atm_levels, z_l=self.ocn_levels)
                     xds = xds.load()
                     xds = xds.rename({"pfull": "level"})
                 xds.to_zarr(local_path)

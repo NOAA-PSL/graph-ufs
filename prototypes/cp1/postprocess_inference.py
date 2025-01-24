@@ -11,8 +11,12 @@ from ufs2arco import Layers2Pressure
 
 from graphufs.log import setup_simple_log
 from graphufs.postprocess import interp2pressure, regrid_and_rename, get_valid_initial_conditions
-from graphufs.fvemulator import fv_vertical_regrid
-
+from graphufs.fvcoupledemulator import fv_vertical_regrid
+"""
+Note: This postprocess is currently a copy of the graphufs/p2p prototype and therefore
+only considers atmospheric variables. This will be modified soon to achieve the same for
+other earth system components.
+"""
 def open_predictions_and_truth(emulator):
 
     duration = emulator.target_lead_time[-1]
@@ -21,14 +25,14 @@ def open_predictions_and_truth(emulator):
     gds = xr.open_zarr(f"{emulator.local_store_path}/inference/validation/graphufs.{duration}.zarr")
 
     # add vertical coordinate stuff
-    nds = xr.open_zarr(emulator.norm_urls["mean"], storage_options={"token": "anon"})
+    nds = xr.open_zarr(emulator.norm_urls["atm"]["mean"], storage_options={"token": "anon"})
     gds["ak"] = nds["ak"]
     gds["bk"] = nds["bk"]
     gds = gds.set_coords(["ak", "bk"])
 
     # add static hgtsfc for geopotential
     if "hgtsfc_static" not in gds:
-        gds["hgtsfc_static"] = emulator.open_dataset()["hgtsfc_static"].rename({
+        gds["hgtsfc_static"] = emulator.open_atm_dataset()["hgtsfc_static"].rename({
             "grid_yt": "lat",
             "grid_xt": "lon",
         }).load()
@@ -61,7 +65,7 @@ def open_targets(emulator, predictions, truth):
     rds = rds.sel(time=time)
 
     # Now FV vertical
-    rds = fv_vertical_regrid(rds, interfaces=list(emulator.interfaces), keep_delz=True)
+    rds = fv_vertical_regrid(rds, interfaces=emulator.interfaces, keep_delz=True)
     rds = rds.rename({"pfull": "level", "grid_xt": "lon", "grid_yt": "lat"})
 
     # Store this as is

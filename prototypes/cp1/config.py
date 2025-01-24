@@ -180,7 +180,7 @@ class BaseCP1Trainer(FVCoupledEmulator):
     # training protocol
     batch_size = 16
     num_batch_splits = 1
-    num_epochs = 64
+    num_epochs = 100
 
     # model config options
     resolution = 1.0
@@ -194,7 +194,7 @@ class BaseCP1Trainer(FVCoupledEmulator):
     # loss weighting, defaults to GraphCast implementation
     weight_loss_per_channel = True
     weight_loss_per_latitude = True
-    weight_loss_per_level = True # weight both ocean and atm vertical levels
+    weight_loss_per_level = False # weight both ocean and atm vertical levels
     loss_weights_per_variable = dict() # weight all of them equally
     #atm_loss_weights_per_variable = {
     #    "tmp"           : 1.0,
