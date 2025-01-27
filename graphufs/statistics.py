@@ -62,14 +62,14 @@ class StatisticsComputer:
         self.open_zarr_kwargs = open_zarr_kwargs if open_zarr_kwargs is not None else dict()
         self.to_zarr_kwargs = to_zarr_kwargs if to_zarr_kwargs is not None else dict()
         self.load_full_dataset = load_full_dataset
-        if self.comp in ["atm", "ice", "land"]:
+        if self.comp in ["atm", "land", "ice"]:
             self.delta_t = f"{self.time_skip*3} hour" if self.time_skip is not None else "3 hour"
             self.dims = ("time", "grid_yt", "grid_xt")
         elif self.comp.lower() == "ocean".lower() or self.comp.lower() == "ocn".lower():
             self.delta_t = f"{self.time_skip*6} hour" if self.time_skip is not None else "6 hour"
             self.dims = ("time", "lat", "lon")
         else:
-            raise ValueError("component can only be atm or ocean")
+            raise ValueError("component can only be atm, ocean/ocn, land, and ice")
         self.transforms = transforms
 
         self.delta_t = f"{self.time_skip*3} hour" if self.time_skip is not None else "3 hour"

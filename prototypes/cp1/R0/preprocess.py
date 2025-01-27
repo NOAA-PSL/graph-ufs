@@ -14,14 +14,14 @@ from graphufs.progress import ProgressTracker
 from graphufs.mpi import MPITopology
 
 # in the future this could be generalized to where it just takes the following as inputs
-from config import P2PPreprocessor as Emulator
+from config import CP1Preprocessor as Emulator
 _n_jobs = 1
 _n_tasks = Emulator.batch_size
 _n_cpus_per_task = 256 // _n_tasks
 _qos = "regular"
 _walltime = "06:00:00"
-_input_channel_chunks =  17
-_target_channel_chunks = 17
+_input_channel_chunks =  16
+_target_channel_chunks = 16
 
 def setup(mode, level=logging.INFO):
 
@@ -83,8 +83,8 @@ def submit_slurm_job():
         f"#SBATCH --account=m4718\n"+\
         f"#SBATCH --constraint=cpu\n"+\
         f"#SBATCH -t {_walltime}\n\n"+\
-        f"conda activate /global/common/software/m4718/timothys/graphufs\n"+\
-        f'python -c "{the_code}"'
+        f"conda activate graphufs-mpi\n"+\
+        f'srun python -c "{the_code}"'
 
     script_dir = "job-scripts"
     fname = f"{script_dir}/submit_stacked_preprocess.sh"
@@ -109,8 +109,8 @@ def store_batch_of_samples(mode):
 
     logging.info(f"Processing {len(loader)} in batch_size: {emulator.batch_size}")
     logging.info(f"Starting at idx = {start}")
-    logging.info(f"    loader.counter = {loader.counter}")
-    logging.info(f"    loader.data_counter = {loader.data_counter}")
+    logging.info(f"loader.counter = {loader.counter}")
+    logging.info(f"loader.data_counter = {loader.data_counter}")
 
     for idx in range(start, len(loader)):
 

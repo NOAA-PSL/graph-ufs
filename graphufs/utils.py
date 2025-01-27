@@ -9,40 +9,6 @@ import numpy as np
 import concurrent.futures
 import jax
 from graphcast import graphcast, checkpoint
-
-def get_network_shape(ckpt):
-    """Get the shape of all layers in the network
-
-    Args:
-        ckpt (graphcast.Checkpoint or str): either a model checkpoitn or a path to a checkpoint file
-
-    Returns:
-        network_shape (jax.pytree): basically a dict with each layer and the size of the weights and biases
-    """
-
-    if isinstance(ckpt, graphcast.CheckPoint):
-        params = ckpt.params
-    else:
-        with open(ckpt, "rb") as f:
-            params = checkpoint.load(f, graphcast.CheckPoint).params
-
-    return jax.tree_util.tree_map(lambda x: x.shape, params)
-
-
-def get_num_params(ckpt):
-    """Get the total number of parameters in a model
-
-    Args:
-        ckpt (graphcast.Checkpoint or str): either a model checkpoitn or a path to a checkpoint file
-
-    Returns:
-        num_params (int): total network size
-    """
-    shape = get_network_shape(ckpt)
-
-    num_per_layer = jax.tree_util.tree_map(lambda x: np.prod(x), shape)
-    return np.sum(jax.tree_util.tree_flatten(num_per_layer)[0])
-
 import jax
 from graphcast import graphcast, checkpoint
 
@@ -107,8 +73,6 @@ def get_num_params(ckpt):
 
     num_per_layer = jax.tree_util.tree_map(lambda x: np.prod(x), shape)
     return np.sum(jax.tree_util.tree_flatten(num_per_layer)[0])
-
-
 
 
 def get_chunk_data(generator, gen_lock, data: dict, load_chunk: bool, shuffle: bool):
@@ -448,40 +412,3 @@ def get_approximate_memory_usage(data, max_queue_size, num_workers, load_chunk):
             chunk_ram /= 1024 * 1024 * 1024
             total += (max_queue_size + num_workers) * chunk_ram
     return total
-
-def convert_loss_channel2var(Emulator, loss2d):
-    """Convert loss by channel to a dataset with loss separated by variable
-
-    Args:
-        Emulator: note that it has to be the training emulator
-        loss2d (xr.DataArray): second axis just has to be "channel"
-
-    Returns:
-        xds (xr.Dataset): with each variable indicating it's loss
-    """
-    em = Emulator()
-    tds = Dataset(em, mode="training")
-
-    _, xtargets, _ = tds.get_xarrays(0)
-    tmeta = get_channel_index(xtargets)
-
-    varloss = {}
-    for cidx in loss2d.channel.values:
-        mymeta = tmeta[cidx]
-        varname = mymeta["varname"]
-        this_loss = loss2d.sel(channel=cidx, drop=True)
-        this_loss.name = varname
-        if "level" in mymeta:
-            levelval = xtargets.level.isel(level=mymeta["level"]).values
-            this_loss = this_loss.expand_dims({"level": [levelval]})
-            if varname not in varloss:
-                varloss[varname] = [this_loss]
-            else:
-                varloss[varname].append(this_loss)
-        else:
-            varloss[varname] = this_loss
-
-    for key in xtargets.data_vars:
-        if "level" in xtargets[key].dims:
-            varloss[key] = xr.concat(varloss[key], dim="level")
-    return xr.Dataset(varloss)
