@@ -286,7 +286,7 @@ def fv_vertical_regrid_ocn(xds, interfaces, keep_dz=False):
     return xr.merge([nds, nds2d])
 
 
-def fv_vertical_regrid_atm(xds, interfaces):
+def fv_vertical_regrid_atm(xds, interfaces, keep_delz=True):
     """Vertically regrid an atm dataset based on approximately located interfaces
     by "approximately" we mean to grab the nearest neighbor to the values in interfaces
 
@@ -338,8 +338,11 @@ def fv_vertical_regrid_atm(xds, interfaces):
                 nds[key] = nds[key].swap_dims({"pfull_bins": "pfull"})
 
             nds[key].attrs["regridding"] = "delz weighted average in vertical,new coordinate bounds represented by 'pfull_bins'"
-            # unfortunately, cannot store the pfull_bins due to this issue: https://github.com/pydata/xarray/issues/2847  
+        # unfortunately, cannot store the pfull_bins due to this issue: https://github.com/pydata/xarray/issues/2847  
         nds = nds.drop_vars("pfull_bins")
+
+    if not keep_delz:
+        nds = nds.drop_vars("delz")
 
     if vars2d:
         nds2d = no_fvregrid_to_2d(xds, vars2d)
@@ -411,7 +414,7 @@ def no_fvregrid_to_2d(xds, varlist):
     
     return nds
 
-def fv_vertical_regrid(xds, interfaces):
+def fv_vertical_regrid(xds, interfaces, keep_delz=True):
     """Vertically regrid a dataset based on approximately located interfaces
     by "approximately" we mean to grab the nearest neighbor to the values in 
     interfaces. Note: here the input dataset may contain any possible combination 
@@ -429,7 +432,7 @@ def fv_vertical_regrid(xds, interfaces):
     # 2D or 3D: no vertical regridding required for 2D
     vars2d = [x for x in xds.data_vars if not ("pfull" in xds[x].dims or "z_l" in xds[x].dims)]
     vars3d = {}
-    vars3d["atm"] = [x for x in xds.data_vars if "pfull" in xds[x].dims]
+    vars3d["atm"] = [x for x in xds.data_vars if "pfull" in xds[x].dims and x != "delz"]
     vars3d["ocn"] = [x for x in xds.data_vars if "z_l" in xds[x].dims]
 
     if vars3d:
@@ -474,6 +477,9 @@ def fv_vertical_regrid(xds, interfaces):
                 nds[key].attrs["regridding"] = "delz weighted average in vertical,new coordinate bounds represented by 'pfull_bins'"
                 # unfortunately, cannot store the pfull_bins due to this issue: https://github.com/pydata/xarray/issues/2847  
                 nds = nds.drop_vars("pfull_bins")
+
+            if not keep_delz:
+                nds = nds.drop_vars("delz")
 
         if vars3d["ocn"]:
             logging.info(f"3D ocean variable detected:{vars3d} ")

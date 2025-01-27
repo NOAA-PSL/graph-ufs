@@ -310,7 +310,7 @@ class ReplayCoupledEmulator:
     @property
     def checkpoint_dir(self):
         return os.path.join(self.local_store_path, "models")
-    
+   
     def open_atm_dataset(self, **kwargs):
         xds = xr.open_zarr(self.data_url["atm"], storage_options={"token": "anon"}, **kwargs)
         return xds
@@ -326,6 +326,14 @@ class ReplayCoupledEmulator:
     def open_land_dataset(self, **kwargs):
         xds = xr.open_zarr(self.data_url["land"], storage_options={"token": "anon"}, **kwargs)
         return xds
+
+    def open_dataset(self, **kwargs):
+        ds_atm = self.open_atm_dataset(**kwargs)
+        ds_ocn = self.open_ocn_dataset(**kwargs)
+        ds_ice = self.open_ice_dataset(**kwargs)
+        ds_land = self.open_land_dataset(**kwargs)
+        ds_all = xr.merge([ds_atm, ds_ocn, ds_ice, ds_land])
+        return ds_all
 
     def get_time(self, mode):
         # choose dates based on mode
