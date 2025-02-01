@@ -648,10 +648,10 @@ def predict(
                 if "z_l" in predictions[var].dims:
                     predictions[var] = predictions[var]*landseamask
 
-                elif var.lower() == "SSH".lower():
+                elif var.lower() == "ssh":
                     predictions[var] = predictions[var]*landseamask.isel(z_l=0)
 
-                elif var.lower() == "land".lower():
+                elif var.lower() == "land":
                     predictions[var]= predictions[var].round()
 
                 elif var.startswith("ice"):

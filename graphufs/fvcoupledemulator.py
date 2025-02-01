@@ -159,7 +159,7 @@ class FVCoupledEmulator(ReplayCoupledEmulator):
 def get_new_vertical_grid(interfaces, comp):
 
     # Create the parent vertical grid via layers2pressure object
-    if comp.lower()=="atm".lower():
+    if comp.lower()=="atm":
         replay_layers = Layers2Pressure()
         phalf = replay_layers.phalf.sel(phalf=interfaces, method="nearest")
 
@@ -171,7 +171,7 @@ def get_new_vertical_grid(interfaces, comp):
         )
         nds = child_layers.xds.copy(deep=True)
     
-    elif comp.lower()=="ocn".lower():
+    elif comp.lower()=="ocn":
         vcoord_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "replay_vertical_levels.yaml")
         with open(vcoord_path, "r") as f:
             vcoords = yaml.safe_load(f)
@@ -414,6 +414,7 @@ def no_fvregrid_to_2d(xds, varlist):
     
     return nds
 
+'''
 def fv_vertical_regrid(xds, interfaces, keep_delz=True):
     """Vertically regrid a dataset based on approximately located interfaces
     by "approximately" we mean to grab the nearest neighbor to the values in 
@@ -424,7 +425,7 @@ def fv_vertical_regrid(xds, interfaces, keep_delz=True):
     
     Args:
         xds (xr.Dataset)
-        interfaces (dictionary with "atm" and "ocn" keys)
+        interfaces (interfaces for the given component. Note that it can only be tuple or list, not dictionary)
 
     Returns:
         nds (xr.Dataset): with vertical averaging
@@ -434,14 +435,19 @@ def fv_vertical_regrid(xds, interfaces, keep_delz=True):
     vars3d = {}
     vars3d["atm"] = [x for x in xds.data_vars if "pfull" in xds[x].dims and x != "delz"]
     vars3d["ocn"] = [x for x in xds.data_vars if "z_l" in xds[x].dims]
+    has_3Datm = False
+    has_3Docn = False
+    has_2D = True
 
     if vars3d:
         if vars3d["atm"]:
-            #nds = fv_vertical_regrid_atm(xds, interfaces["atm"])
+            has_3Datm = True
             logging.info(f"3D atmospheric variable detected:{vars3d} ")
             # create a new dataset with the new vertical grid 
-            nds = get_new_vertical_grid(list(interfaces["atm"]), "atm")
-
+            if isinstance(interfaces, dict):
+                raise ValueError("interfaces cannot be a dictionary. Slice and pass interfaces as a tuple/list for the atm component")
+            else:
+                nds3Datm = get_new_vertical_grid(list(interfaces), "atm")
             # if the dataset has somehow already renamed pfull -> level, rename to pfull for Layers2Pressure computations
             has_level_not_pfull = False 
             if "level" in xds.dims and "pfull" not in xds.dims:
@@ -449,43 +455,46 @@ def fv_vertical_regrid(xds, interfaces, keep_delz=True):
                     xds = xds.rename({"level": "pfull"}) 
 
             # Regrid vertical distance, and get weighting
-            nds["delz"] = xds["delz"].groupby_bins(
+            nds3Datm["delz"] = xds["delz"].groupby_bins(
                 "pfull",
-                bins=nds["phalf"],
+                bins=nds3Datm["phalf"],
             ).sum()
-            new_delz_inverse = 1/nds["delz"]
+            new_delz_inverse = 1/nds3Datm["delz"]
 
             for key in vars3d["atm"]:
                 # Regrid the variable
                 with xr.set_options(keep_attrs=True):
-                    nds[key] = new_delz_inverse * (
+                    nds3Datm[key] = new_delz_inverse * (
                         (
                             xds[key]*xds["delz"]
                         ).groupby_bins(
                             "pfull",
-                            bins=nds["phalf"],
+                            bins=nds3Datm["phalf"],
                         ).sum()
                     )
-                nds[key].attrs = xds[key].attrs.copy()
+                nds3Datm[key].attrs = xds[key].attrs.copy()
             
                 # set the coordinates
-                nds = nds.set_coords("pfull")
-                nds["pfull_bins"] = nds["pfull_bins"].swap_dims({"pfull_bins": "pfull"})
+                nds3Datm = nds3Datm.set_coords("pfull")
+                nds3Datm["pfull_bins"] = nds3Datm["pfull_bins"].swap_dims({"pfull_bins": "pfull"})
                 with xr.set_options(keep_attrs=True):
-                    nds[key] = nds[key].swap_dims({"pfull_bins": "pfull"})
+                    nds3Datm[key] = nds3Datm[key].swap_dims({"pfull_bins": "pfull"})
 
-                nds[key].attrs["regridding"] = "delz weighted average in vertical,new coordinate bounds represented by 'pfull_bins'"
+                nds3Datm[key].attrs["regridding"] = "delz weighted average in vertical,new coordinate bounds represented by 'pfull_bins'"
                 # unfortunately, cannot store the pfull_bins due to this issue: https://github.com/pydata/xarray/issues/2847  
-                nds = nds.drop_vars("pfull_bins")
+                nds3Datm = nds3Datm.drop_vars("pfull_bins")
 
             if not keep_delz:
-                nds = nds.drop_vars("delz")
-
+                nds3Datm = nds3Datm.drop_vars("delz")
+            
         if vars3d["ocn"]:
+            has_3Docn = True
             logging.info(f"3D ocean variable detected:{vars3d} ")
             # create a new dataset with the new vertical grid
-            nds = get_new_vertical_grid(list(interfaces["ocn"]), "ocn")
-
+            if isinstance(interfaces, dict):
+                raise ValueError("interfaces cannot be a dictionary. Slice and pass interfaces as a tuple/list for the ocn component")
+            else:
+                nds3Docn = get_new_vertical_grid(list(interfaces), "ocn")
             # Regrid static layer thickness and get weighting
             vcoord_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"replay_vertical_levels.yaml")
             with open(vcoord_path, "r") as f:
@@ -498,40 +507,61 @@ def fv_vertical_regrid(xds, interfaces, keep_delz=True):
             xa_dz = xa_interface.diff(dim="z_i")
             xa_dz = xa_dz.assign_coords({"z_i":xds.coords["z_l"].values})
             xa_dz = xa_dz.rename({"z_i":"z_l"})
-            nds["dz"] = xa_dz.groupby_bins(
+            nds3Docn["dz"] = xa_dz.groupby_bins(
                     "z_l",
-                    bins=nds["z_i"],
+                    bins=nds3Docn["z_i"],
             ).sum()
-            dz_inverse = 1/nds["dz"]
+            dz_inverse = 1/nds3Docn["dz"]
             # do the regridding for all variables now.
             for key in vars3d["ocn"]:
                 with xr.set_options(keep_attrs=True):
                     weighted_mult = xds[key]*xa_dz
-                    nds[key] = dz_inverse*(
+                    nds3Docn[key] = dz_inverse*(
                         weighted_mult.groupby_bins(
                             "z_l",
-                            bins=nds["z_i"],
+                            bins=nds3Docn["z_i"],
                         ).sum()
                     )
-                nds[key].attrs = xds[key].attrs.copy()
+                nds3Docn[key].attrs = xds[key].attrs.copy()
                 # set the coordinates
-                nds = nds.set_coords("z_l")
-                nds["z_l_bins"] = nds["z_l_bins"].swap_dims({"z_l_bins": "z_l"})
+                nds3Docn = nds3Docn.set_coords("z_l")
+                nds3Docn["z_l_bins"] = nds3Docn["z_l_bins"].swap_dims({"z_l_bins": "z_l"})
                 with xr.set_options(keep_attrs=True):
-                    nds[key] = nds[key].swap_dims({"z_l_bins": "z_l"})
-                nds[key].attrs["regridding"] = "layer thickness weighted average in vertical, new coordinate bounds represented by 'z_l_bins'"
+                    nds3Docn[key] = nds3Docn[key].swap_dims({"z_l_bins": "z_l"})
+                nds3Docn[key].attrs["regridding"] = "layer thickness weighted average in vertical, new coordinate bounds represented by 'z_l_bins'"
 
-                nds = nds.drop_vars("z_l_bins")
-            nds["dz"] = nds["dz"].swap_dims({"z_l_bins": "z_l"})
-
+                nds3Docn = nds3Docn.drop_vars("z_l_bins")
+            nds3Docn["dz"] = nds3Docn["dz"].swap_dims({"z_l_bins": "z_l"})
+            
     if vars2d:
+        has_2D = True
         logging.info("2D variable detected: no regridding applied")
-        nds = xr.Dataset(
+        nds2D = xr.Dataset(
                 data_vars={}, 
                 coords=xds.coords,
                 attrs=xds.attrs,
         )
         for v in vars2d:
-            nds[v] = xds[v]
-    
+            nds2D[v] = xds[v]
+
+    if has_3Datm:
+        if has_3Docn:
+            if has_2D:
+                nds = xr.merge([nds3Datm, nds3Docn, nds2D])
+            else:
+                nds = xr.merge([nds3Datm, nds3Docn])
+        else:
+            if has_2D:
+                nds = xr.merge([nds3Datm, nds2D])
+            else:
+                nds = nds3Datm.copy()
+    elif has_3Docn:
+        if has_2D:
+            nds = xr.merge([nds3Docn, nds2D])
+        else:
+            nds = nds3Docn.copy()
+    else:
+        nds = nds2D.copy()
+
     return nds
+'''

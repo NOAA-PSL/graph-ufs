@@ -374,17 +374,17 @@ class ReplayCoupledEmulator:
         """
 
         # select our vertical levels
-        if es_comp.lower() == "atm".lower():
+        if es_comp.lower() == "atm":
             xds = xds.sel(pfull=list(self.atm_levels), method="nearest")
             myvars = list(x for x in set(self.atm_input_variables+self.atm_target_variables+self.atm_forcing_variables) if x in xds)
-        elif es_comp.lower() == "ocn".lower():
+        elif es_comp.lower() == "ocn":
             xds = xds.sel(z_l=self.ocn_levels, method="nearest")
             myvars = list(x for x in set(self.ocn_input_variables+self.ocn_target_variables+self.ocn_forcing_variables) if x in xds)
-        elif es_comp.lower() == "ice".lower():
+        elif es_comp.lower() == "ice":
             myvars = list(x for x in set(self.ice_input_variables+self.ice_target_variables+self.ice_forcing_variables) if x in xds)
-        elif es_comp.lower() == "land".lower():
+        elif es_comp.lower() == "land":
             myvars = list(x for x in set(self.land_input_variables+self.land_target_variables+self.land_forcing_variables) if x in xds)
-        elif es_comp.lower() == "coupled".lower():
+        elif es_comp.lower() == "coupled":
             xds = xds.sel(pfull=self.atm_levels, z_l=self.ocn_levels)
             myvars = list(x for x in self.all_variables if x in xds)
         else:
@@ -397,7 +397,7 @@ class ReplayCoupledEmulator:
             xds = xds.sel(time=new_time)
         
         # mask nans in ocean target variables
-        if es_comp.lower() == "ocn".lower() or es_comp.lower() == "ice" or es_comp.lower() == "land":
+        if es_comp.lower() == "ocn" or es_comp.lower() == "ice" or es_comp.lower() == "land":
             xds = xds.fillna(0)
 
         # if we have any transforms to apply, do it here
@@ -1049,13 +1049,13 @@ class ReplayCoupledEmulator:
 
     @staticmethod
     def _get_replay_vertical_levels(es_comp="atm"):
-        if es_comp.lower() == "atm".lower():
+        if es_comp.lower() == "atm":
             pfull_path = os.path.join(os.path.dirname(__file__), "replay_vertical_levels.yaml")
             with open(pfull_path, "r") as f:
                 pfull = yaml.safe_load(f)["pfull"]
             return xr.DataArray(pfull, coords={"pfull": pfull}, dims="pfull")
 
-        elif es_comp.lower() == "ocn".lower():
+        elif es_comp.lower() == "ocn":
             z_l_path = os.path.join(os.path.dirname(__file__), "replay_vertical_levels.yaml")
             with open(z_l_path, "r") as f:
                 z_l = yaml.safe_load(f)["z_l"]

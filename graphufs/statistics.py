@@ -62,17 +62,15 @@ class StatisticsComputer:
         self.open_zarr_kwargs = open_zarr_kwargs if open_zarr_kwargs is not None else dict()
         self.to_zarr_kwargs = to_zarr_kwargs if to_zarr_kwargs is not None else dict()
         self.load_full_dataset = load_full_dataset
-        if self.comp in ["atm", "land", "ice"]:
+        if self.comp.lower() in ["atm", "land", "ice"]:
             self.delta_t = f"{self.time_skip*3} hour" if self.time_skip is not None else "3 hour"
             self.dims = ("time", "grid_yt", "grid_xt")
-        elif self.comp.lower() == "ocean".lower() or self.comp.lower() == "ocn".lower():
+        elif self.comp.lower() == "ocean" or self.comp.lower() == "ocn":
             self.delta_t = f"{self.time_skip*6} hour" if self.time_skip is not None else "6 hour"
             self.dims = ("time", "lat", "lon")
         else:
-            raise ValueError("component can only be atm, ocean/ocn, land, and ice")
+            raise ValueError("component can only be atm, ocn, land, and ice")
         self.transforms = transforms
-
-        self.delta_t = f"{self.time_skip*3} hour" if self.time_skip is not None else "3 hour"
 
     def __call__(self, data_vars=None, **tisr_kwargs):
         """Processes the input dataset to compute normalization statistics.
@@ -85,7 +83,7 @@ class StatisticsComputer:
         walltime.start()
 
         localtime.start("Setup")
-        
+    
         ds = self.open_dataset(data_vars=data_vars, **tisr_kwargs) 
         self._transforms_warning(list(ds.data_vars.keys()))
         
@@ -326,7 +324,7 @@ def add_derived_vars(
         xds (xr.Dataset): with added variables
     """
     with xr.set_options(keep_attrs=True):
-        if component.lower() == "atm".lower():
+        if component.lower() == "atm":
             xds = xds.rename({"time": "datetime", "grid_xt": "lon", "grid_yt": "lat", "pfull": "level"})
             data_utils.add_derived_vars(xds)
             if compute_tisr:
@@ -337,7 +335,7 @@ def add_derived_vars(
                 )
             xds = xds.rename({"datetime": "time", "lon": "grid_xt", "lat": "grid_yt", "level": "pfull"})
 
-        elif component.lower() == "ocean".lower():
+        elif component.lower() == "ocean":
             xds = xds.rename({"time": "datetime"})
             data_utils.add_derived_vars(xds)
             xds = xds.rename({"datetime": "time"})
