@@ -133,6 +133,7 @@ class Dataset():
         result = result.transpose("batch", "lat", "lon", "channels")
         return result
 
+    
     def _open_dataset(self) -> xr.Dataset:
         """
         Open, subsample, and rename variables in the dataset.
@@ -140,14 +141,16 @@ class Dataset():
         Returns:
             xds (xarray.Dataset): Preprocessed xarray dataset.
         """
-        time = self.emulator.get_time(mode=self.mode)
-        xds = self.emulator.open_and_subsample(all_new_time=time, mode=self.mode)
-        if "z_l" in xds.dims and ("pfull" in xds.dims or "level" in xds.dims):
+        if isinstance(self.emulator, ReplayCoupledEmulator): 
+            time = self.emulator.get_time(mode=self.mode)
+            xds = self.emulator.open_and_subsample(all_new_time=time, mode=self.mode)
             es_comp = "coupled"
-        elif "z_l" in xds.dims and "level" not in xds.dims and "pfull" not in xds.dims:
-            es_comp = "ocn"
-        else: # this has to be refined in the future to accomodate land- and ice-only models
+        elif isinstance(self.emulator, ReplayEmulator):
+            xds = self.emulator.open_dataset()
+            time = self.emulator.get_time(mode=self.mode)
+            xds = self.emulator.subsample_dataset(xds, new_time=time)
             es_comp = "atm"
+        xds = self.emulator.check_for_ints(xds)
         if "time" in xds.dims:
             xds = xds.rename({"time": "datetime"})
         if "grid_xt" in xds.dims:

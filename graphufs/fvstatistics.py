@@ -1,12 +1,10 @@
 import logging
 from typing import Optional
 from copy import copy
-
 import numpy as np
 import xarray as xr
-
 from graphcast import data_utils
-from .fvcoupledemulator import fv_vertical_regrid
+from .fvcoupledemulator import fv_vertical_regrid_atm, fv_vertical_regrid_ocn
 from .statistics import StatisticsComputer, add_derived_vars, add_transformed_vars
 
 class FVStatisticsComputer(StatisticsComputer):
@@ -21,7 +19,7 @@ class FVStatisticsComputer(StatisticsComputer):
         then doing vertical regridding.
 
     Attributes:
-        interfaces (array_like): with approximate values of vertical grid interfaces to
+        interfaces (array_like | dict): with approximate values of vertical grid interfaces to
             grab from the parent dataset, using nearest neighbor (i.e., passing 100 would
             return the closest value of 101.963245 or whatever it is)
         """
@@ -31,8 +29,8 @@ class FVStatisticsComputer(StatisticsComputer):
         self,
         path_in: str,
         path_out: str,
-        comp: str,
         interfaces: tuple | list | np.ndarray,
+        comp: Optional[str] = "atm",
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         time_skip: Optional[int] = None,
@@ -57,17 +55,17 @@ class FVStatisticsComputer(StatisticsComputer):
 
     def open_dataset(self, data_vars=None, **tisr_kwargs):
         xds = xr.open_zarr(self.path_in, **self.open_zarr_kwargs)
-
         # subsample in time
         if "time" in xds.dims:
             xds = self.subsample_time(xds)
 
-        logging.info(f"{self.name}: Adding any derived variables")
-        xds = add_derived_vars(
-            xds,
-            compute_tisr=data_utils.TISR in data_vars if data_vars is not None else False,
-            **tisr_kwargs,
-        )
+        if self.comp.lower() == "atm":
+            logging.info(f"{self.name}: Adding any derived variables")
+            xds = add_derived_vars(
+                xds,
+                compute_tisr=data_utils.TISR in data_vars if data_vars is not None else False,
+                **tisr_kwargs,
+            )
 
         # select variables, keeping delz for atmosphere
         if data_vars is not None:
@@ -76,8 +74,11 @@ class FVStatisticsComputer(StatisticsComputer):
                 data_vars = [data_vars]
                 local_data_vars = [local_data_vars]
 
+        if self.comp.lower() == "atm":
             # if the transformed variables are desired, need to hang onto
             # the original, not transformed variable, since we vertically average then transform
+            # right now, this functionality is only coded for atmospheric variable. This would be
+            # changed to support other components as well.
             for key, mapping in self.transforms.items():
                 transformed_key = f"{mapping.__name__}_{key}"
                 do_transformed_var = any(transformed_key == dv for dv in local_data_vars)
@@ -88,27 +89,31 @@ class FVStatisticsComputer(StatisticsComputer):
                 if do_transformed_var and original_var_not_in_list:
                     local_data_vars.append(key)
 
-            if "pfull" in xds[local_data_vars].dims:
-                xds = xds[local_data_vars+["delz"]]
-            else:
-                xds = xds[local_data_vars]
+        if "pfull" in xds[local_data_vars].dims:
+            xds = xds[local_data_vars+["delz"]]
+        else:
+            xds = xds[local_data_vars]
 
         # regrid in the vertical
-        if "pfull" in xds[local_data_vars].dims:
+        if "pfull" in xds[local_data_vars].dims: 
             logging.info(f"{self.name}: starting vertical regridding")
-            xds = fv_vertical_regrid(xds, interfaces=list(self.interfaces))
+            xds = fv_vertical_regrid_atm(xds, interfaces=self.interfaces)
+        if "z_l" in xds[local_data_vars].dims:
+            logging.info(f"{self.name}: starting vertical regridding")
+            xds = fv_vertical_regrid_ocn(xds, interfaces=self.interfaces)
 
-        logging.info(f"{self.name}: Adding any transformed variables")
-        xds = add_transformed_vars(
-            xds,
-            transforms=self.transforms,
-        )
-
-        if data_vars is not None:
-            selvars = data_vars
-            for key in ["phalf", "ak", "bk"]:
-                if key in xds:
-                    selvars.append(key)
-            xds = xds[selvars]
+        if self.comp == "atm":
+            logging.info(f"{self.name}: Adding any transformed variables")
+            xds = add_transformed_vars(
+                xds,
+                transforms=self.transforms,
+            )
+        if self.comp.lower() == "atm":
+            if data_vars is not None:
+                selvars = data_vars
+                for key in ["phalf", "ak", "bk"]:
+                    if key in xds:
+                        selvars.append(key)
+                xds = xds[selvars]
 
         return xds
