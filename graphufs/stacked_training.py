@@ -125,7 +125,8 @@ def optimize(
         a batch of losses will be returned
         """
         predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping)
-        return predictor.loss(inputs, targets, weights=weights)
+        loss, diagnostics = predictor.loss(inputs, targets, weights=weights)
+        return loss.squeeze(), diagnostics.squeeze()
 
 
     @hk.transform_with_state
@@ -158,7 +159,7 @@ def optimize(
                 rng=PRNGKey(0),
             )
             return loss, (diagnostics, next_state)
-
+        
         # process one batch per GPU
         def process_batch(inputs, targets):
 
