@@ -18,7 +18,7 @@ from graphufs.batchloader import BatchLoader
 from graphufs.log import setup_simple_log
 from graphufs.utils import get_last_input_mapping
 from graphufs.fvstatistics import FVStatisticsComputer
-from graphufs import (
+from graphufs.training import (
     init_devices,
 )
 import jax
