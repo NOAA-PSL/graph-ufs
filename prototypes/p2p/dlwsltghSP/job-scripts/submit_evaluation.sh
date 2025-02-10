@@ -25,7 +25,7 @@ mkdir -p $mycommunity/logs/training
 mkdir -p $mycommunity/logs/inference
 
 mv $mywork/loss.nc $mycommunity
-mv -r $mywork/models $mycommunity
+mv $mywork/models $mycommunity
 cp $mywork/logs/training/*.00.*.* $mycommunity/logs/training
 cp $mywork/logs/inference/*.00.*.* $mycommunity/logs/inference
 mv $mywork/inference/validation/*.nc $mycommunity/inference/validation
