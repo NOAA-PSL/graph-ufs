@@ -4,7 +4,7 @@ from copy import copy
 import numpy as np
 import xarray as xr
 from graphcast import data_utils
-from .fvcoupledemulator import fv_vertical_regrid_atm, fv_vertical_regrid_ocn
+from .fvcoupledemulator import fv_vertical_regrid_atm, fv_vertical_regrid_ocn, append_landsea_mask
 from .statistics import StatisticsComputer, add_derived_vars, add_transformed_vars
 
 class FVStatisticsComputer(StatisticsComputer):
@@ -101,6 +101,10 @@ class FVStatisticsComputer(StatisticsComputer):
         if "z_l" in xds[local_data_vars].dims:
             logging.info(f"{self.name}: starting vertical regridding")
             xds = fv_vertical_regrid_ocn(xds, interfaces=self.interfaces)
+            # append landsea_mask -- this is hard coded now and would be computed 
+            # irrespective of the diagnose_and_apply_mask_ocn option in the Emulator config
+            xds = append_landsea_mask(xds)
+            logging.info("appended landsea_mask to the dataset for statistics computation")
 
         if self.comp == "atm":
             logging.info(f"{self.name}: Adding any transformed variables")

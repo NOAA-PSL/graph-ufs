@@ -135,6 +135,9 @@ class FVCoupledEmulator(ReplayCoupledEmulator):
             myvars = list(x for x in list(set(self.ocn_input_variables+self.ocn_target_variables+self.ocn_forcing_variables)) if x in xds)
             xds = xds[myvars]
             xds = fv_vertical_regrid_ocn(xds, interfaces=self.interfaces[es_comp], keep_dz=False)
+            # append landsea_mask if diagnose_and_apply_mask is true
+            if self.diagnose_and_apply_mask_ocn:
+                xds = append_landsea_mask(xds)
         
         elif es_comp=="ice":
             myvars = list(x for x in list(set(self.ice_input_variables+self.ice_target_variables+self.ice_forcing_variables)) if x in xds)
@@ -153,7 +156,7 @@ class FVCoupledEmulator(ReplayCoupledEmulator):
         if es_comp == "atm":
             xds = self.transform_variables(xds)
         
-        xds = xds.fillna(0)
+        #xds = xds.fillna(0)
         return xds
 
 def get_new_vertical_grid(interfaces, comp):
@@ -413,6 +416,44 @@ def no_fvregrid_to_2d(xds, varlist):
         nds[key] = xds[key]
     
     return nds
+
+def append_landsea_mask(xds):
+    """
+    Append landsea mask to FV regridded ocean data for all vertical levels. The mask
+    is diagnosed using a 3D salinity snapshot. We use salinity because fvregridding is 
+    removing all nan values as a result of the .sum() operation. We cannot even use 
+    skipna=False there because that may end up considering an ocean column as land column 
+    if only the last of the grid box in that column is land (say a topographic tip). Salinity
+    can be used to bypass this problem as a zero salinity is not within its range and therefore
+    it must be a land point.
+    
+    Args:
+    xds: FV regridded ocean dataset without the land-sea mask.
+
+    Returns:
+    xds: ocean dataset with the diagnosed landsea_mask
+    """
+    # pick a snapshot
+    try:
+        quantity = xds.so.isel(time=0)
+    except:
+        raise KeyError("salinity is required for computing landsea mask")
+    
+    # create the mask and add attributes
+    landsea_mask = xr.where(quantity==0, 0, 1).astype(xds.so.dtype)
+    landsea_mask = landsea_mask.assign_attrs(long_name="land-sea mask (land=0, sea/ice=1)", units="None",)
+    
+    # deleting any time dimensions
+    not_requires_dims = ["cftime", "ftime", "time"]
+    for key in not_requires_dims:
+        if key in landsea_mask.dims:
+            landsea_mask = landsea_mask.reset_coords(names=key, drop=True)
+    
+    # append landsea_mask to xds 
+    xds = xds.assign(landsea_mask=landsea_mask)
+    logging.info("appended landsea_mask for ocean")
+
+    return xds
 
 '''
 def fv_vertical_regrid(xds, interfaces, keep_delz=True):

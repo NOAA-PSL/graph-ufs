@@ -25,7 +25,6 @@ from .utils import (
     get_num_params,
 )
 
-
 class ReplayCoupledEmulator:
     """A coupled emulator based on UFS Replay data. This manages all model configuration settings and normalization fields. Currently it is designed to be inherited for a specific use-case, and this could easily be generalized to read in settings via a configuration file (yaml, json, etc). Be sure to register any inherited class as a pytree for it to work with JAX.
 
@@ -149,6 +148,9 @@ class ReplayCoupledEmulator:
     loss_weights_per_variable.update(land_loss_weights_per_variable)
     input_transforms = None
     output_transforms = None
+    
+    # masking related
+    diagnose_and_apply_mask_ocn = True
 
     # this is used for initializing the state in the gradient computation
     grad_rng_seed = None
