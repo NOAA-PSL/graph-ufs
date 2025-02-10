@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 if __name__ == "__main__":
 
-    ds = xr.load_dataset("/pscratch/sd/t/timothys/p2p/dlwsltghSP/loss.nc")
+    ds = xr.load_dataset("/global/cfs/cdirs/m4718/timothys/p2p/dlwsltghSP/loss.nc")
 
     fig, axs = plt.subplots(1,2, figsize=(8,4), constrained_layout=True)
 
