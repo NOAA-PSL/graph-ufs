@@ -78,16 +78,18 @@ class StackedCP0Emulator(FVCoupledEmulator):
         "temp",
         #"uo",
         #"vo",
-        #"landsea_mask",
+        "landsea_mask", # this is diagnosed inside 
     )
     ice_input_variables = (
         "icec",
         #"icetk",
+        #"seaice_mask",
     )
     land_input_variables = (
         "soilm",
         #"soilt1",
         #"tmpsfc",
+        "land_static",
     )
 
     # targets
@@ -134,7 +136,7 @@ class StackedCP0Emulator(FVCoupledEmulator):
         "day_progress_sin",
         "day_progress_cos",
     )
-    ocn_forcing_variables = ()
+    ocn_forcing_variables = () # this is diagnosed inside
     ice_forcing_variables = ()
     land_forcing_variables = ()
 
@@ -151,7 +153,7 @@ class StackedCP0Emulator(FVCoupledEmulator):
     target_lead_time = "6h"     # how long is the forecast ... at what point do we compare model to targets
     training_dates = (          # bounds of training data (inclusive)
         "1994-01-01T00",        # start
-        "1994-03-01T00"         # stop
+        "1994-01-31T18"         # stop
     )
     testing_dates = (           # bounds of testing data (inclusive)
         "1995-01-01T00",        # start
@@ -159,13 +161,13 @@ class StackedCP0Emulator(FVCoupledEmulator):
     )
     validation_dates = (        # bounds of validation data (inclusive)
         "1996-01-01T00",        # start
-        "1996-01-31T21"         # stop
+        "1996-01-31T18"         # stop
     )
 
     # training protocol
     batch_size = 16
     num_batch_splits = 1
-    num_epochs = 10
+    num_epochs = 20
 
     # model config options
     resolution = 1.0
@@ -214,10 +216,11 @@ class StackedCP0Emulator(FVCoupledEmulator):
     use_jax_distributed = False
     use_xla_flags = False
     dask_threads = 8
-    use_half_precision = True
+    use_half_precision = False # this must be set to false for coupled stacked graphcast with masked loss to work
 
 class StackedCP0Tester(StackedCP0Emulator):
-    target_lead_time = ["6h", "12h", "18h", "24h", "30h", "36h", "42h", "48h"]
+    #target_lead_time = ["6h", "12h", "18h", "24h", "30h", "36h", "42h", "48h"]
+    target_lead_time = [f"{n}h" for n in range(6, 6*4*10+1, 6)]
 
 tree_util.register_pytree_node(
     StackedCP0Emulator,

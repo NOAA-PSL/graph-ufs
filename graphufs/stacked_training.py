@@ -90,6 +90,8 @@ def optimize(
     weights,
     last_input_channel_mapping,
     opt_state=None,
+    meta_inputs=None,
+    meta_targets=None,
 ):
     """Optimize the model parameters by running through all optim_steps in data
 
@@ -125,7 +127,11 @@ def optimize(
         a batch of losses will be returned
         """
         predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping)
-        loss, diagnostics = predictor.loss(inputs, targets, weights=weights)
+        if hasattr(emulator, "ocn_input_variables") and hasattr(emulator, "atm_input_variables"):
+            loss, diagnostics = predictor.loss_coupled(inputs, targets, weights=weights,
+                    meta_inputs=meta_inputs, meta_targets=meta_targets)
+        else:
+            loss, diagnostics = predictor.loss(inputs, targets, weights=weights)
         return loss.squeeze(), diagnostics.squeeze()
 
 
@@ -135,7 +141,11 @@ def optimize(
         a batch of losses will be returned
         """
         predictor = construct_wrapped_graphcast(emulator, last_input_channel_mapping)
-        loss, diagnostics = predictor.loss(inputs, targets, weights=weights)
+        if hasattr(emulator, "ocn_input_variables") and hasattr(emulator, "atm_input_variables"):
+            loss, diagnostics = predictor.loss_coupled(inputs, targets, weights=weights,
+                    meta_inputs=meta_inputs, meta_targets=meta_targets)
+        else:
+            loss, diagnostics = predictor.loss(inputs, targets, weights=weights)
         return loss.mean(), diagnostics.mean(axis=0)
 
     def optim_step(

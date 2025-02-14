@@ -6,6 +6,7 @@ import shutil
 from functools import partial
 
 import numpy as np
+import xarray as xr
 import pandas as pd
 import optax
 from graphufs.stacked_training import init_model, optimize
@@ -20,7 +21,7 @@ from graphufs.training import (
     init_devices,
 )
 import jax
-
+from graphufs.stacked_utils import get_channel_index
 from config import StackedCP0Emulator
 from graphufs.optim import clipped_cosine_adamw
 
@@ -101,7 +102,10 @@ def train(Emulator):
 
     # data generators
     training_data = Dataset(gufs, mode="training")
+    sample_batch_inputs, sample_batch_targets = training_data.__getitem__(0)
+    print("training data:", training_data.__getitem__(0))
     validation_data = Dataset(gufs, mode="validation")
+    print("validation data:", validation_data.__getitem__(0))
     # this loads the data in ... suboptimal I know
     logging.info("Loading Training and Validation Datasets")
     training_data.xds.load(); 
@@ -129,6 +133,11 @@ def train(Emulator):
     # this is tricky, because it needs to be "rebuildable" in JAX's eyes
     # so better to just explicitly pass it around
     last_input_channel_mapping = get_last_input_mapping(training_data)
+    # same is true for channel to var mapping for targets as well, which is
+    # required for masking purposes.
+    xinputs, xtargets, xforcing = training_data.get_xarrays(0)
+    meta_targets = get_channel_index(xtargets)
+    meta_inputs = get_channel_index(xinputs)
 
     # load weights or initialize a random model
     logging.info("Initializing Optimizer and Parameters")
@@ -176,6 +185,8 @@ def train(Emulator):
             weights=weights,
             last_input_channel_mapping=last_input_channel_mapping,
             opt_state=opt_state,
+            meta_inputs = meta_inputs,
+            meta_targets = meta_targets,
         )
 
         logging.info(f"Done with epoch {e}")
@@ -196,7 +207,7 @@ if __name__ == "__main__":
 
     if not os.path.isdir(stats_path):
         logging.info(f"Could not find {stats_path}, computing statistics...")
-        for comp in ["atm", "ocn", "ice", "land"]:
+        for comp in ["atm","ocn","land","ice"]:
             calc_stats(StackedCP0Emulator, comp=comp)
 
     train(StackedCP0Emulator)

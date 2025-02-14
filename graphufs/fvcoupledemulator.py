@@ -135,9 +135,10 @@ class FVCoupledEmulator(ReplayCoupledEmulator):
             myvars = list(x for x in list(set(self.ocn_input_variables+self.ocn_target_variables+self.ocn_forcing_variables)) if x in xds)
             xds = xds[myvars]
             xds = fv_vertical_regrid_ocn(xds, interfaces=self.interfaces[es_comp], keep_dz=False)
-            # append landsea_mask if diagnose_and_apply_mask is true
-            if self.diagnose_and_apply_mask_ocn:
-                xds = append_landsea_mask(xds)
+            # append landsea_mask
+            xds = append_landsea_mask(xds)
+            if "landsea_mask" not in self.ocn_input_variables:
+                self.ocn_input_variables = self.ocn_input_variables + ("landsea_mask",)
         
         elif es_comp=="ice":
             myvars = list(x for x in list(set(self.ice_input_variables+self.ice_target_variables+self.ice_forcing_variables)) if x in xds)
@@ -156,7 +157,7 @@ class FVCoupledEmulator(ReplayCoupledEmulator):
         if es_comp == "atm":
             xds = self.transform_variables(xds)
         
-        #xds = xds.fillna(0)
+        xds = xds.fillna(0)
         return xds
 
 def get_new_vertical_grid(interfaces, comp):
