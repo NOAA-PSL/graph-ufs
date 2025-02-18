@@ -127,12 +127,12 @@ def main(varname, comp):
 
 
 if __name__ == "__main__":
-    comp = "ice"
+    comp = "ocn"
     all_variables = list(set(
         # uncomment one of the below lines based on the component chosen. This would be automated in the future.
         #Emulator.atm_input_variables + Emulator.atm_forcing_variables + Emulator.atm_target_variables
-        #Emulator.ocn_input_variables + Emulator.ocn_forcing_variables + Emulator.ocn_target_variables
-        Emulator.ice_input_variables + Emulator.ice_forcing_variables + Emulator.ice_target_variables
+        Emulator.ocn_input_variables + Emulator.ocn_forcing_variables + Emulator.ocn_target_variables
+        #Emulator.ice_input_variables + Emulator.ice_forcing_variables + Emulator.ice_target_variables
         #Emulator.land_input_variables + Emulator.land_forcing_variables + Emulator.land_target_variables
     ))
     

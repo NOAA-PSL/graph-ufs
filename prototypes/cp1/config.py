@@ -74,14 +74,14 @@ class BaseCP1Trainer(FVCoupledEmulator):
     )
     ocn_input_variables = (
         # Surface Variables
-        "SSH",
-        "LW",
-        "SW",
+        #"SSH",
+        #"LW",
+        #"SW",
         # 3D Variables
         "so",
-        "temp",
-        "uo",
-        "vo",
+        #"temp",
+        #"uo",
+        #"vo",
         #"landsea_mask",
     )
     ice_input_variables = (
@@ -109,14 +109,14 @@ class BaseCP1Trainer(FVCoupledEmulator):
     )
     ocn_target_variables = (
         # Surface Variables
-        "SSH",
-        "LW",
-        "SW",
+        #"SSH",
+        #"LW",
+        #"SW",
         # 3D Variables
         "so",
-        "temp",
-        "uo",
-        "vo",
+        #"temp",
+        #"uo",
+        #"vo",
     )
     ice_target_variables = (
         "icec",
@@ -166,15 +166,15 @@ class BaseCP1Trainer(FVCoupledEmulator):
     #target_lead_time = [f"{n}h" for n in range(6, 6*4*1+1, 6)]
     training_dates = (          # bounds of training data (inclusive)
         "1993-12-31T18",        # start
-        "2019-12-31T21"         # stop
+        "2019-12-31T18"         # stop
     )
     validation_dates = (        # bounds of validation data (inclusive)  
         "2022-01-01T00",        # start
-        "2023-10-13T03",        # stop 
+        "2023-10-13T00",        # stop 
     )
     testing_dates = (           # bounds of testing data (inclusive)
         "2020-01-01T00",        # start
-        "2021-12-31T21"         # stop
+        "2021-12-31T18"         # stop
     )
 
     # training protocol
