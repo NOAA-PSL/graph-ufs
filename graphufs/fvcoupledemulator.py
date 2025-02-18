@@ -286,8 +286,9 @@ def fv_vertical_regrid_ocn(xds, interfaces, keep_dz=False):
         
     if vars2d:
         nds2d = no_fvregrid_to_2d(xds, vars2d)
+        nds = xr.merge([nds, nds2d])
 
-    return xr.merge([nds, nds2d])
+    return nds
 
 
 def fv_vertical_regrid_atm(xds, interfaces, keep_delz=True):
