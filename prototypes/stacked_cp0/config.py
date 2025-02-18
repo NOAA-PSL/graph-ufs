@@ -177,12 +177,8 @@ class StackedCP0Emulator(FVCoupledEmulator):
     hidden_layers = 1
     radius_query_fraction_edge_length = 0.6
 
-    # diagnose and mask
-    # diagnose ocn mask after FV regridding and mask; other components have depth independent masks
-    diagnose_and_apply_mask_ocn = True
-
     # loss weighting, defaults to GraphCast implementation
-    #weight_loss_per_channel = True
+    weight_loss_per_channel = True
     weight_loss_per_latitude = True
     weight_loss_per_level = False
     loss_weights_per_variable = dict()
