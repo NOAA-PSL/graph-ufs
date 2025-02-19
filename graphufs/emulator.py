@@ -767,7 +767,7 @@ class ReplayEmulator:
                     if os.path.isdir(paths["diagnostics"]):
                         normers["diagnostics"] = xr.open_zarr(paths["diagnostics"])["diagnostics"]
                     else:
-                        raise ValueError(f"{self.name}.set_normalization: we have stored inputs and targets normalizationlocally, but not diagnostics")
+                        raise ValueError(f"{self.name}.set_normalization: we have stored inputs and targets normalization locally, but not diagnostics")
                 else:
                     normers["diagnostics"] = None
 
