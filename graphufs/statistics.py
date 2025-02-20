@@ -92,7 +92,8 @@ class StatisticsComputer:
 
 
         logging.info(f"{self.name}: computing statistics for {data_vars}")
-        logging.info(f"{self.name}: computing statistics for diagnostics: {diagnostics}")
+        if diagnostics is not None:
+             logging.info(f"{self.name}: computing statistics for diagnostics: {diagnostics}")
 
         # load if not 3D
         if self.load_full_dataset:
