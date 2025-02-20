@@ -8,7 +8,7 @@ from prototypes.tp0.train import calc_stats, train
 
 if __name__ == "__main__":
 
-    # logging isn't working for me on PSL, no idea why
+    
     setup_simple_log()
 
     stats_path = os.path.dirname(Emulator.norm_urls["mean"])
