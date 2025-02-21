@@ -1,6 +1,6 @@
 import os
 import logging
-
+import json
 from mpi4py import MPI
 
 from graphufs.datasets import Dataset
@@ -14,6 +14,7 @@ from graphufs.stacked_mpi_training import (
 
 from graphufs.optim import clipped_cosine_adamw
 from graphufs.utils import get_last_input_mapping
+from graphufs.stacked_utils import get_channel_index
 
 def train(RemoteEmulator, PackedEmulator):
 
@@ -48,6 +49,20 @@ def train(RemoteEmulator, PackedEmulator):
         rng_seed=11,
     )
 
+    # get the training and target meta data
+    logging.info("Getting metadata for inputs and targets")
+    xinputs, xtargets, _ = tds.get_xarrays(0)
+    meta_targets = get_channel_index(xtargets)
+    meta_inputs = get_channel_index(xinputs)
+
+    #inputs_meta_json = "meta_data_inputs_cp1.json"
+    #targets_meta_json = "meta_data_targets_cp1.json"
+    #with open(inputs_meta_json, "r") as metafile:
+    #    meta_inputs = json.load(metafile)
+    #with open(targets_meta_json, "r") as metafile:
+    #    meta_targets = json.load(metafile)
+    
+    logging.info("input and target meta data are read from stored jsons")
     logging.info("Initializing Loss Function Weights and Stacked Mappings")
     # compute loss function weights once
     loss_weights = remote_emulator.calc_loss_weights(tds)
@@ -106,6 +121,8 @@ def train(RemoteEmulator, PackedEmulator):
             last_input_channel_mapping=last_input_channel_mapping,
             opt_state=opt_state,
             mpi_topo=topo,
+            meta_inputs = meta_inputs,
+            meta_targets = meta_targets,
         )
 
         # save weights
