@@ -12,7 +12,7 @@ import xarray as xr
 _gravity = 9.80665
 _dry_air_specific_gas = 287.05
 _water_vapor_specific_gas = 461.5
-_vapor_to_gas_ratio_minus1 = water_vapor_specific_gas / dry_air_specific_gas - 1.
+_vapor_to_gas_ratio_minus1 = _water_vapor_specific_gas / _dry_air_specific_gas - 1.
 
 
 def prepare_diagnostic_functions(
