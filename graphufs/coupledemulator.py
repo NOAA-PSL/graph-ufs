@@ -121,26 +121,11 @@ class ReplayCoupledEmulator:
     weight_loss_per_latitude = True
     weight_loss_per_level = True
     weight_loss_per_channel = False
-    atm_loss_weights_per_variable = {
-        "tmp2m"         : 1.0,
-        "ugrd10m"       : 0.1,
-        "vgrd10m"       : 0.1,
-        "pressfc"       : 0.1,
-        "prateb_ave"    : 0.1,
-    }
+    atm_loss_weights_per_variable = {}
 
-    ocn_loss_weights_per_variable = {
-        "SSH"           : 1.0,
-        "so"            : 0.1,
-        "temp"          : 0.1,
-    }
-    ice_loss_weights_per_variable = {
-        "icec"          : 1.0,
-        "icetk"         : 0.1,
-    }
-    land_loss_weights_per_variable = {
-        "soilm"         : 0.1,
-    }
+    ocn_loss_weights_per_variable = {}
+    ice_loss_weights_per_variable = {}
+    land_loss_weights_per_variable = {}
     loss_weights_per_variable = {}
     loss_weights_per_variable.update(atm_loss_weights_per_variable)
     loss_weights_per_variable.update(ocn_loss_weights_per_variable)
@@ -149,9 +134,6 @@ class ReplayCoupledEmulator:
     input_transforms = None
     output_transforms = None
     
-    # masking related
-    diagnose_and_apply_mask_ocn = True
-
     # this is used for initializing the state in the gradient computation
     grad_rng_seed = None
     init_rng_seed = None
@@ -190,18 +172,20 @@ class ReplayCoupledEmulator:
         latitude, longitude = self._get_replay_grid(self.resolution)
         self.latitude = tuple(float(x) for x in latitude)
         self.longitude = tuple(float(x) for x in longitude)
-        self.atm_levels = list(
-            pfull.sel(
-                pfull=list(self.vert_levels["atm"]),
-                method="nearest",
-            ).values
-        )
-        self.ocn_levels = list(
-            z_l.sel(
-                z_l=list(self.vert_levels["ocn"]),
-                method="nearest",
-            ).values
-        )
+        if self.vert_levels["atm"]:
+            self.atm_levels = list(
+                pfull.sel(
+                    pfull=list(self.vert_levels["atm"]),
+                    method="nearest",
+                ).values
+            )
+        if self.vert_levels["ocn"]:
+            self.ocn_levels = list(
+                z_l.sel(
+                    z_l=list(self.vert_levels["ocn"]),
+                    method="nearest",
+                ).values
+            )
         self.model_config = ModelConfig(
             resolution=self.resolution,
             mesh_size=self.mesh_size,
@@ -332,10 +316,11 @@ class ReplayCoupledEmulator:
     def open_dataset(self, **kwargs):
         ds_atm = self.open_atm_dataset(**kwargs)
         ds_ocn = self.open_ocn_dataset(**kwargs)
+        ds_ocn = ds_ocn.rename({"lat":"grid_yt", "lon":"grid_xt"})
         ds_ice = self.open_ice_dataset(**kwargs)
         ds_land = self.open_land_dataset(**kwargs)
-        ds_all = xr.merge([ds_atm, ds_ocn, ds_ice, ds_land])
-        return ds_all
+        
+        return xr.merge([ds_atm, ds_ocn, ds_ice, ds_land])
 
     def get_time(self, mode):
         # choose dates based on mode
@@ -377,17 +362,26 @@ class ReplayCoupledEmulator:
 
         # select our vertical levels
         if es_comp.lower() == "atm":
-            xds = xds.sel(pfull=list(self.atm_levels), method="nearest")
+            if self.atm_levels:
+                xds = xds.sel(pfull=list(self.atm_levels), method="nearest")
             myvars = list(x for x in set(self.atm_input_variables+self.atm_target_variables+self.atm_forcing_variables) if x in xds)
+        
         elif es_comp.lower() == "ocn":
-            xds = xds.sel(z_l=self.ocn_levels, method="nearest")
+            if self.ocn_levels:
+                xds = xds.sel(z_l=self.ocn_levels, method="nearest")
             myvars = list(x for x in set(self.ocn_input_variables+self.ocn_target_variables+self.ocn_forcing_variables) if x in xds)
+        
         elif es_comp.lower() == "ice":
             myvars = list(x for x in set(self.ice_input_variables+self.ice_target_variables+self.ice_forcing_variables) if x in xds)
+        
         elif es_comp.lower() == "land":
             myvars = list(x for x in set(self.land_input_variables+self.land_target_variables+self.land_forcing_variables) if x in xds)
+        
         elif es_comp.lower() == "coupled":
-            xds = xds.sel(pfull=self.atm_levels, z_l=self.ocn_levels)
+            if self.atm_levels:
+                xds = xds.sel(pfull=self.atm_levels)
+            if self.ocn_levels:
+                xds = xds.sel(z_l=self.ocn_levels)
             myvars = list(x for x in self.all_variables if x in xds)
         else:
             raise ValueError("Unknown earth system component: only atm, ocn, ice, and land are supported")
@@ -460,16 +454,20 @@ class ReplayCoupledEmulator:
         # download only missing dates and write them to disk
         if self.no_cache_data or not os.path.exists(self.local_data_path):
             logging.info(f"Downloading {mode} data for {len(all_new_time)} time stamps.")
+            
             # atm
             xds_atm = xr.open_zarr(self.data_url["atm"], storage_options={"token": "anon"})
             all_xds_atm = self.subsample_dataset(xds_atm, new_time=all_new_time, es_comp="atm")
+            
             # ocn
             xds_ocn = xr.open_zarr(self.data_url["ocn"], storage_options={"token": "anon"})
             all_xds_ocn = self.subsample_dataset(xds_ocn, new_time=all_new_time, es_comp="ocn")
             all_xds_ocn = all_xds_ocn.rename({"lat":"grid_yt", "lon":"grid_xt"})
+            
             # ice
             xds_ice = xr.open_zarr(self.data_url["ice"], storage_options={"token": "anon"})
             all_xds_ice = self.subsample_dataset(xds_ice, new_time=all_new_time, es_comp="ice")
+            
             # land
             xds_land = xr.open_zarr(self.data_url["land"], storage_options={"token": "anon"})
             all_xds_land = self.subsample_dataset(xds_land, new_time=all_new_time, es_comp="land")
@@ -519,25 +517,32 @@ class ReplayCoupledEmulator:
     ):
         """Open datsets, subsample and return"""
         all_new_time = all_new_time if all_new_time is not None else self.get_time(mode=mode)
-        
+        all_xds = xr.Dataset() 
         # atm
-        xds_atm = xr.open_zarr(self.data_url["atm"], storage_options={"token": "anon"})
-        all_xds_atm = self.subsample_dataset(xds_atm, new_time=all_new_time, es_comp="atm")
-    
+        if tuple(set(self.atm_input_variables + self.atm_target_variables + self.atm_forcing_variables)):
+            xds_atm = xr.open_zarr(self.data_url["atm"], storage_options={"token": "anon"})
+            all_xds_atm = self.subsample_dataset(xds_atm, new_time=all_new_time, es_comp="atm")
+            all_xds = xr.merge([all_xds, all_xds_atm])
+
         # ocn
-        xds_ocn = xr.open_zarr(self.data_url["ocn"], storage_options={"token": "anon"})
-        all_xds_ocn = self.subsample_dataset(xds_ocn, new_time=all_new_time, es_comp="ocn")
-        all_xds_ocn = all_xds_ocn.rename({"lat":"grid_yt", "lon":"grid_xt"})
+        if tuple(set(self.ocn_input_variables + self.ocn_target_variables + self.ocn_forcing_variables)):
+            xds_ocn = xr.open_zarr(self.data_url["ocn"], storage_options={"token": "anon"})
+            all_xds_ocn = self.subsample_dataset(xds_ocn, new_time=all_new_time, es_comp="ocn")
+            all_xds_ocn = all_xds_ocn.rename({"lat":"grid_yt", "lon":"grid_xt"})
+            all_xds = xr.merge([all_xds, all_xds_ocn])
         
         # ice
-        xds_ice = xr.open_zarr(self.data_url["ice"], storage_options={"token": "anon"})
-        all_xds_ice = self.subsample_dataset(xds_ice, new_time=all_new_time, es_comp="ice")
-        
-        # land
-        xds_land = xr.open_zarr(self.data_url["land"], storage_options={"token": "anon"})
-        all_xds_land = self.subsample_dataset(xds_land, new_time=all_new_time, es_comp="land")
+        if tuple(set(self.ice_input_variables + self.ice_target_variables + self.ice_forcing_variables)):
+            xds_ice = xr.open_zarr(self.data_url["ice"], storage_options={"token": "anon"})
+            all_xds_ice = self.subsample_dataset(xds_ice, new_time=all_new_time, es_comp="ice")
+            all_xds = xr.merge([all_xds, all_xds_ice])
 
-        all_xds = xr.merge([all_xds_atm, all_xds_ocn, all_xds_ice, all_xds_land])
+        # land
+        if tuple(set(self.land_input_variables + self.land_target_variables + self.land_forcing_variables)):
+            xds_land = xr.open_zarr(self.data_url["land"], storage_options={"token": "anon"})
+            all_xds_land = self.subsample_dataset(xds_land, new_time=all_new_time, es_comp="land")
+            all_xds = xr.merge([all_xds, all_xds_land])
+
         all_xds = self.check_for_ints(all_xds)
         return all_xds
     
@@ -894,9 +899,13 @@ class ReplayCoupledEmulator:
 
                             # necessary for graphcast.dataset to stacked operations
                             xds = xds.rename({transformed_key: key})
-                    xds = xds.sel(pfull=self.atm_levels, z_l=self.ocn_levels)
+                    if "pfull" in xds.dims:
+                        xds = xds.sel(pfull=self.atm_levels)
+                    if "z_l" in xds.dims:
+                        xds = xds.sel(z_l=self.ocn_levels)
                     xds = xds.load()
-                    xds = xds.rename({"pfull": "level"})
+                    if "pfull" in xds.dims:
+                        xds = xds.rename({"pfull": "level"})
                 xds.to_zarr(local_path)
             return xds
 

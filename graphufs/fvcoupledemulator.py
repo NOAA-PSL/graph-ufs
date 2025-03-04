@@ -51,8 +51,9 @@ class FVCoupledEmulator(ReplayCoupledEmulator):
         self.atm_levels = list(nds_atm["pfull"].values)
         #self.pressure_levels = tuple(nds_atm["pfull"].values)
 
-        nds_ocn = get_new_vertical_grid(list(self.interfaces["ocn"]), "ocn")
-        self.ocn_levels = list(nds_ocn["z_l"].values)
+        if self.interfaces["ocn"]:
+            nds_ocn = get_new_vertical_grid(list(self.interfaces["ocn"]), "ocn")
+            self.ocn_levels = list(nds_ocn["z_l"].values)
 
         self.model_config = ModelConfig(
             resolution=self.resolution,
@@ -126,7 +127,8 @@ class FVCoupledEmulator(ReplayCoupledEmulator):
                 myvars.append("delz")
                 
             xds = xds[myvars]
-            xds = fv_vertical_regrid_atm(xds, interfaces=self.interfaces[es_comp])
+            if self.interfaces["atm"]:
+                xds = fv_vertical_regrid_atm(xds, interfaces=self.interfaces["atm"])
             
             # if we didn't want delz and just kept it for regridding, remove it here
             xds = xds[[x for x in self.all_variables if x in xds]]
@@ -134,23 +136,28 @@ class FVCoupledEmulator(ReplayCoupledEmulator):
         elif es_comp=="ocn":
             myvars = list(x for x in list(set(self.ocn_input_variables+self.ocn_target_variables+self.ocn_forcing_variables)) if x in xds)
             xds = xds[myvars]
-            xds = fv_vertical_regrid_ocn(xds, interfaces=self.interfaces[es_comp], keep_dz=False)
+            if self.interfaces["ocn"]:
+                xds = fv_vertical_regrid_ocn(xds, interfaces=self.interfaces["ocn"], keep_dz=False)
             # append landsea_mask
             xds = append_landsea_mask(xds)
-            if "landsea_mask" not in self.ocn_input_variables:
-                self.ocn_input_variables = self.ocn_input_variables + ("landsea_mask",)
+            if "landsea_mask" in self.ocn_input_variables and "ocean_static_3d" not in self.ocn_input_variables:
+                warnings.warn("landsea_mask is specified in ocean inputs. consider renaming it to ocean_static_3d to only use the mask diagnosed internally.")
+            if "ocean_static_3d" not in self.ocn_input_variables:
+                self.ocn_input_variables = self.ocn_input_variables + ("ocean_static_3d",)
         
         elif es_comp=="ice":
             myvars = list(x for x in list(set(self.ice_input_variables+self.ice_target_variables+self.ice_forcing_variables)) if x in xds)
             xds = xds[myvars]
-            xds = fv_vertical_regrid_ice(xds, interfaces=self.interfaces[es_comp])
+            if self.interfaces["ice"]:
+                xds = fv_vertical_regrid_ice(xds, interfaces=self.interfaces["ice"])
         
         elif es_comp=="land":
             myvars = list(x for x in list(set(self.land_input_variables+self.land_target_variables+self.land_forcing_variables)) if x in xds)
             xds = xds[myvars]
-            xds = fv_vertical_regrid_land(xds, interfaces=self.interfaces[es_comp])
+            if self.interfaces["land"]:
+                xds = fv_vertical_regrid_land(xds, interfaces=self.interfaces["land"])
                     
-        if new_time is not None:
+        if new_time is not None and "time" in xds.dims:
             xds = xds.sel(time=new_time)
         
         # perform transform after vertical averaging, less subsceptible to noisy results
@@ -351,8 +358,9 @@ def fv_vertical_regrid_atm(xds, interfaces, keep_delz=True):
 
     if vars2d:
         nds2d = no_fvregrid_to_2d(xds, vars2d)
-
-    return xr.merge([nds, nds2d])
+        nds = xr.merge([nds, nds2d])
+    
+    return nds
 
 
 def fv_vertical_regrid_ice(xds, interfaces):
@@ -452,13 +460,13 @@ def append_landsea_mask(xds):
             landsea_mask = landsea_mask.reset_coords(names=key, drop=True)
     
     # append landsea_mask to xds 
-    xds = xds.assign(landsea_mask=landsea_mask)
+    xds = xds.assign(ocean_static_3d=landsea_mask)
     logging.info("appended landsea_mask for ocean")
 
     return xds
 
-'''
-def fv_vertical_regrid(xds, interfaces, keep_delz=True):
+
+def fv_vertical_regrid(xds, interfaces, keep_delz=True, keep_dz=True):
     """Vertically regrid a dataset based on approximately located interfaces
     by "approximately" we mean to grab the nearest neighbor to the values in 
     interfaces. Note: here the input dataset may contain any possible combination 
@@ -468,7 +476,7 @@ def fv_vertical_regrid(xds, interfaces, keep_delz=True):
     
     Args:
         xds (xr.Dataset)
-        interfaces (interfaces for the given component. Note that it can only be tuple or list, not dictionary)
+        interfaces (interfaces for the given component. Note that it can only be tuple or list or dictionary)
 
     Returns:
         nds (xr.Dataset): with vertical averaging
@@ -476,19 +484,21 @@ def fv_vertical_regrid(xds, interfaces, keep_delz=True):
     # 2D or 3D: no vertical regridding required for 2D
     vars2d = [x for x in xds.data_vars if not ("pfull" in xds[x].dims or "z_l" in xds[x].dims)]
     vars3d = {}
-    vars3d["atm"] = [x for x in xds.data_vars if "pfull" in xds[x].dims and x != "delz"]
+    vars3d["atm"] = [x for x in xds.data_vars if "pfull" in xds[x].dims]
     vars3d["ocn"] = [x for x in xds.data_vars if "z_l" in xds[x].dims]
     has_3Datm = False
     has_3Docn = False
-    has_2D = True
+    has_2D = False
 
     if vars3d:
         if vars3d["atm"]:
             has_3Datm = True
             logging.info(f"3D atmospheric variable detected:{vars3d} ")
+            
             # create a new dataset with the new vertical grid 
             if isinstance(interfaces, dict):
-                raise ValueError("interfaces cannot be a dictionary. Slice and pass interfaces as a tuple/list for the atm component")
+            #    raise ValueError("interfaces cannot be a dictionary. Slice and pass interfaces as a tuple/list for the atm component")
+                nds3Datm = get_new_vertical_grid(list(interfaces["atm"]), "atm")
             else:
                 nds3Datm = get_new_vertical_grid(list(interfaces), "atm")
             # if the dataset has somehow already renamed pfull -> level, rename to pfull for Layers2Pressure computations
@@ -535,7 +545,8 @@ def fv_vertical_regrid(xds, interfaces, keep_delz=True):
             logging.info(f"3D ocean variable detected:{vars3d} ")
             # create a new dataset with the new vertical grid
             if isinstance(interfaces, dict):
-                raise ValueError("interfaces cannot be a dictionary. Slice and pass interfaces as a tuple/list for the ocn component")
+            #    raise ValueError("interfaces cannot be a dictionary. Slice and pass interfaces as a tuple/list for the ocn component")
+                nds3Docn = get_new_vertical_grid(list(interfaces["ocn"]), "ocn")
             else:
                 nds3Docn = get_new_vertical_grid(list(interfaces), "ocn")
             # Regrid static layer thickness and get weighting
@@ -575,17 +586,14 @@ def fv_vertical_regrid(xds, interfaces, keep_delz=True):
 
                 nds3Docn = nds3Docn.drop_vars("z_l_bins")
             nds3Docn["dz"] = nds3Docn["dz"].swap_dims({"z_l_bins": "z_l"})
+            if not keep_dz:
+                nds3Docn = nds3Docn.drop_vars("dz")
             
     if vars2d:
         has_2D = True
         logging.info("2D variable detected: no regridding applied")
-        nds2D = xr.Dataset(
-                data_vars={}, 
-                coords=xds.coords,
-                attrs=xds.attrs,
-        )
-        for v in vars2d:
-            nds2D[v] = xds[v]
+        nds2D = no_fvregrid_to_2d(xds, vars2d)
+        
 
     if has_3Datm:
         if has_3Docn:
@@ -607,4 +615,3 @@ def fv_vertical_regrid(xds, interfaces, keep_delz=True):
         nds = nds2D.copy()
 
     return nds
-'''
