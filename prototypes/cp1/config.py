@@ -74,15 +74,15 @@ class BaseCP1Trainer(FVCoupledEmulator):
     )
     ocn_input_variables = (
         # Surface Variables
-        #"SSH",
-        #"LW",
-        #"SW",
+        "SSH",
+        "LW",
+        "SW",
         # 3D Variables
         "so",
-        #"temp",
-        #"uo",
-        #"vo",
-        #"landsea_mask",
+        "temp",
+        "uo",
+        "vo",
+        "landsea_mask", # this is diagnosed inside
     )
     ice_input_variables = (
         "icec",
@@ -92,6 +92,7 @@ class BaseCP1Trainer(FVCoupledEmulator):
         "soilm",
         "soilt1",
         "tmpsfc",
+        "land_static",
     )
     atm_target_variables = (
         # Surface Variables
@@ -109,14 +110,14 @@ class BaseCP1Trainer(FVCoupledEmulator):
     )
     ocn_target_variables = (
         # Surface Variables
-        #"SSH",
-        #"LW",
-        #"SW",
+        "SSH",
+        "LW",
+        "SW",
         # 3D Variables
         "so",
-        #"temp",
-        #"uo",
-        #"vo",
+        "temp",
+        "uo",
+        "vo",
     )
     ice_target_variables = (
         "icec",
@@ -180,7 +181,8 @@ class BaseCP1Trainer(FVCoupledEmulator):
     # training protocol
     batch_size = 16
     num_batch_splits = 1
-    num_epochs = 100
+    num_epochs = 80
+    use_half_precision = False
 
     # model config options
     resolution = 1.0
