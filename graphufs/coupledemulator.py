@@ -369,6 +369,9 @@ class ReplayCoupledEmulator:
         elif es_comp.lower() == "ocn":
             if self.ocn_levels:
                 xds = xds.sel(z_l=self.ocn_levels, method="nearest")
+                # update landsea_mask to place 1 at oceans and 0 at land. In MOM6.zarr dataset on GCP, it is the opposite.
+                if "landsea_mask" in xds:
+                    xds["landsea_mask"] = 1 - xds["landsea_mask"]
             myvars = list(x for x in set(self.ocn_input_variables+self.ocn_target_variables+self.ocn_forcing_variables) if x in xds)
         
         elif es_comp.lower() == "ice":
@@ -838,12 +841,21 @@ class ReplayCoupledEmulator:
 
 
 
+
     def set_normalization(self, **kwargs):
         """Load the normalization fields into memory
 
         Returns:
             mean_by_level, stddev_by_level, diffs_stddev_by_level (xarray.Dataset): with normalization fields
         """
+        
+        def check_missing_vars(vars_all, vars_exist, moment=""):
+            """
+            A helper function to check and report any difference between the two lists of variables
+            """
+            missing_vars = list(set(vars_all) - set(vars_exist))
+            if missing_vars:
+                logging.info(f"No {moment} statistics exist in the storage for {missing_vars}")
 
         def open_normalization(moment):
 
@@ -851,29 +863,46 @@ class ReplayCoupledEmulator:
             local_path = os.path.join(
                 self.local_store_path,
                 "normalization",
-                "coupled",
                 os.path.basename(self.norm_urls["atm"][moment]),
             )
 
             if os.path.isdir(local_path):
                 xds = xr.open_zarr(local_path)
                 myvars = list(x for x in self.all_variables if x in xds)
+                check_missing_vars(self.all_variables, myvars, moment)
                 xds = xds[myvars]
                 xds = xds.load()
                 foundit = True
 
             else:
                 kwargs = {"storage_options": {"token": "anon"}} if any(x in self.norm_urls[comp][moment] for x in ["gs://", "gcs://"] for comp in ["atm", "ocn", "ice", "land"]) else {}
+                # atm
                 xds_atm = xr.open_zarr(self.norm_urls["atm"][moment], **kwargs)
+                vars_all = self.atm_input_variables+self.atm_target_variables+self.atm_forcing_variables
+                vars_atm = list(x for x in tuple(set(vars_all)) if x in xds_atm)
+                check_missing_vars(vars_all, vars_atm, moment)
+                
+                # ocn
                 xds_ocn = xr.open_zarr(self.norm_urls["ocn"][moment], **kwargs)
+                vars_all = self.ocn_input_variables+self.ocn_target_variables+self.ocn_forcing_variables
+                vars_ocn = list(x for x in tuple(set(vars_all)) if x in xds_ocn)
+                check_missing_vars(vars_all, vars_ocn, moment)
+
+                # ice
                 xds_ice = xr.open_zarr(self.norm_urls["ice"][moment], **kwargs)
+                vars_all = self.ice_input_variables+self.ice_target_variables+self.ice_forcing_variables
+                vars_ice = list(x for x in tuple(set(vars_all)) if x in xds_ice)
+                check_missing_vars(vars_all, vars_ice, moment)
+
+                # land
                 xds_land = xr.open_zarr(self.norm_urls["land"][moment], **kwargs)
-                vars_atm = list(x for x in tuple(set(self.atm_input_variables+self.atm_target_variables+self.atm_forcing_variables)) if x in xds_atm)
-                vars_ocn = list(x for x in tuple(set(self.ocn_input_variables+self.ocn_target_variables+self.ocn_forcing_variables)) if x in xds_ocn)
-                vars_ice = list(x for x in tuple(set(self.ice_input_variables+self.ice_target_variables+self.ice_forcing_variables)) if x in xds_ice)
-                vars_land = list(x for x in tuple(set(self.land_input_variables+self.land_target_variables+self.land_forcing_variables)) if x in xds_land)
+                vars_all = self.land_input_variables+self.land_target_variables+self.land_forcing_variables
+                vars_land = list(x for x in tuple(set(vars_all)) if x in xds_land)
+                check_missing_vars(vars_all, vars_land, moment)
+
                 xds = xr.merge([xds_ocn, xds_atm, xds_ice, xds_land])
                 myvars = list(x for x in self.all_variables if x in xds)
+                
                 # keep attributes in order to distinguish static from time varying components
                 with xr.set_options(keep_attrs=True):
 
@@ -889,7 +918,6 @@ class ReplayCoupledEmulator:
                             if key in myvars:
                                 idx = myvars.index(key)
                                 myvars[idx] = transformed_key
-                    print("myvars after renaming:", myvars)
                     xds = xds[myvars]
                     if self.input_transforms is not None:
                         for key, transform_function in self.input_transforms.items():
