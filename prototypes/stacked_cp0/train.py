@@ -3,6 +3,7 @@ import logging
 import os
 import sys
 import shutil
+import json
 from functools import partial
 
 import numpy as np
@@ -68,8 +69,11 @@ def calc_stats(Emulator, comp="atm"):
         all_variables = list(set(
             Emulator.atm_input_variables + Emulator.atm_forcing_variables + Emulator.atm_target_variables
         )) 
-        all_variables.append("log_spfh")
-        all_variables.append("log_spfh2m")
+        if Emulator.input_transforms:
+            for key, mapping in Emulator.input_transforms.items():
+                transformed_key = f"{mapping.__name__}_{key}"
+                all_variables.append(transformed_key)
+                print(f"appended {transformed_key}")
         tisr_args["integration_period"] = pd.Timedelta(hours=6)
     
     elif comp.lower() == "ocn":
@@ -102,10 +106,7 @@ def train(Emulator):
 
     # data generators
     training_data = Dataset(gufs, mode="training")
-    sample_batch_inputs, sample_batch_targets = training_data.__getitem__(0)
-    print("training data:", training_data.__getitem__(0))
     validation_data = Dataset(gufs, mode="validation")
-    print("validation data:", validation_data.__getitem__(0))
     # this loads the data in ... suboptimal I know
     logging.info("Loading Training and Validation Datasets")
     training_data.xds.load(); 
@@ -137,8 +138,11 @@ def train(Emulator):
     # required for masking purposes.
     xinputs, xtargets, xforcing = training_data.get_xarrays(0)
     meta_targets = get_channel_index(xtargets)
+    print("meta targets:", meta_targets)
     meta_inputs = get_channel_index(xinputs)
-
+    print("meta inputs:", meta_inputs)
+    meta_forcing = get_channel_index(xforcing)
+    print("meta forcing:", meta_forcing)
     # load weights or initialize a random model
     logging.info("Initializing Optimizer and Parameters")
     inputs, _ = trainer.get_data()
