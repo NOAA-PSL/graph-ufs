@@ -1,6 +1,7 @@
 import logging
 import warnings
 import os
+import shutil
 import numpy as np
 import xarray as xr
 import pandas as pd
@@ -138,12 +139,12 @@ class FVCoupledEmulator(ReplayCoupledEmulator):
             xds = xds[myvars]
             if self.interfaces["ocn"]:
                 xds = fv_vertical_regrid_ocn(xds, interfaces=self.interfaces["ocn"], keep_dz=False)
-            # append landsea_mask
-            xds = append_landsea_mask(xds)
-            if "landsea_mask" in self.ocn_input_variables and "ocean_static_3d" not in self.ocn_input_variables:
-                warnings.warn("landsea_mask is specified in ocean inputs. consider renaming it to ocean_static_3d to only use the mask diagnosed internally.")
-            if "ocean_static_3d" not in self.ocn_input_variables:
-                self.ocn_input_variables = self.ocn_input_variables + ("ocean_static_3d",)
+                # if landsea_mask is specified, this would also get FV regridded in the above step, which is not entirely correct. We must
+                # overwrite this to a landsea_mask diagnosed from one of the 3D FV regridded variable.
+                xds, mask = diagnose_and_append_ocean_mask(xds)
+                # if the correct statistics for mask is not present, recompute it and append
+                #for moment in ["mean", "std"]:
+                #        self.append_diagnosed_mask_statistics(moment, mask, diag_mask_var, "ocn") 
         
         elif es_comp=="ice":
             myvars = list(x for x in list(set(self.ice_input_variables+self.ice_target_variables+self.ice_forcing_variables)) if x in xds)
@@ -167,6 +168,56 @@ class FVCoupledEmulator(ReplayCoupledEmulator):
         xds = xds.fillna(0)
         return xds
 
+    def append_diagnosed_mask_statistics(self, moment, ds_mask, diag_mask_var, es_comp="ocn"):
+        local_path = os.path.join(
+            self.local_store_path,
+            "normalization",
+            os.path.basename(self.norm_urls[es_comp][moment]),
+        )
+        print("appending statistics of the diagnosed ocean mask")
+        if os.path.isdir(local_path):
+            xds = xr.open_zarr(local_path,)
+            if diag_mask_var not in xds:
+                xds = xds.load()
+                # add mean as 0
+                if moment.lower() == "mean":
+                    xds[diag_mask_var] = xr.DataArray(
+                            np.zeros(ds_mask.sizes["z_l"]),
+                            dims=["z_l"],
+                            coords={"z_l":ds_mask.coords["z_l"]},
+                            attrs={"description": "min over lat, lon for max-min normalization: replace mean in \
+                                    standardization by this value" },
+                            )
+                # add std as 1
+                elif moment.lower() == "std":
+                    xds[diag_mask_var] = xr.DataArray(
+                            np.ones(ds_mask.sizes["z_l"]),
+                            dims=["z_l"],
+                            coords={"z_l":ds_mask.coords["z_l"]},
+                            attrs={"description": "max-min over lat, lon for max-min normalization: replace std in \
+                                    standardization by this value" },
+                            )
+
+            xds.close()
+            # delete any existing stacked norm statistic and re-stack
+            stacked_norm_path = os.path.join(
+                self.local_store_path,
+                "stacked-normalization",
+            )
+            if os.path.exists(stacked_norm_path):
+                try:
+                    shutil.rmtree(stacked_norm_path)
+                except OSError as e:
+                    print(f"Error deleting {stacked_norm_path}: {e}")
+            else:
+                print(f"Folder {stacked_norm_path} does not exist")
+            
+            self.set_stacked_normalization()
+
+        else:
+            warnings.warn(f"local statistics store {local_path} not found. no statistics stored for diagnosed mask")
+        return
+        
 def get_new_vertical_grid(interfaces, comp):
 
     # Create the parent vertical grid via layers2pressure object
@@ -427,9 +478,9 @@ def no_fvregrid_to_2d(xds, varlist):
     
     return nds
 
-def append_landsea_mask(xds):
+def diagnose_and_append_ocean_mask(xds):
     """
-    Append landsea mask to FV regridded ocean data for all vertical levels. The mask
+    Diagnose and append a 3D ocean mask using a FV regridded variable. Here, the mask
     is diagnosed using a 3D salinity snapshot. We use salinity because fvregridding is 
     removing all nan values as a result of the .sum() operation. We cannot even use 
     skipna=False there because that may end up considering an ocean column as land column 
@@ -450,20 +501,24 @@ def append_landsea_mask(xds):
         raise KeyError("salinity is required for computing landsea mask")
     
     # create the mask and add attributes
-    landsea_mask = xr.where(quantity==0, 0, 1).astype(xds.so.dtype)
-    landsea_mask = landsea_mask.assign_attrs(long_name="land-sea mask (land=0, sea/ice=1)", units="None",)
+    ocean_mask = xr.where(quantity==0, 0, 1).astype(xds.so.dtype)
+    ocean_mask = ocean_mask.assign_attrs(long_name="land-sea mask (land=0, sea/ice=1)", units="None",)
     
     # deleting any time dimensions
     not_requires_dims = ["cftime", "ftime", "time"]
     for key in not_requires_dims:
-        if key in landsea_mask.dims:
-            landsea_mask = landsea_mask.reset_coords(names=key, drop=True)
+        if key in ocean_mask.dims:
+            ocean_mask = ocean_mask.reset_coords(names=key, drop=True)
     
     # append landsea_mask to xds 
-    xds = xds.assign(ocean_static_3d=landsea_mask)
-    logging.info("appended landsea_mask for ocean")
+    if "landsea_mask" in xds:
+        xds["landsea_mask"] = ocean_mask
+        logging.info("updated landsea_mask variable with the diagnosed one")
+    else:
+        xds = xds.assign(landsea_mask=ocean_mask)
+        logging.info("appended new diagnosed 3d ocean mask")
 
-    return xds
+    return xds, ocean_mask
 
 
 def fv_vertical_regrid(xds, interfaces, keep_delz=True, keep_dz=True):
