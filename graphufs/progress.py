@@ -1,6 +1,7 @@
 """Written by ChatGPT"""
 import json
 import os
+import warnings
 
 class ProgressTracker:
     def __init__(self, json_file_path):
@@ -10,6 +11,10 @@ class ProgressTracker:
             os.makedirs(dirname)
         self.current_iteration = 0
         self.load_progress()
+        if self.current_iteration!=0:
+            warnings.warn("Progress Tracker initialized with non-zero value" +
+                          "of current iteration. This may result in undesired" +
+                          "performance.")
 
     def load_progress(self):
         """Loads the last saved iteration from the JSON file, if it exists."""
