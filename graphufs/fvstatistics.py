@@ -4,7 +4,7 @@ from copy import copy
 import numpy as np
 import xarray as xr
 from graphcast import data_utils
-from .fvcoupledemulator import fv_vertical_regrid_atm, fv_vertical_regrid_ocn, append_landsea_mask
+from .fvcoupledemulator import fv_vertical_regrid_atm, fv_vertical_regrid_ocn, diagnose_and_append_ocean_mask 
 from .statistics import StatisticsComputer, add_derived_vars, add_transformed_vars
 
 class FVStatisticsComputer(StatisticsComputer):
@@ -73,7 +73,7 @@ class FVStatisticsComputer(StatisticsComputer):
             if isinstance(data_vars, str):
                 data_vars = [data_vars]
                 local_data_vars = [local_data_vars]
-
+        
         if self.comp.lower() == "atm":
             # if the transformed variables are desired, need to hang onto
             # the original, not transformed variable, since we vertically average then transform
@@ -88,31 +88,31 @@ class FVStatisticsComputer(StatisticsComputer):
                     local_data_vars.remove(transformed_key)
                 if do_transformed_var and original_var_not_in_list:
                     local_data_vars.append(key)
-
-        if "pfull" in xds[local_data_vars].dims:
-            xds = xds[local_data_vars+["delz"]]
+        
+        myvars = [x for x in local_data_vars if x in xds]
+        if "pfull" in xds[myvars].dims:
+            xds = xds[myvars+["delz"]]
         else:
-            xds = xds[local_data_vars]
+            xds = xds[myvars]
 
         # regrid in the vertical
-        if "pfull" in xds[local_data_vars].dims: 
+        if "pfull" in xds[myvars].dims: 
             logging.info(f"{self.name}: starting vertical regridding")
             xds = fv_vertical_regrid_atm(xds, interfaces=self.interfaces)
-        if "z_l" in xds[local_data_vars].dims:
+        if "z_l" in xds[myvars].dims:
             logging.info(f"{self.name}: starting vertical regridding")
             xds = fv_vertical_regrid_ocn(xds, interfaces=self.interfaces)
-            # append landsea_mask -- this is hard coded now and would be computed 
-            # irrespective of the diagnose_and_apply_mask_ocn option in the Emulator config
-            xds = append_landsea_mask(xds)
-            logging.info("appended landsea_mask to the dataset for statistics computation")
+            # In FV regridding, we need to update the landsea_mask with that 
+            # diagnosed from one of the regridded variables 
+            xds, _ = diagnose_and_append_ocean_mask(xds)  
 
-        if self.comp == "atm":
+        if self.comp.lower() == "atm":
             logging.info(f"{self.name}: Adding any transformed variables")
             xds = add_transformed_vars(
                 xds,
                 transforms=self.transforms,
             )
-        if self.comp.lower() == "atm":
+            
             if data_vars is not None:
                 selvars = data_vars
                 for key in ["phalf", "ak", "bk"]:
