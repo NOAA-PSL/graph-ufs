@@ -6,6 +6,7 @@ from typing import Optional
 import numpy as np
 import xarray as xr
 import dask.array
+import pandas as pd
 
 from xbatcher import BatchGenerator
 
@@ -43,8 +44,9 @@ class Dataset():
         self.target_chunks = target_chunks
         xds, es_comp = self._open_dataset()
         self.es_comp = es_comp
+        self.dt_m_over_d = int(pd.Timedelta(emulator.delta_t_model)/pd.Timedelta(emulator.delta_t_data))
         input_dims = {
-                "datetime": emulator.n_forecast,
+                "datetime": self.dt_m_over_d*emulator.n_forecast,
             }
         for key in ["lon", "lat", "level", "z_l"]:
             if key in xds.dims:
@@ -53,7 +55,7 @@ class Dataset():
             ds=xds,
             input_dims=input_dims,
             input_overlap={
-                "datetime": emulator.n_forecast-1,
+                "datetime": self.dt_m_over_d*emulator.n_forecast-1,
             },
             preload_batch=preload_batch,
         )
@@ -178,6 +180,7 @@ class Dataset():
         xds["time"] = xds["datetime"] - xds["datetime"][0]
         xds = xds.swap_dims({"datetime": "time"}).reset_coords()
         xds = xds.set_coords(["datetime"])
+        xds = xds.isel(time=slice(0, None, self.dt_m_over_d))
         return xds
 
     def get_xds(self, idx: int) -> xr.Dataset:

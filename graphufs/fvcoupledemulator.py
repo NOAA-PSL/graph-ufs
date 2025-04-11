@@ -73,8 +73,8 @@ class FVCoupledEmulator(ReplayCoupledEmulator):
                 target_variables=self.target_variables,
                 forcing_variables=self.forcing_variables,
                 pressure_levels=tuple(set(self.atm_levels)),
-                ocn_vert_levels=sorted(tuple(set(self.ocn_levels))),
                 input_duration=self.input_duration,
+                ocn_vert_levels=sorted(tuple(set(self.ocn_levels))),
                 longitude=self.longitude,
                 latitude=self.latitude,
             )
@@ -84,8 +84,8 @@ class FVCoupledEmulator(ReplayCoupledEmulator):
                 target_variables=self.target_variables,
                 forcing_variables=self.forcing_variables,
                 pressure_levels=tuple(set(self.atm_levels)),
-                ocn_vert_levels=sorted(tuple(set(self.ocn_levels))),
                 input_duration=self.input_duration,
+                ocn_vert_levels=sorted(tuple(set(self.ocn_levels))),
             )
 
 
@@ -94,7 +94,7 @@ class FVCoupledEmulator(ReplayCoupledEmulator):
         ))
 
         # convert some types
-        self.delta_t = pd.Timedelta(self.delta_t)
+        self.delta_t_model = pd.Timedelta(self.delta_t_model)
         self.input_duration = pd.Timedelta(self.input_duration)
         lead_times, duration = data_utils._process_target_lead_times_and_get_duration(self.target_lead_time)
         self.forecast_duration = duration
@@ -117,7 +117,7 @@ class FVCoupledEmulator(ReplayCoupledEmulator):
 
         # TOA Incident Solar Radiation integration period
         if self.tisr_integration_period is None:
-            self.tisr_integration_period = self.delta_t
+            self.tisr_integration_period = self.delta_t_model
 
     def subsample_dataset(self, xds, es_comp="atm", new_time=None):
     
