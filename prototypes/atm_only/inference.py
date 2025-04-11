@@ -48,10 +48,9 @@ def predict(
     with open(mpi_topo.progress_file, "a") as f:
         progress_bar = tqdm(total=n_steps, ncols=80, desc="Processing", file=f)
         for k, (inputs, targets, forcings) in enumerate(batchloader):
-
             if inputs is not None:
                 # retrieve and drop t0
-                inittimes = inputs.datetime.isel(time=-1).values
+                inittimes = np.atleast_1d(inputs.datetime.isel(time=-1).values)
                 inputs = inputs.drop_vars("datetime")
                 targets = targets.drop_vars("datetime")
                 forcings = forcings.drop_vars("datetime")
@@ -113,7 +112,7 @@ def inference(Emulator):
         mode="validation",
         preload_batch=False,
     )
-
+    
     validator = MPIExpandedBatchLoader(
         vds,
         batch_size=emulator.batch_size,
@@ -124,7 +123,7 @@ def inference(Emulator):
         sample_stride=emulator.sample_stride,
         mpi_topo=topo,
     )
-    assert validator.data_per_device == 1
+    # assert validator.data_per_device == 1
 
     # setup weights
     logging.info(f"Reading weights ...")
