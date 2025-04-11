@@ -71,6 +71,9 @@ class BaseAtmTrainer(FVCoupledEmulator):
         "year_progress_cos",
         "day_progress_sin",
         "day_progress_cos",
+        # static
+        "land_static",
+        "hgtsfc_static"
     )
     ocn_input_variables = (
         # Surface Variables
@@ -91,7 +94,7 @@ class BaseAtmTrainer(FVCoupledEmulator):
     land_input_variables = (
         #"soilm",
         #"soilt1",
-        "tmpsfc",
+        #"tmpsfc",
         #"land_static",
     )
     atm_target_variables = (
@@ -126,7 +129,7 @@ class BaseAtmTrainer(FVCoupledEmulator):
     land_target_variables = (
         #"soilm",
         #"soilt1",
-        "tmpsfc",
+        #"tmpsfc",
     )
     atm_forcing_variables = (
         "dswrf_avetoa",
@@ -147,9 +150,8 @@ class BaseAtmTrainer(FVCoupledEmulator):
     interfaces["land"] = ()
 
     # time related
-    delta_t = "6h"              # the model time step, assumed to be the same for both atm and ocn for now.
-                                # A more complicated case of diffential time steps and grid size will be 
-                                # developed in the future
+    delta_t_model = "6h"        # the model time step
+    delta_t_data = "3h"         # time steps in the data
     input_duration = "12h"      # time covered by initial condition(s) + delta_t (necessary for GraphCast code)
     target_lead_time = "6h"     # how long is the forecast ... at what point do we compare model to targets
     #target_lead_time = [f"{n}h" for n in range(6, 6*4*1+1, 6)]
@@ -169,7 +171,7 @@ class BaseAtmTrainer(FVCoupledEmulator):
     # training protocol
     batch_size = 16
     num_batch_splits = 1
-    num_epochs = 80
+    num_epochs = 64
     use_half_precision = False
 
     # model config options
@@ -179,7 +181,6 @@ class BaseAtmTrainer(FVCoupledEmulator):
     gnn_msg_steps = 16
     hidden_layers = 1
     radius_query_fraction_edge_length = 0.6
-    #mesh2grid_edge_normalization_factor = 0.6180338738074472
 
     # loss weighting, defaults to GraphCast implementation
     weight_loss_per_channel = True

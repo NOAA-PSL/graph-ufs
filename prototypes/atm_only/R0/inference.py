@@ -1,5 +1,5 @@
 from prototypes.atm_only.inference import inference
-from config import AtmEvaluator as Emulator
+from config import Evaluator as Emulator
 
 if __name__ == "__main__":
     inference(Emulator)
