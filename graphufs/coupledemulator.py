@@ -14,7 +14,7 @@ from jax import tree_util
 
 from ufs2arco.regrid.ufsregridder import UFSRegridder
 from graphcast import checkpoint
-from graphcast.graphcast import ModelConfig, TaskConfig, CheckPoint
+from graphcast.graphcast import ModelConfig, TaskConfig, CheckPoint, CheckPointOcnOnly
 from graphcast import data_utils
 from graphcast.model_utils import dataset_to_stacked
 from graphcast.losses import normalized_level_weights, normalized_ocn_level_weights, normalized_latitude_weights
@@ -66,12 +66,12 @@ class ReplayCoupledEmulator:
     longitude = tuple()
     tisr_integration_period = None  # TOA Incident Solar Radiation, integration period used in the function:
                                     # graphcast.solar_radiation.get_toa_incident_solar_radiation_for_xarray
-                                    # default = self.delta_t, i.e. the ML model time step
+                                    # default = self.delta_t_model, i.e. the ML model time step
                                     # Note: the value provided here has no effect unless "toa_incident_solar_radiation" is listed in "forcing_variables",
                                     # which indicates to graphcast that TISR needs to be computed.
 
     # time related
-    delta_t = None              # the model time step, same for both ocean and atmosphere
+    delta_t_model = None              # the model time step, same for both ocean and atmosphere
     input_duration = None       # time covered by initial condition(s)
     target_lead_time = None     # when we compare to data, e.g. singular "3h", or many ["3h", "12h", "24h"]
     forecast_duration = None    # Created in __init__, total forecast time
@@ -119,7 +119,9 @@ class ReplayCoupledEmulator:
 
     # loss weighting, defaults to GraphCast implementation
     weight_loss_per_latitude = True
-    weight_loss_per_level = True
+    weight_loss_per_level = False
+    weight_loss_per_level_atm = False
+    weight_loss_per_level_ocn = False
     weight_loss_per_channel = False
     atm_loss_weights_per_variable = {}
 
@@ -234,7 +236,7 @@ class ReplayCoupledEmulator:
             )
         
         # convert some types
-        self.delta_t = pd.Timedelta(self.delta_t)
+        self.delta_t_model = pd.Timedelta(self.delta_t_model)
         self.input_duration = pd.Timedelta(self.input_duration)
         lead_times, duration = data_utils._process_target_lead_times_and_get_duration(self.target_lead_time)
         self.forecast_duration = duration
@@ -257,7 +259,7 @@ class ReplayCoupledEmulator:
 
         # TOA Incident Solar Radiation integration period
         if self.tisr_integration_period is None:
-            self.tisr_integration_period = self.delta_t
+            self.tisr_integration_period = self.delta_t_model
 
     @property
     def name(self):
@@ -270,17 +272,17 @@ class ReplayCoupledEmulator:
     @property
     def n_input(self):
         """Number of steps that initial condition(s) cover"""
-        return self.input_duration // self.delta_t
+        return self.input_duration // self.delta_t_model
 
     @property
     def n_forecast(self):
         """Number of steps covered by a single forecast, including initial condition(s)"""
-        return self.time_per_forecast // self.delta_t
+        return self.time_per_forecast // self.delta_t_model
 
     @property
     def n_target(self):
         """Number of steps in the target, doesn't include initial condition(s)"""
-        return self.forecast_duration // self.delta_t
+        return self.forecast_duration // self.delta_t_model
 
     @property
     def extract_kwargs(self):
@@ -342,7 +344,7 @@ class ReplayCoupledEmulator:
         time = pd.date_range(
             start=start,
             end=end,
-            freq=self.delta_t,
+            freq=self.delta_t_data,
             inclusive="both",
         )
         return time
@@ -714,7 +716,7 @@ class ReplayCoupledEmulator:
                 # figure out duration of IC(s), forecast, all of training
                 data_duration = end - start
 
-                n_max_forecasts = (data_duration - self.time_per_forecast) // self.delta_t + 1
+                n_max_forecasts = (data_duration - self.time_per_forecast) // self.delta_t_model + 1
                 if n_max_forecasts <= 0:
                     raise ValueError(f"n_max_forecasts for {mode} is {n_max_forecasts}")
 
@@ -729,12 +731,12 @@ class ReplayCoupledEmulator:
                     n_optim_steps = n_max_optim_steps
                     warnings.warn(f"There's less data than the number of batches requested, reducing n_optim_steps to {n_optim_steps}")
 
-                # create a new time vector with desired delta_t
+                # create a new time vector with desired delta_t_model
                 # this has to end such that we can pull an entire forecast from the training data
                 all_initial_times = pd.date_range(
                     start=start,
                     end=end - self.time_per_forecast,
-                    freq=self.delta_t,
+                    freq=self.delta_t_model,
                     inclusive="both",
                 )
                 # randomly sample without replacement
@@ -791,7 +793,7 @@ class ReplayCoupledEmulator:
                     timestamps_in_this_forecast = pd.date_range(
                         start=forecast_initial_times[i],
                         end=forecast_initial_times[i]+self.time_per_forecast,
-                        freq=self.delta_t,
+                        freq=self.delta_t_model,
                         inclusive="both",
                     )
                     batch = self.preprocess(
@@ -1070,17 +1072,21 @@ class ReplayCoupledEmulator:
 
 
         # 3. compute per level weighting
-        if self.weight_loss_per_level:
+        if self.weight_loss_per_level_atm:
             level_weights = normalized_level_weights(xtargets)
-            ocn_level_weights = normalized_ocn_level_weights(xtargets)
             target_idx = get_channel_index(xtargets)
             for ichannel in range(targets.shape[-1]):
                 if "level" in target_idx[ichannel].keys():
                     ilevel = target_idx[ichannel]["level"]
                     weights[..., ichannel] *= level_weights.isel(level=ilevel).data
+        
+        if self.weight_loss_per_level_ocn:
+            ocn_level_weights = normalized_ocn_level_weights(xtargets)
+            target_idx = get_channel_index(xtargets)
+            for ichannel in range(targets.shape[-1]):
                 if "z_l" in target_idx[ichannel].keys():
                     iz_l = target_idx[ichannel]["z_l"]
-                    weights[..., ichannel] *= ocn_level_weights.isel(z_l=iz_l).data 
+                    weights[..., ichannel] *= ocn_level_weights.isel(z_l=iz_l).data
 
         # do we need to put this on the device(s)?
         return weights
@@ -1205,6 +1211,25 @@ class ReplayCoupledEmulator:
             logging.info("Model license:\n", ckpt.license, "\n")
         return params, state
 
+    def load_checkpoint_ocn_only(self, id, verbose: bool = False):
+        """Load checkpoint.
+            
+        Args:
+            id (int): integer ID num to load
+            verbose (bool, optional): print metadata about the model
+        """ 
+        ckpt_path = os.path.join(self.checkpoint_dir, f"model_{id}.npz")
+            
+        with open(ckpt_path, "rb") as f:
+            ckpt = checkpoint.load(f, CheckPointOcnOnly)
+        params = ckpt.params
+        state = {}
+        model_config = ckpt.model_config
+        task_config = ckpt.task_config
+        if verbose:
+            logging.info("Model description:\n", ckpt.description, "\n")
+            logging.info("Model license:\n", ckpt.license, "\n")
+        return params, state
 
     def _tree_flatten(self):
         """Pack up everything needed to remake this object.
