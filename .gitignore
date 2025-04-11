@@ -13,6 +13,8 @@ job-scripts/
 
 # Figures
 *.pdf
+*.png
+*.jpeg
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
