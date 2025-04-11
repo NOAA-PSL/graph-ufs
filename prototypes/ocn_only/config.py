@@ -165,9 +165,8 @@ class BaseOcnTrainer(FVCoupledEmulator):
     output_transforms = {}
 
     # time related
-    delta_t = "6h"              # the model time step, assumed to be the same for both atm and ocn for now.
-                                # A more complicated case of diffential time steps and grid size will be 
-                                # developed in the future
+    delta_t_model = "6h"        # the model time step
+    delta_t_data = "6h"         # time steps in the data
     input_duration = "12h"      # time covered by initial condition(s) + delta_t (necessary for GraphCast code)
     target_lead_time = "6h"     # how long is the forecast ... at what point do we compare model to targets
     #target_lead_time = [f"{n}h" for n in range(6, 6*4*1+1, 6)]
