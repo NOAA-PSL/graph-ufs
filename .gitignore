@@ -11,6 +11,9 @@ Untitled*.ipynb
 slurm/
 job-scripts/
 
+# Figures
+*.pdf
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
