@@ -109,8 +109,10 @@ def train(Emulator):
     validation_data = Dataset(gufs, mode="validation")
     # this loads the data in ... suboptimal I know
     logging.info("Loading Training and Validation Datasets")
-    training_data.xds.load(); 
+    training_data.xds.load();
+    print("Training data:", training_data.xds)
     validation_data.xds.load();  
+    print("Validation Data:", validation_data.xds)
     logging.info("... done loading")
 
     trainer = BatchLoader(
@@ -138,11 +140,8 @@ def train(Emulator):
     # required for masking purposes.
     xinputs, xtargets, xforcing = training_data.get_xarrays(0)
     meta_targets = get_channel_index(xtargets)
-    print("meta targets:", meta_targets)
     meta_inputs = get_channel_index(xinputs)
-    print("meta inputs:", meta_inputs)
     meta_forcing = get_channel_index(xforcing)
-    print("meta forcing:", meta_forcing)
     # load weights or initialize a random model
     logging.info("Initializing Optimizer and Parameters")
     inputs, _ = trainer.get_data()
@@ -211,7 +210,7 @@ if __name__ == "__main__":
 
     if not os.path.isdir(stats_path):
         logging.info(f"Could not find {stats_path}, computing statistics...")
-        for comp in ["atm","ocn","land","ice"]:
+        for comp in ["atm", "ocn", "ice", "land"]:
             calc_stats(StackedCP0Emulator, comp=comp)
 
     train(StackedCP0Emulator)

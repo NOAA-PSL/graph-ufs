@@ -50,17 +50,18 @@ class StackedCP0Emulator(FVCoupledEmulator):
     # inputs
     atm_input_variables = (
         # Surface Variables
-        "pressfc",
-        #"ugrd10m",
-        #"vgrd10m",
+        #"pressfc",
+        "ugrd10m",
+        "vgrd10m",
         #"tmp2m",
-        "spfh2m",
+        #"spfh2m",
         # 3D Variables
-        "tmp",
-        "spfh",
+        #"tmp",
+        #"spfh",
         #"ugrd",
         #"vgrd",
         #"dzdt",
+        "land_static",
         # Forcing Variables at input time
         "dswrf_avetoa",
         "year_progress_sin",
@@ -71,38 +72,37 @@ class StackedCP0Emulator(FVCoupledEmulator):
     ocn_input_variables = (
         # Surface Variables
         "SSH",
-        #"LW",
-        #"SW",
+        "LW",
+        "SW",
         # 3D Variables
         "so",
         "temp",
-        #"uo",
-        #"vo",
-        "landsea_mask", # this is diagnosed inside 
+        "uo",
+        "vo",
+        "landsea_mask",
     )
     ice_input_variables = (
-        "icec",
+        #"icec",
         #"icetk",
-        #"seaice_mask",
     )
     land_input_variables = (
-        "soilm",
+        #"soilm",
         #"soilt1",
         #"tmpsfc",
-        "land_static",
+        #"land_static",
     )
 
     # targets
     atm_target_variables = (
         # Surface Variables
-        "pressfc",
+        #"pressfc",
         #"ugrd10m",
         #"vgrd10m",
         #"tmp2m",
-        "spfh2m",
+        #"spfh2m",
         # 3D Variables
-        "tmp",
-        "spfh",
+        #"tmp",
+        #"spfh",
         #"ugrd",
         #"vgrd",
         #"dzdt",
@@ -110,64 +110,89 @@ class StackedCP0Emulator(FVCoupledEmulator):
     ocn_target_variables = (
         # Surface Variables
         "SSH",
-        #"LW",
-        #"SW",
+        "LW",
+        "SW",
         # 3D Variables
         "so",
         "temp",
-        #"uo",
-        #"vo",
+        "uo",
+        "vo",
     )
     ice_target_variables = (
-        "icec",
+        #"icec",
         #"icetk",
     )
     land_target_variables = (
-        "soilm",
+        #"soilm",
         #"soilt1",
         #"tmpsfc",
     )
 
     # forcing
     atm_forcing_variables = (
+        "ugrd10m",
+        "vgrd10m",
         "dswrf_avetoa",
         "year_progress_sin",
         "year_progress_cos",
         "day_progress_sin",
         "day_progress_cos",
     )
-    ocn_forcing_variables = () # this is diagnosed inside
+    ocn_forcing_variables = ()
     ice_forcing_variables = ()
     land_forcing_variables = ()
 
     all_variables = tuple() # this is created in __init__
     interfaces = {}
-    interfaces["atm"] = (400, 600, 800, 1000)
-    interfaces["ocn"] = (0, 50, 200, 300, 500)
+    interfaces["atm"] = () #tuple(x for x in range(200, 1001, 50)) #(400, 600, 800, 1000)
+    interfaces["ocn"] = (#(0, 1) 
+        0,
+        1,
+        5,
+        10,
+        20,
+        40,
+        70,
+        120,
+        200,
+        350,
+        500,
+    )
     interfaces["ice"] = ()
     interfaces["land"] = ()
+    
+    # transforms related
+    input_transforms = {
+    #    "spfh": log,
+    #    "spfh2m": log,
+    }
+    output_transforms = {
+    #    "spfh": exp,
+    #    "spfh2m": exp,
+    }
 
     # time related
-    delta_t = "6h"              # the model time step
+    delta_t_model = "6h"        # the model time step
+    delta_t_data = "6h"         # time steps in the data
     input_duration = "12h"      # time covered by initial condition(s) + delta_t (necessary for GraphCast code)
     target_lead_time = "6h"     # how long is the forecast ... at what point do we compare model to targets
     training_dates = (          # bounds of training data (inclusive)
-        "1994-01-01T00",        # start
-        "1994-01-31T18"         # stop
-    )
-    testing_dates = (           # bounds of testing data (inclusive)
-        "1995-01-01T00",        # start
-        "1995-01-31T18"         # stop
+        "1993-12-31T18",        # start
+        "1994-03-31T18"         # stop
     )
     validation_dates = (        # bounds of validation data (inclusive)
-        "1996-01-01T00",        # start
-        "1996-01-31T18"         # stop
+        "2021-12-31T18",        # start
+        "2022-01-31T18",        # stop
+    )
+    testing_dates = (           # bounds of testing data (inclusive)
+        "2020-01-01T18",        # start
+        "2020-01-31T18"         # stop
     )
 
     # training protocol
     batch_size = 16
     num_batch_splits = 1
-    num_epochs = 20
+    num_epochs = 5
 
     # model config options
     resolution = 1.0
@@ -182,15 +207,7 @@ class StackedCP0Emulator(FVCoupledEmulator):
     weight_loss_per_latitude = True
     weight_loss_per_level = False
     loss_weights_per_variable = dict()
-    input_transforms = {
-        "spfh": log,
-        "spfh2m": log,
-    }
-    output_transforms = {
-        "spfh": exp,
-        "spfh2m": exp,
-    }
-
+    
     # this is used for initializing the state in the gradient computation
     grad_rng_seed = 0
     init_rng_seed = 0
