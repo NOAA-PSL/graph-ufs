@@ -7,6 +7,7 @@ import numpy as np
 import xarray as xr
 import dask.array
 import pandas as pd
+import logging
 
 from xbatcher import BatchGenerator
 
@@ -44,7 +45,10 @@ class Dataset():
         self.target_chunks = target_chunks
         xds, es_comp = self._open_dataset()
         self.es_comp = es_comp
-        self.dt_m_over_d = int(pd.Timedelta(emulator.delta_t_model)/pd.Timedelta(emulator.delta_t_data))
+        if hasattr(emulator, "delta_t_model") and hasattr(emulator, "delta_t_data"):
+            self.dt_m_over_d = int(pd.Timedelta(emulator.delta_t_model)/pd.Timedelta(emulator.delta_t_data))
+        else:
+            self.dt_m_over_d = 1
         input_dims = {
                 "datetime": self.dt_m_over_d*emulator.n_forecast,
             }
@@ -320,11 +324,13 @@ class PackedDataset():
     that BatchLoader can pull a full batch in a single dask/zarr call
     """
 
-    def __init__(self, emulator, mode, **kwargs):
+    def __init__(self, emulator, mode, missing_samples=None, **kwargs):
         self.emulator = emulator
         self.mode = mode
         self.inputs = xr.open_zarr(self.local_inputs_path, **kwargs)
         self.targets = xr.open_zarr(self.local_targets_path, **kwargs)
+        
+        self.drop_missing(missing_samples)
 
     def __len__(self):
         return len(self.inputs["sample"])
@@ -333,6 +339,15 @@ class PackedDataset():
         x = self.inputs["inputs"].isel(sample=idx, drop=True)
         y = self.targets["targets"].isel(sample=idx, drop=True)
         return x, y
+
+    def drop_missing(self, missing_samples=None):
+        if missing_samples is not None:
+            if isinstance(missing_samples, int):
+                missing_samples = [missing_samples]
+            for idx in missing_samples:
+                logging.info(f"PackedDataset: dropping missing sample at idx = {idx}")
+                self.inputs = self.inputs.drop_sel(sample=idx)
+                self.targets = self.targets.drop_sel(sample=idx)
 
     @property
     def local_inputs_path(self) -> str:

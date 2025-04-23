@@ -209,25 +209,45 @@ class ReplayCoupledEmulator:
         # try/except logic to support original graphcast.graphcast.TaskConfig
         # since I couldn't get inspect.getfullargspec to work
         try:
-            self.task_config = TaskConfig(
-                input_variables=self.input_variables,
-                target_variables=self.target_variables,
-                forcing_variables=self.forcing_variables,
-                pressure_levels=tuple(set(self.atm_levels)),
-                ocn_vert_levels=sorted(tuple(set(self.ocn_levels))),
-                input_duration=self.input_duration,
-                longitude=self.longitude,
-                latitude=self.latitude,
-            )
+            if self.ocn_levels:
+                self.task_config = TaskConfig(
+                    input_variables=self.input_variables,
+                    target_variables=self.target_variables,
+                    forcing_variables=self.forcing_variables,
+                    pressure_levels=tuple(set(self.atm_levels)),
+                    input_duration=self.input_duration,
+                    ocn_vert_levels=sorted(tuple(set(self.ocn_levels))),
+                    longitude=self.longitude,
+                    latitude=self.latitude,
+                )
+            else:
+                self.task_config = TaskConfig(
+                    input_variables=self.input_variables,
+                    target_variables=self.target_variables,
+                    forcing_variables=self.forcing_variables,
+                    pressure_levels=tuple(set(self.atm_levels)),
+                    input_duration=self.input_duration,
+                    longitude=self.longitude,
+                    latitude=self.latitude,
+                )
         except ValueError:
-            self.task_config = TaskConfig(
-                input_variables=self.input_variables,
-                target_variables=self.target_variables,
-                forcing_variables=self.forcing_variables,
-                pressure_levels=tuple(set(self.atm_levels)),
-                ocn_vert_levels=sorted(tuple(set(self.ocn_levels))),
-                input_duration=self.input_duration,
-            )
+            if self.ocn_levels:
+                self.task_config = TaskConfig(
+                    input_variables=self.input_variables,
+                    target_variables=self.target_variables,
+                    forcing_variables=self.forcing_variables,
+                    pressure_levels=tuple(set(self.atm_levels)),
+                    input_duration=self.input_duration,
+                    ocn_vert_levels=sorted(tuple(set(self.ocn_levels))),
+                )
+            else:
+                self.task_config = TaskConfig(
+                    input_variables=self.input_variables,
+                    target_variables=self.target_variables,
+                    forcing_variables=self.forcing_variables,
+                    pressure_levels=tuple(set(self.atm_levels)),
+                    input_duration=self.input_duration,
+                )
 
         self.all_variables = tuple(
                 set(self.input_variables +
@@ -997,7 +1017,10 @@ class ReplayCoupledEmulator:
                         [norms[key].copy() for _ in range(n_time)],
                         dim="time",
                     )
-            dimorder = ("batch", "time", "level", "z_l", "lat", "lon")
+            if "z_l" in xds.dims:
+                dimorder = ("batch", "time", "level", "z_l", "lat", "lon")
+            else:
+                dimorder = ("batch", "time", "level", "lat", "lon")
             dimorder = tuple(x for x in dimorder if x in norms.dims)
             norms = norms.transpose(*dimorder)
             return dataset_to_stacked(norms, **kwargs)

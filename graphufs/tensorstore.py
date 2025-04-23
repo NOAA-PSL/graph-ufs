@@ -13,21 +13,23 @@ class PackedDataset(BaseDataset):
     """Same as the other PackedDatset, but use xarray_tensorstore instead of xarray/dask/zarr
     """
 
-    def __init__(self, emulator, mode):
+    def __init__(self, emulator, mode, missing_samples=None):
         self.emulator = emulator
         self.mode = mode
         self.inputs = xarray_tensorstore.open_zarr(self.local_inputs_path)
         self.targets = xarray_tensorstore.open_zarr(self.local_targets_path)
 
+        self.drop_missing(missing_samples)
+
     def __getitem__(self, idx):
         if isinstance(idx, int):
 
-            x = xarray_tensorstore.read(self.inputs["inputs"].sel(sample=idx))
-            y = xarray_tensorstore.read(self.targets["targets"].sel(sample=idx))
+            x = xarray_tensorstore.read(self.inputs["inputs"].isel(sample=idx))
+            y = xarray_tensorstore.read(self.targets["targets"].isel(sample=idx))
 
         else:
-            x = [xarray_tensorstore.read(self.inputs["inputs"].sel(sample=i)) for i in idx]
-            y = [xarray_tensorstore.read(self.targets["targets"].sel(sample=i)) for i in idx]
+            x = [xarray_tensorstore.read(self.inputs["inputs"].isel(sample=i)) for i in idx]
+            y = [xarray_tensorstore.read(self.targets["targets"].isel(sample=i)) for i in idx]
 
         return x, y
 

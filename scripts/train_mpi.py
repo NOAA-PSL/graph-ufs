@@ -16,7 +16,7 @@ from graphufs.optim import clipped_cosine_adamw
 from graphufs.utils import get_last_input_mapping
 from graphufs.stacked_utils import get_channel_index
 
-def train(RemoteEmulator, PackedEmulator):
+def train(RemoteEmulator, PackedEmulator, missing_samples=None):
 
     # initial setup
     topo = MPITopology(log_dir=f"{RemoteEmulator.local_store_path}/logs/training")
@@ -25,7 +25,7 @@ def train(RemoteEmulator, PackedEmulator):
 
     # data generators
     tds = Dataset(remote_emulator, mode="training")
-    training_data = TSPackedDataset(emulator, mode="training")
+    training_data = TSPackedDataset(emulator, mode="training", missing_samples=missing_samples)
     validation_data = TSPackedDataset(emulator, mode="validation")
 
     trainer = TSBatchLoader(

@@ -18,14 +18,14 @@ from graphufs.log import setup_simple_log
 from graphufs.utils import get_last_input_mapping
 from graphufs import init_devices
 
-def train(RawEmulator, TransformedEmulator):
+def train(RawEmulator, TransformedEmulator, missing_samples=None):
 
     # initial setup
     init_devices(TransformedEmulator)
 
     # data generators
     tds = Dataset(RawEmulator, mode="training")
-    training_data = TSPackedDataset(TransformedEmulator, mode="training")
+    training_data = TSPackedDataset(TransformedEmulator, mode="training", missing_samples=missing_samples)
     validation_data = TSPackedDataset(TransformedEmulator, mode="validation")
 
 
