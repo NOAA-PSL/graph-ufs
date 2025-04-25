@@ -71,7 +71,8 @@ class ReplayCoupledEmulator:
                                     # which indicates to graphcast that TISR needs to be computed.
 
     # time related
-    delta_t_model = None              # the model time step, same for both ocean and atmosphere
+    delta_t_model = None        # the model time step
+    delta_t_data = None         # time step of the data
     input_duration = None       # time covered by initial condition(s)
     target_lead_time = None     # when we compare to data, e.g. singular "3h", or many ["3h", "12h", "24h"]
     forecast_duration = None    # Created in __init__, total forecast time
@@ -209,45 +210,25 @@ class ReplayCoupledEmulator:
         # try/except logic to support original graphcast.graphcast.TaskConfig
         # since I couldn't get inspect.getfullargspec to work
         try:
-            if self.ocn_levels:
-                self.task_config = TaskConfig(
-                    input_variables=self.input_variables,
-                    target_variables=self.target_variables,
-                    forcing_variables=self.forcing_variables,
-                    pressure_levels=tuple(set(self.atm_levels)),
-                    input_duration=self.input_duration,
-                    ocn_vert_levels=sorted(tuple(set(self.ocn_levels))),
-                    longitude=self.longitude,
-                    latitude=self.latitude,
-                )
-            else:
-                self.task_config = TaskConfig(
-                    input_variables=self.input_variables,
-                    target_variables=self.target_variables,
-                    forcing_variables=self.forcing_variables,
-                    pressure_levels=tuple(set(self.atm_levels)),
-                    input_duration=self.input_duration,
-                    longitude=self.longitude,
-                    latitude=self.latitude,
-                )
+            self.task_config = TaskConfig(
+                input_variables=self.input_variables,
+                target_variables=self.target_variables,
+                forcing_variables=self.forcing_variables,
+                pressure_levels=tuple(self.atm_levels),
+                input_duration=self.input_duration,
+                ocn_vert_levels=tuple(self.ocn_levels),
+                longitude=self.longitude,
+                latitude=self.latitude,
+            )
         except ValueError:
-            if self.ocn_levels:
-                self.task_config = TaskConfig(
-                    input_variables=self.input_variables,
-                    target_variables=self.target_variables,
-                    forcing_variables=self.forcing_variables,
-                    pressure_levels=tuple(set(self.atm_levels)),
-                    input_duration=self.input_duration,
-                    ocn_vert_levels=sorted(tuple(set(self.ocn_levels))),
-                )
-            else:
-                self.task_config = TaskConfig(
-                    input_variables=self.input_variables,
-                    target_variables=self.target_variables,
-                    forcing_variables=self.forcing_variables,
-                    pressure_levels=tuple(set(self.atm_levels)),
-                    input_duration=self.input_duration,
-                )
+            self.task_config = TaskConfig(
+                input_variables=self.input_variables,
+                target_variables=self.target_variables,
+                forcing_variables=self.forcing_variables,
+                pressure_levels=tuple(self.atm_levels),
+                input_duration=self.input_duration,
+                ocn_vert_levels=tuple(self.ocn_levels),
+            )
 
         self.all_variables = tuple(
                 set(self.input_variables +
@@ -402,12 +383,6 @@ class ReplayCoupledEmulator:
         elif es_comp.lower() == "land":
             myvars = list(x for x in set(self.land_input_variables+self.land_target_variables+self.land_forcing_variables) if x in xds)
         
-        elif es_comp.lower() == "coupled":
-            if self.atm_levels:
-                xds = xds.sel(pfull=self.atm_levels)
-            if self.ocn_levels:
-                xds = xds.sel(z_l=self.ocn_levels)
-            myvars = list(x for x in self.all_variables if x in xds)
         else:
             raise ValueError("Unknown earth system component: only atm, ocn, ice, and land are supported")
 
@@ -423,7 +398,6 @@ class ReplayCoupledEmulator:
 
         # if we have any transforms to apply, do it here
         xds = self.transform_variables(xds)
-
         return xds
 
 
