@@ -129,7 +129,7 @@ def inference(Emulator):
     # setup weights
     logging.info(f"Reading weights ...")
     ckpt_id = emulator.evaluation_checkpoint_id if emulator.evaluation_checkpoint_id is not None else emulator.num_epochs
-    params, state = emulator.load_checkpoint(id=ckpt_id)
+    params, state = emulator.load_checkpoint_ocn_only(id=ckpt_id)
 
     predict(
         params=params,

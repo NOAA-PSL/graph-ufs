@@ -148,6 +148,12 @@ class BaseAtmTrainer(FVCoupledEmulator):
     interfaces["ocn"] = ()
     interfaces["ice"] = ()
     interfaces["land"] = ()
+    # uncomment below if not using FV version
+    #vert_levels = {}
+    #vert_levels["atm"] = tuple(x for x in range(200, 1001, 50))
+    #vert_levels["ocn"] = ()
+    #vert_levels["ice"] = ()
+    #vert_levels["land"] = ()
 
     # time related
     delta_t_model = "6h"        # the model time step
