@@ -48,7 +48,7 @@ class Dataset():
         if hasattr(emulator, "delta_t_model") and hasattr(emulator, "delta_t_data"):
             self.dt_m_over_d = int(pd.Timedelta(emulator.delta_t_model)/pd.Timedelta(emulator.delta_t_data))
         else:
-            self.dt_m_over_d = 1
+            self.dt_m_over_d = int(1.)
         input_dims = {
                 "datetime": self.dt_m_over_d*emulator.n_forecast,
             }
@@ -59,7 +59,7 @@ class Dataset():
             ds=xds,
             input_dims=input_dims,
             input_overlap={
-                "datetime": self.dt_m_over_d*emulator.n_forecast-1,
+                "datetime": int(self.dt_m_over_d*emulator.n_forecast-1),
             },
             preload_batch=preload_batch,
         )
@@ -224,6 +224,7 @@ class Dataset():
                 drop_datetime=False,
                 **self.emulator.extract_kwargs,
             )
+
         xinput = xinput.expand_dims({"batch": [idx]})
         xtarget = xtarget.expand_dims({"batch": [idx]})
         xforcing = xforcing.expand_dims({"batch": [idx]})

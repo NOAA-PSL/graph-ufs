@@ -18,8 +18,6 @@ from graphcast import data_utils
 from .coupledemulator import ReplayCoupledEmulator
 
 class FVCoupledEmulator(ReplayCoupledEmulator):
-    interfaces = None # Note the these values can be approximate, we'll grab nearest neighbors to Replay dataset
-
 
     def __init__(self, mpi_rank=None, mpi_size=None):
 
@@ -50,7 +48,7 @@ class FVCoupledEmulator(ReplayCoupledEmulator):
         # finite-volume vertical regridding
         nds_atm = get_new_vertical_grid(list(self.interfaces["atm"]), "atm")
         self.atm_levels = list(nds_atm["pfull"].values)
-        #self.pressure_levels = tuple(nds_atm["pfull"].values)
+        self.pressure_levels = tuple(nds_atm["pfull"].values)
 
         if self.interfaces["ocn"]:
             nds_ocn = get_new_vertical_grid(list(self.interfaces["ocn"]), "ocn")
@@ -72,9 +70,9 @@ class FVCoupledEmulator(ReplayCoupledEmulator):
                 input_variables=self.input_variables,
                 target_variables=self.target_variables,
                 forcing_variables=self.forcing_variables,
-                pressure_levels=tuple(set(self.atm_levels)),
+                pressure_levels=tuple(self.atm_levels),
                 input_duration=self.input_duration,
-                ocn_vert_levels=sorted(tuple(set(self.ocn_levels))),
+                ocn_vert_levels=tuple(self.ocn_levels),
                 longitude=self.longitude,
                 latitude=self.latitude,
             )
@@ -83,11 +81,10 @@ class FVCoupledEmulator(ReplayCoupledEmulator):
                 input_variables=self.input_variables,
                 target_variables=self.target_variables,
                 forcing_variables=self.forcing_variables,
-                pressure_levels=tuple(set(self.atm_levels)),
+                pressure_levels=tuple(self.atm_levels),
                 input_duration=self.input_duration,
-                ocn_vert_levels=sorted(tuple(set(self.ocn_levels))),
+                ocn_vert_levels=tuple(self.ocn_levels),
             )
-
 
         self.all_variables = tuple(set(
             self.input_variables + self.target_variables + self.forcing_variables
