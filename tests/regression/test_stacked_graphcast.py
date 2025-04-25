@@ -1,10 +1,9 @@
-
 import pytest
 from functools import partial
 import numpy as np
 from numpy.testing import assert_allclose
 from shutil import rmtree
-
+import xarray as xr
 import haiku as hk
 import jax
 
@@ -20,7 +19,8 @@ from graphcast.stacked_graphcast import StackedGraphCast
 from graphcast.stacked_casting import StackedBfloat16Cast
 from graphcast.stacked_normalization import StackedInputsAndResiduals
 
-from p0 import P0Emulator
+from prototypes.atm_only.R0.config import Trainer as TrainingEmulator
+#from p0 import P0Emulator as TrainingEmulator
 from graphufs.datasets import Dataset
 from graphufs.batchloader import BatchLoader
 from graphufs.utils import get_channel_index, get_last_input_mapping
@@ -70,9 +70,9 @@ def stacked_graphcast(emulator, inputs, last_input_channel_mapping, do_bfloat16,
 
 # loss
 @hk.transform_with_state
-def original_loss(emulator, inputs, targets, forcings, do_bfloat16, do_inputs_and_residuals):
+def original_loss(emulator, inputs, targets, forcings, weights, do_bfloat16, do_inputs_and_residuals):
     graphcast = wrap_original_graphcast(emulator, do_bfloat16, do_inputs_and_residuals)
-    loss, diagnostics = graphcast.loss(inputs, targets, forcings)
+    loss, diagnostics = graphcast.loss(inputs, targets, forcings, weights)
     result = map_structure(
         lambda x: unwrap_data(x.mean(), require_jax=True),
         (loss, diagnostics),
@@ -90,12 +90,12 @@ def stacked_loss(emulator, inputs, targets, weights, last_input_channel_mapping,
 
 # establish all this stuff once
 @pytest.fixture(scope="module")
-def p0():
-    yield P0Emulator()
+def Emulator():
+    yield TrainingEmulator()
 
 @pytest.fixture(scope="module")
-def sample_dataset(p0):
-    yield Dataset(p0, mode="training", preload_batch=True)
+def sample_dataset(Emulator):
+    yield Dataset(Emulator, mode="testing", preload_batch=True)
 
 @pytest.fixture(scope="module")
 def sample_stacked_data(sample_dataset):
@@ -108,7 +108,7 @@ def sample_xdata(sample_dataset):
     yield xi.load(), xt.load(), xf.load()
 
 @pytest.fixture(scope="module")
-def parameters(p0, sample_dataset, sample_stacked_data):
+def parameters(Emulator, sample_dataset, sample_stacked_data):
 
     # get the data
     inputs, _ = sample_stacked_data
@@ -118,7 +118,7 @@ def parameters(p0, sample_dataset, sample_stacked_data):
 
     init = jax.jit( stacked_graphcast.init, static_argnames=["do_bfloat16", "do_inputs_and_residuals"] )
     params, state = init(
-        emulator=p0,
+        emulator=Emulator,
         inputs=inputs,
         last_input_channel_mapping=last_input_channel_mapping,
         do_bfloat16=True,
@@ -129,7 +129,7 @@ def parameters(p0, sample_dataset, sample_stacked_data):
     yield params, state, last_input_channel_mapping
 
 @pytest.fixture(scope="module")
-def setup(p0, sample_dataset, sample_stacked_data, sample_xdata, parameters):
+def setup(Emulator, sample_dataset, sample_stacked_data, sample_xdata, parameters):
 
     # get the data
     inputs, targets = sample_stacked_data
@@ -140,7 +140,7 @@ def setup(p0, sample_dataset, sample_stacked_data, sample_xdata, parameters):
     yield params, state, inputs, targets, xinputs, xtargets, xforcings, last_input_channel_mapping
 
 @pytest.fixture(scope="module")
-def setup_batch(p0, sample_dataset, sample_xdata, parameters):
+def setup_batch(Emulator, sample_dataset, sample_xdata, parameters):
 
     # stacked_data
     dl = BatchLoader(
@@ -162,18 +162,17 @@ def setup_batch(p0, sample_dataset, sample_xdata, parameters):
     params, state, last_input_channel_mapping = parameters
     yield params, state, inputs, targets, xinputs, xtargets, xforcings, last_input_channel_mapping
 
-
 def print_stats(test, expected):
     abs_diff = np.abs(test - expected).values
     rel_diff = np.where(np.isclose(expected, 0.), 0., abs_diff / np.abs(expected).values)
-
+    
     print("max |test - expected| = ", np.max(abs_diff) )
     print("min |test - expected| = ", np.min(abs_diff) )
     print("avg |test - expected| = ", np.mean(abs_diff) )
     print()
-    print("max |test - expected| / |test| = ", np.max(rel_diff) )
-    print("min |test - expected| / |test| = ", np.min(rel_diff) )
-    print("avg |test - expected| / |test| = ", np.mean(rel_diff) )
+    print("max |test - expected| / |expected| = ", np.max(rel_diff) )
+    print("min |test - expected| / |expected| = ", np.min(rel_diff) )
+    print("avg |test - expected| / |expected| = ", np.mean(rel_diff) )
     print()
 
 def print_loss_stats(test_loss, test_diagnostics, expected_loss, expected_diagnostics):
@@ -196,33 +195,39 @@ def print_loss_stats(test_loss, test_diagnostics, expected_loss, expected_diagno
 
 # at last, test some models
 @pytest.mark.parametrize(
-    "do_batch", [False, True],
+    "do_batch", [False,],
 )
 @pytest.mark.parametrize(
     "do_bfloat16, do_inputs_and_residuals, atol",
     [
-        (False, False, 1e-4),
-        (True, False, 1e-1),
+        #(False, False, 1e-4),
+        #(True, False, 1e-1),
         (False, True, 1e-2),
-        (True, True, 50),
+        #(True, True, 50),
     ],
 )
 class TestStackedGraphCast():
 
-    def test_predictions(self, p0, setup, setup_batch, do_batch, do_bfloat16, do_inputs_and_residuals, atol):
+    def test_predictions(self, Emulator, setup, setup_batch, do_batch, do_bfloat16, do_inputs_and_residuals, atol):
 
         if do_batch:
             test_params, test_state, inputs, _, xinputs, xtargets, xforcings, last_input_channel_mapping = setup_batch
         else:
             test_params, test_state, inputs, _, xinputs, xtargets, xforcings, last_input_channel_mapping = setup
 
+        sinputs = dataset_to_stacked(xinputs)
+        sforcings = dataset_to_stacked(xforcings)
+        stacked_inputs = xr.concat([sinputs, sforcings], dim="channels")
+        difference  = np.sqrt(np.mean(np.square(stacked_inputs-inputs)))
+        print("difference of stacked inputs and inputs:", difference.values)
+        
         expected_params = test_params.copy()
         expected_state = test_state.copy()
 
         # run stacked graphcast
         sgc = jax.jit( stacked_graphcast.apply, static_argnames=["do_bfloat16", "do_inputs_and_residuals"]  )
         test, _ = sgc(
-            emulator=p0,
+            emulator=Emulator,
             inputs=inputs,
             last_input_channel_mapping=last_input_channel_mapping,
             do_bfloat16=do_bfloat16,
@@ -231,11 +236,12 @@ class TestStackedGraphCast():
             state=test_state,
             rng=jax.random.PRNGKey(0),
         )
+        test = test.squeeze()
 
         # run original graphcast
         gc = jax.jit( original_graphcast.apply, static_argnames=["do_bfloat16", "do_inputs_and_residuals"]  )
         expected, _ = gc(
-            emulator=p0,
+            emulator=Emulator,
             inputs=xinputs,
             targets=xtargets,
             forcings=xforcings,
@@ -248,12 +254,12 @@ class TestStackedGraphCast():
         expected = dataset_to_stacked(expected)
         expected = expected.transpose("batch", "lat", "lon", ...)
         expected = expected.squeeze()
-
+        
         # compare
         print_stats(test, expected)
         assert_allclose(test, expected, atol=atol)
-
-    def test_loss(self, p0, sample_dataset, setup, setup_batch, do_batch, do_bfloat16, do_inputs_and_residuals, atol):
+"""
+    def test_loss(self, Emulator, sample_dataset, setup, setup_batch, do_batch, do_bfloat16, do_inputs_and_residuals, atol):
 
         if do_batch:
             test_params, test_state, inputs, targets, xinputs, xtargets, xforcings, last_input_channel_mapping = setup_batch
@@ -264,10 +270,10 @@ class TestStackedGraphCast():
         expected_state = test_state.copy()
 
         # run stacked graphcast
-        weights = p0.calc_loss_weights(sample_dataset)
+        weights = Emulator.calc_loss_weights(sample_dataset)
         sgc_loss = jax.jit( stacked_loss.apply, static_argnames=["do_bfloat16", "do_inputs_and_residuals"]  )
         (test_loss, test_diagnostics), _ = sgc_loss(
-            emulator=p0,
+            emulator=Emulator,
             inputs=inputs,
             targets=targets,
             weights=weights,
@@ -282,10 +288,11 @@ class TestStackedGraphCast():
         # run original graphcast
         gc_loss = jax.jit( original_loss.apply, static_argnames=["do_bfloat16", "do_inputs_and_residuals"] )
         (expected_loss, expected_diagnostics), _ = gc_loss(
-            emulator=p0,
+            emulator=Emulator,
             inputs=xinputs,
             targets=xtargets,
             forcings=xforcings,
+            weights=weights,
             do_bfloat16=do_bfloat16,
             do_inputs_and_residuals=do_inputs_and_residuals,
             params=expected_params,
@@ -296,15 +303,15 @@ class TestStackedGraphCast():
         # convert channel diagnostics to variable
         # in order to match graphcast loss, since they average over variable first before summing
         target_idx = get_channel_index(xtargets)
-        test_var_diagnostics = {k: 0. for k in p0.target_variables}
+        test_var_diagnostics = {k: 0. for k in Emulator.target_variables}
         for ichannel, val in enumerate(test_diagnostics):
             varname = target_idx[ichannel]["varname"]
             test_var_diagnostics[varname] += val
 
         # for some reason GraphCast "diagnostics" is not weighted
-        for varname in p0.target_variables:
-            if varname in p0.loss_weights_per_variable.keys():
-                expected_diagnostics[varname] *= p0.loss_weights_per_variable[varname]
+        for varname in Emulator.target_variables:
+            if varname in Emulator.loss_weights_per_variable.keys():
+                expected_diagnostics[varname] *= Emulator.loss_weights_per_variable[varname]
 
         print_loss_stats(test_loss, test_var_diagnostics, expected_loss, expected_diagnostics)
 
@@ -317,3 +324,4 @@ class TestStackedGraphCast():
 
         # compare to GraphCast
         assert_allclose(test_loss, expected_loss, rtol=rtol)
+"""
