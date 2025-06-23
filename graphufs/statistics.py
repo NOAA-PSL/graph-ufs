@@ -3,6 +3,7 @@ import logging
 from typing import Optional
 import numpy as np
 import xarray as xr
+import matplotlib.pyplot as plt
 import pandas as pd
 from ufs2arco.timer import Timer
 
@@ -35,6 +36,7 @@ class StatisticsComputer:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         time_skip: Optional[int] = None,
+        spatial_avg: Optional[bool] = True,
         open_zarr_kwargs: Optional[dict] = None,
         to_zarr_kwargs: Optional[dict] = None,
         load_full_dataset: Optional[bool] = False,
@@ -59,15 +61,17 @@ class StatisticsComputer:
         self.start_date = start_date
         self.end_date = end_date
         self.time_skip = time_skip
+        self.spatial_avg = spatial_avg 
         self.open_zarr_kwargs = open_zarr_kwargs if open_zarr_kwargs is not None else dict()
         self.to_zarr_kwargs = to_zarr_kwargs if to_zarr_kwargs is not None else dict()
         self.load_full_dataset = load_full_dataset
+        self.time_dims = ("time",)
         if self.comp.lower() in ["atm", "land", "ice"]:
             self.delta_t = f"{self.time_skip*3} hour" if self.time_skip is not None else "3 hour"
-            self.dims = ("time", "grid_yt", "grid_xt")
+            self.space_dims = ("grid_yt", "grid_xt",)
         elif self.comp.lower() == "ocean" or self.comp.lower() == "ocn":
             self.delta_t = f"{self.time_skip*6} hour" if self.time_skip is not None else "6 hour"
-            self.dims = ("time", "lat", "lon")
+            self.space_dims = ("lat", "lon",)
         else:
             raise ValueError("component can only be atm, ocn, land, and ice")
         self.transforms = transforms
@@ -89,7 +93,6 @@ class StatisticsComputer:
         
         localtime.stop()
 
-
         logging.info(f"{self.name}: computing statistics for {data_vars}")
 
         # load if not 3D
@@ -97,7 +100,7 @@ class StatisticsComputer:
             localtime.start("Loading the whole dataset...")
             ds = ds.load();
             localtime.stop()
-
+        
         # do the computations
         localtime.start("Computing mean")
         self.calc_mean_by_level(ds)
@@ -254,15 +257,45 @@ class StatisticsComputer:
     def _local_op(self, xda, opstr, description):
 
         # get appropriate dims, e.g. maybe not time varying
-        dims = list(d for d in self.dims if d in xda.dims)
+        dims = list(d for d in self.time_dims if d in xda.dims)
+        if self.spatial_avg:
+            dims = dims + [d for d in self.space_dims if d in xda.dims]
+        if self.comp.lower() == "atm":
+            logging.info("atm component detected. No masking applied")
+        elif xda.name in ["landsea_mask", "land_static"]:
+            logging.info("mask variable detected. No masking applied")
+        else:
+            mask = xda.std(self.time_dims, skipna=True) > 1e-6
+            # plot to check what is being diagnosed
+            #fig, ax = plt.subplots(figsize=(8, 4))
+            #if "z_l" in mask.dims:
+            #    mask.isel(z_l=-1).plot(ax=ax)
+            #    title = f"Mask for {xda.name}, iz_l=-1"
+            #else:
+            #    mask.plot(ax=ax)
+            #    title = f"Mask for {xda.name}"
+            #ax.set_title(title)
+            #fig.tight_layout()
+            #
+            #local_store_path = "/global/homes/n/nagarwal/graph-ufs/prototypes/ocn_only/R4"
+            #store_mask_path = os.path.join(local_store_path, "figures", "diagnostic_masks")
+            #plot_path = f"{store_mask_path}/mask_{xda.name}.png"
+            #fig.savefig(plot_path)
+            #plt.close(fig)
+
+            logging.info(f"{self.comp} compotent detected: applying mask before statistics computation")
+            xda = xda.where(mask)
         
         with xr.set_options(keep_attrs=True):
             if opstr == "mean":
-                result = xda.mean(dims)
+                logging.info(f"dims to avg over:{dims}")
+                result = xda.mean(dims, skipna=True)
             elif opstr == "stddev":
-                result = xda.std(dims)
+                result = xda.std(dims, skipna=True)
             elif opstr == "diffs_stddev":
-                result = xda.diff("time").std(dims)
+                # safer diff and std combo
+                xda_diff = xda.diff("time")
+                result = xda_diff.std(dims, skipna=True)
 
         result.attrs["description"] = description+str(dims)
         if "time" in xda.dims:
