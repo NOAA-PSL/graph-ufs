@@ -411,3 +411,10 @@ def get_approximate_memory_usage(data, max_queue_size, num_workers, load_chunk):
             chunk_ram /= 1024 * 1024 * 1024
             total += (max_queue_size + num_workers) * chunk_ram
     return total
+
+def search_nested_dict(data, key, value):
+    results = {}
+    for idx, inner_dict in data.items():
+        if key in inner_dict and inner_dict[key] == value:
+            results[idx] = inner_dict
+    return list(results.keys()), results
