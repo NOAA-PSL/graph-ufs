@@ -1,4 +1,5 @@
 import os
+import sys
 import logging
 import json
 from mpi4py import MPI
@@ -16,7 +17,9 @@ from graphufs.optim import clipped_cosine_adamw
 from graphufs.utils import get_last_input_mapping
 from graphufs.stacked_utils import get_channel_index
 
-def train(RemoteEmulator, PackedEmulator, missing_samples=None):
+def train(RemoteEmulator, PackedEmulator, missing_samples=None,):
+    
+    #logging.basicConfig(stream=sys.stdout, level=logging.DEBUG,)
 
     # initial setup
     topo = MPITopology(log_dir=f"{RemoteEmulator.local_store_path}/logs/training")
@@ -25,8 +28,25 @@ def train(RemoteEmulator, PackedEmulator, missing_samples=None):
 
     # data generators
     tds = Dataset(remote_emulator, mode="training")
-    training_data = TSPackedDataset(emulator, mode="training", missing_samples=missing_samples)
-    validation_data = TSPackedDataset(emulator, mode="validation")
+
+    # get the training and target meta data
+    logging.info("Getting metadata for inputs and targets")
+    xinputs, xtargets, xforcing = tds.get_xarrays(0)
+    meta_xinputs = get_channel_index(xinputs)
+    meta_xtargets = get_channel_index(xtargets)
+    meta_xforcing = get_channel_index(xforcing)
+
+    # get meta data for stacked inputs
+    meta_xforcing_copy = {}
+    for key, value in meta_xforcing.items():
+        meta_xforcing_copy[key+len(meta_xinputs)] = value
+    meta_sinputs = {**meta_xinputs, **meta_xforcing_copy}
+    
+    # get training and validation data
+    training_data = TSPackedDataset(emulator, mode="training", missing_samples=missing_samples,
+                                    meta_inputs=meta_sinputs, meta_targets=meta_xtargets)
+    validation_data = TSPackedDataset(emulator, mode="validation", meta_inputs=meta_sinputs, 
+                                      meta_targets=meta_xtargets)
 
     trainer = TSBatchLoader(
         training_data,
@@ -50,10 +70,10 @@ def train(RemoteEmulator, PackedEmulator, missing_samples=None):
     )
 
     # get the training and target meta data
-    logging.info("Getting metadata for inputs and targets")
-    xinputs, xtargets, _ = tds.get_xarrays(0)
-    meta_targets = get_channel_index(xtargets)
-    meta_inputs = get_channel_index(xinputs)
+    #logging.info("Getting metadata for inputs and targets")
+    #xinputs, xtargets, _ = tds.get_xarrays(0)
+    #meta_targets = get_channel_index(xtargets)
+    #meta_inputs = get_channel_index(xinputs)
 
     logging.info("Initializing Loss Function Weights and Stacked Mappings")
     # compute loss function weights once
@@ -81,12 +101,18 @@ def train(RemoteEmulator, PackedEmulator, missing_samples=None):
     n_total = emulator.num_epochs * steps_in_epoch
     n_linear = 1_000
     n_cosine = n_total - n_linear
+    peak_value = RemoteEmulator.lr_peak_value if hasattr(RemoteEmulator, "lr_peak_value") else 1e-3
+    clip_grad_global_norm= RemoteEmulator.clip_grad_global_norm if hasattr(RemoteEmulator, "clip_grad_global_norm") else 32.
+    weight_decay = RemoteEmulator.weight_decay if hasattr(RemoteEmulator, "weight_decay") else 0.1
+
     optimizer = clipped_cosine_adamw(
         n_linear=n_linear,
         n_total=n_total,
-        peak_value=1e-3,
+        peak_value=peak_value,
+        clip_grad_global_norm=clip_grad_global_norm,
+        weight_decay=weight_decay,
     )
-
+    
     logging.info(f"Starting Training with:")
     logging.info(f"\t batch_size = {emulator.batch_size}")
     logging.info(f"\t {len(trainer)} training steps per epoch")
@@ -113,8 +139,8 @@ def train(RemoteEmulator, PackedEmulator, missing_samples=None):
             last_input_channel_mapping=last_input_channel_mapping,
             opt_state=opt_state,
             mpi_topo=topo,
-            meta_inputs = meta_inputs,
-            meta_targets = meta_targets,
+            meta_inputs = meta_xinputs,
+            meta_targets = meta_xtargets,
         )
 
         # save weights
