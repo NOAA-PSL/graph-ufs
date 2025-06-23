@@ -100,7 +100,6 @@ def main(Emulator):
     emulator = Emulator()
     dask.config.set(scheduler="threads", num_workers=64)
 
-
     logging.info("Opening Predictions")
     gds, truth = open_predictions_and_truth(emulator)
 
