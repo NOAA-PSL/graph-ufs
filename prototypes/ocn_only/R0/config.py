@@ -6,7 +6,7 @@ class OcnTrainer(BaseOcnTrainer):
     case = "R0" 
     local_store_path = f"{_scratch}/ocn-only/{case}"
     use_half_precision = False
-    
+
 class OcnPreprocessor(OcnTrainer):
     batch_size = 64
 
