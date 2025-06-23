@@ -46,14 +46,15 @@ class FVCoupledEmulator(ReplayCoupledEmulator):
         self.longitude = tuple(float(x) for x in longitude)
 
         # finite-volume vertical regridding
-        nds_atm = get_new_vertical_grid(list(self.interfaces["atm"]), "atm")
-        self.atm_levels = list(nds_atm["pfull"].values)
-        self.pressure_levels = tuple(nds_atm["pfull"].values)
+        if self.interfaces["atm"]:
+            nds_atm = get_new_vertical_grid(list(self.interfaces["atm"]), "atm")
+            self.atm_levels = list(nds_atm["pfull"].values)
+            self.pressure_levels = tuple(nds_atm["pfull"].values)
 
         if self.interfaces["ocn"]:
             nds_ocn = get_new_vertical_grid(list(self.interfaces["ocn"]), "ocn")
             self.ocn_levels = list(nds_ocn["z_l"].values)
-
+            
         self.model_config = ModelConfig(
             resolution=self.resolution,
             mesh_size=self.mesh_size,
@@ -498,8 +499,10 @@ def diagnose_and_append_ocean_mask(xds):
         raise KeyError("salinity is required for computing landsea mask")
     
     # create the mask and add attributes
-    ocean_mask = xr.where(quantity==0, 0, 1).astype(xds.so.dtype)
-    ocean_mask = ocean_mask.assign_attrs(long_name="land-sea mask (land=0, sea/ice=1)", units="None",)
+    # To keep things consistent with the original landsea_mask from Replay, land 
+    # is 1 and sea is 0. 
+    ocean_mask = xr.where(quantity==0, 1, 0).astype(xds.so.dtype) 
+    ocean_mask = ocean_mask.assign_attrs(long_name="land-sea mask (land=1, sea/ice=0)", units="None",)
     
     # deleting any time dimensions
     not_requires_dims = ["cftime", "ftime", "time"]
