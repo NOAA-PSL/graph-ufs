@@ -8,12 +8,14 @@ import xarray as xr
 import dask.array
 import pandas as pd
 import logging
+import os
 
 from xbatcher import BatchGenerator
 
 from graphcast.data_utils import extract_inputs_targets_forcings, extract_inputs_targets_forcings_coupled
 from graphcast.model_utils import dataset_to_stacked
 
+from .utils import get_channel_index
 from .emulator import ReplayEmulator
 from .coupledemulator import ReplayCoupledEmulator
 
@@ -90,9 +92,74 @@ class Dataset():
             sample_input, sample_target, sample_forcing = self.get_batch_of_xarrays(idx)
             
         x = self._stack(sample_input, sample_forcing)
+        
+        # add gaussian noise to inputs
+        if self.emulator.add_gauss_noise:
+            logging.info("Gaussian noise is being added to inputs")
+            
+            tmeta_inp = get_channel_index(sample_input)
+            tmeta_forcing = get_channel_index(sample_forcing)
+            tmeta_forcing_copy = {}
+            for key, value in tmeta_forcing.items():
+                tmeta_forcing_copy[key+len(tmeta_inp)] = value
+            
+            tmeta_x = {**tmeta_inp, **tmeta_forcing_copy}
+                
+            x = self._add_gaussian_noise(x, tmeta_x)
+
         y = self._stack(sample_target)
         return x, y
+    
+    def _add_gaussian_noise(self, x, tmeta_x):
+        """
+        Add Gaussian noise to xr.DataArray.
+        
+        Args:
+            x (xr.DataArray): Input dataset to which noise would be added.
+        
+        Returns:
+            xr.DataArray: Noisy array. 
+        """
+        stacked_norm_inputs_path = os.path.join(
+                self.emulator.local_store_path,
+                "stacked-normalization", "inputs",
+                os.path.basename(self.emulator.norm_urls["atm"]["std"]),
+        )
 
+        if not os.path.isdir(stacked_norm_inputs_path):
+            raise FileNotFoundError(
+                f"Stacked normalization statistics directory not found: {stacked_norm_inputs_path}"
+            )
+        
+        stddev_channels = xr.open_zarr(stacked_norm_inputs_path)
+        stddev_x = stddev_channels["inputs"]
+
+        # Build noise fraction mask
+        omit_vars = [
+            "landsea_mask", "land_static",
+            "day_progress_cos", "day_progress_sin",
+            "year_progress_cos", "year_progress_sin"
+        ]
+
+        fraction_da = xr.full_like(stddev_x, fill_value=self.emulator.noise_std_as_fraction)
+        for key, meta in tmeta_x.items():
+            if meta["varname"] in omit_vars:
+                fraction_da.loc[dict(channels=key)] = 0.0
+
+        rng = np.random.default_rng(self.emulator.gauss_noise_seed)
+        scale = (stddev_x * fraction_da).broadcast_like(x)
+        noise = xr.apply_ufunc(
+            rng.normal,
+            0.0,
+            scale,
+            input_core_dims=[[], x.dims],
+            output_core_dims=[x.dims],
+            vectorize=True,
+            dask="allowed",
+            output_dtypes=[x.dtype]
+        )
+
+        return x + noise
 
     @property
     def xds(self) -> xr.Dataset:
@@ -139,7 +206,6 @@ class Dataset():
         result = result.transpose("batch", "lat", "lon", "channels")
         return result
 
-    
     def _open_dataset(self) -> xr.Dataset:
         """
         Open, subsample, and rename variables in the dataset.
@@ -325,13 +391,17 @@ class PackedDataset():
     that BatchLoader can pull a full batch in a single dask/zarr call
     """
 
-    def __init__(self, emulator, mode, missing_samples=None, **kwargs):
+    def __init__(self, emulator, mode, missing_samples=None, meta_inputs=None, 
+                 meta_targets=None, **kwargs):
         self.emulator = emulator
         self.mode = mode
         self.inputs = xr.open_zarr(self.local_inputs_path, **kwargs)
         self.targets = xr.open_zarr(self.local_targets_path, **kwargs)
         
         self.drop_missing(missing_samples)
+        
+        self.tmeta_inputs = meta_inputs
+        self.tmeta_targets = meta_targets
 
     def __len__(self):
         return len(self.inputs["sample"])
@@ -349,7 +419,7 @@ class PackedDataset():
                 logging.info(f"PackedDataset: dropping missing sample at idx = {idx}")
                 self.inputs = self.inputs.drop_sel(sample=idx)
                 self.targets = self.targets.drop_sel(sample=idx)
-
+    
     @property
     def local_inputs_path(self) -> str:
         return join(self.emulator.local_store_path, self.mode, "inputs.zarr")
