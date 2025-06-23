@@ -34,6 +34,7 @@ class FVStatisticsComputer(StatisticsComputer):
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         time_skip: Optional[int] = None,
+        spatial_avg: Optional[bool] = True,
         open_zarr_kwargs: Optional[dict] = None,
         to_zarr_kwargs: Optional[dict] = None,
         load_full_dataset: Optional[bool] = False,
@@ -46,6 +47,7 @@ class FVStatisticsComputer(StatisticsComputer):
             start_date=start_date,
             end_date=end_date,
             time_skip=time_skip,
+            spatial_avg=spatial_avg,
             open_zarr_kwargs=open_zarr_kwargs,
             to_zarr_kwargs=to_zarr_kwargs,
             load_full_dataset=load_full_dataset,
@@ -104,7 +106,7 @@ class FVStatisticsComputer(StatisticsComputer):
             xds = fv_vertical_regrid_ocn(xds, interfaces=self.interfaces)
             # In FV regridding, we need to update the landsea_mask with that 
             # diagnosed from one of the regridded variables 
-            xds, _ = diagnose_and_append_ocean_mask(xds)  
+            #xds, _ = diagnose_and_append_ocean_mask(xds)  
 
         if self.comp.lower() == "atm":
             logging.info(f"{self.name}: Adding any transformed variables")
