@@ -1,9 +1,15 @@
 # Ocn-only run
-This is similar to the R1 attempt, i.e., run the ocn-only config with full REPLAY data and
-with the indices of bad samples supplied to omit them during the training, but we work
-with slighly less complex model (graphcast) in this run. In particular, we are interested 
-in utilizing a smaller hierarchy of multimesh to avoid the overfitting issue seen in R1. 
-This will presumabely not allow the model to learn grid scale noise which appear in the 
-autogregressive rollout and gradually worsens the forecast.
+In this run, we have removed too many layers near the surface ocean as it was
+possibly leading to ill-conditioned feature matrix and therefore the grid
+artifacts we were seeing in the inferences. In the new setup, the vertical
+levels are more uniformly spaced than before  and do not possess as much
+vertical correlation as before.  
 
+A brief literature review on the vertical
+levels of ocean-only emulators suggested that the existing emulators do not
+possess too much vertical resolution near the surface ocean -- as done in
+physical ocean modeling. For e.g., GLONET possess only 3 layers in the top 100m
+ocean. Although OLA probably had more vertical resolution around the surface but
+full credibility of this model is yet to be cofirmed.  
+ 
 ## Outcome

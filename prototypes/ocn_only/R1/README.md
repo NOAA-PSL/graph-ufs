@@ -1,15 +1,10 @@
 # Ocn-only run
-This is the second attempt to run the ocean-only configuration with full 27 years of 
-REPLAY data with 10m U-V from atmosphere as forcing. In this run, the standard deviation
-of all prognostic ocean variables are bumped up to 6 times their value in R0. Hopefully,
-this would calm down the loss curve.
-
+In this run, we are increasing the time step of the ocn-only model to 24hr as
+opposed to 6hr used in R0. This is after numerous failed attempts to emulate 6hr
+increments in the ocean. The hypothesis is that there is not enough signal to
+learn in such a short time step and therefore the model is overfitting.
+Presumabely, 24hr increments would have more coherent signals to learn and
+emulate.
+ 
 ## Outcome
-* Increasing the standard deviation of 3D variables didn't help even after increasing them 
-up to a factor 20.This gave the suspecion that perhaps this is not the reason for those 
-sharp bumps in the loss.
-* By digging the dataset, I found that the samples for which those bumps are occurring 
-possess a much higher increment (I checked for salinity, but this applies for other variables 
-too) compared to their neighbouring samples. This means that those bumps were due to the bad
-data samples and not due to dividing by small std.
-* These bad samples belonged to -----   
+- Increasing the delta_t_model only did not help a ton.
