@@ -117,6 +117,9 @@ class ReplayCoupledEmulator:
                                                 # the number of grid points feeding into multiple mesh nodes and therefore
                                                 # reduces edge count and memory use, but gives better predictions.
     mesh2grid_edge_normalization_factor = None
+    
+    # noise related
+    add_gauss_noise = False
 
     # loss weighting, defaults to GraphCast implementation
     weight_loss_per_latitude = True
@@ -373,8 +376,8 @@ class ReplayCoupledEmulator:
             if self.ocn_levels:
                 xds = xds.sel(z_l=self.ocn_levels, method="nearest")
                 # update landsea_mask to place 1 at oceans and 0 at land. In MOM6.zarr dataset on GCP, it is the opposite.
-                if "landsea_mask" in xds:
-                    xds["landsea_mask"] = 1 - xds["landsea_mask"]
+                #if "landsea_mask" in xds:
+                #    xds["landsea_mask"] = 1 - xds["landsea_mask"]
             myvars = list(x for x in set(self.ocn_input_variables+self.ocn_target_variables+self.ocn_forcing_variables) if x in xds)
         
         elif es_comp.lower() == "ice":
@@ -847,92 +850,140 @@ class ReplayCoupledEmulator:
         
         def check_missing_vars(vars_all, vars_exist, moment=""):
             """
-            A helper function to check and report any difference between the two lists of variables
+            A helper function to check and report any difference in the two lists of variables
             """
             missing_vars = list(set(vars_all) - set(vars_exist))
             if missing_vars:
                 logging.info(f"No {moment} statistics exist in the storage for {missing_vars}")
+        
+        def get_all_domain_vars(domain):
+            """
+            Concatenate input, target, and forcing variable lists for a given domain (atm, ocn, ice, land)
+            """
+            return (
+                getattr(self, f"{domain}_input_variables", []) +
+                getattr(self, f"{domain}_target_variables", []) +
+                getattr(self, f"{domain}_forcing_variables", [])
+            )
+
+        def open_remote_zarr(domain, moment, vars_all):
+            """
+            Open normalization Zarr store for a given domain and moment from local/remote/cloud location
+            """
+            url = self.norm_urls[domain][moment]
+            storage_opts = {"storage_options": {"token": "anon"}} if "gs://" in url or "gcs://" in url else {}
+            xds = xr.open_zarr(url, **storage_opts)
+            present_vars = [v for v in vars_all if v in xds]
+            check_missing_vars(vars_all, present_vars, moment)
+            return xds[present_vars]
 
         def open_normalization(moment):
-
-            # try to read locally first
+            """
+            Attempt to load normalization data for a given moment (mean, std, stddiff)
+            First try local cache; if not found, pull from remote sources
+            """
             local_path = os.path.join(
                 self.local_store_path,
                 "normalization",
                 os.path.basename(self.norm_urls["atm"][moment]),
             )
-
+            # Try reading from local cache
             if os.path.isdir(local_path):
                 xds = xr.open_zarr(local_path)
                 myvars = list(x for x in self.all_variables if x in xds)
                 check_missing_vars(self.all_variables, myvars, moment)
-                xds = xds[myvars]
-                xds = xds.load()
-                foundit = True
+                return xds[myvars].load()
+            
+            # Load from remote sources if local copy does not exist
+            xds_list = []
+            for domain in ["atm", "ocn", "ice", "land"]:
+                vars_all = get_all_domain_vars(domain)
+                if vars_all:
+                    xds_domain = open_remote_zarr(domain, moment, vars_all)
+                    xds_list.append(xds_domain)
 
-            else:
-                kwargs = {"storage_options": {"token": "anon"}} if any(x in self.norm_urls[comp][moment] for x in ["gs://", "gcs://"] for comp in ["atm", "ocn", "ice", "land"]) else {}
-                # atm
-                xds_atm = xr.open_zarr(self.norm_urls["atm"][moment], **kwargs)
-                vars_all = self.atm_input_variables+self.atm_target_variables+self.atm_forcing_variables
-                vars_atm = list(x for x in tuple(set(vars_all)) if x in xds_atm)
-                check_missing_vars(vars_all, vars_atm, moment)
-                
-                # ocn
-                xds_ocn = xr.open_zarr(self.norm_urls["ocn"][moment], **kwargs)
-                vars_all = self.ocn_input_variables+self.ocn_target_variables+self.ocn_forcing_variables
-                vars_ocn = list(x for x in tuple(set(vars_all)) if x in xds_ocn)
-                check_missing_vars(vars_all, vars_ocn, moment)
+            #else:
+            #    xds = xr.Dataset()
+            #    # atm
+            #    vars_all = self.atm_input_variables+self.atm_target_variables+self.atm_forcing_variables
+            #    if vars_all:
+            #        kwargs = {"storage_options": {"token": "anon"}} if any(x in self.norm_urls["atm"][moment] for x in ["gs://", "gcs://"]) else {}
+            #        xds_atm = xr.open_zarr(self.norm_urls["atm"][moment], **kwargs)
+            #        vars_atm = list(x for x in tuple(set(vars_all)) if x in xds_atm)
+            #        check_missing_vars(vars_all, vars_atm, moment)
+            #        xds = xr.merge([xds, xds_atm])
+            #    
+            #    # ocn
+            #    vars_all = self.ocn_input_variables+self.ocn_target_variables+self.ocn_forcing_variables
+            #    if vars_all:
+            #        kwargs = {"storage_options": {"token": "anon"}} if any(x in self.norm_urls["ocn"][moment] for x in ["gs://", "gcs://"]) else {}
+            #        xds_ocn = xr.open_zarr(self.norm_urls["ocn"][moment], **kwargs)
+            #        vars_ocn = list(x for x in tuple(set(vars_all)) if x in xds_ocn)
+            #        check_missing_vars(vars_all, vars_ocn, moment)
+            #        xds = xr.merge([xds, xds_ocn])
+            #
+            #    # ice
+            #    vars_all = self.ice_input_variables+self.ice_target_variables+self.ice_forcing_variables
+            #    if vars_all:
+            #        kwargs = {"storage_options": {"token": "anon"}} if any(x in self.norm_urls["ice"][moment] for x in ["gs://", "gcs://"]) else {}
+            #        xds_ice = xr.open_zarr(self.norm_urls["ice"][moment], **kwargs) 
+            #        vars_ice = list(x for x in tuple(set(vars_all)) if x in xds_ice)
+            #        check_missing_vars(vars_all, vars_ice, moment)
+            #        xds = xr.merge([xds, xds_ice])
+            #
+            #    # land
+            #    vars_all = self.land_input_variables+self.land_target_variables+self.land_forcing_variables
+            #    if vars_all:
+            #        kwargs = {"storage_options": {"token": "anon"}} if any(x in self.norm_urls["land"][moment] for x in ["gs://", "gcs://"]) else {}
+            #        xds_land = xr.open_zarr(self.norm_urls["land"][moment], **kwargs)
+            #        vars_land = list(x for x in tuple(set(vars_all)) if x in xds_land)
+            #        check_missing_vars(vars_all, vars_land, moment)
+            #        xds = xr.merge([xds, xds_land])
+            #
+            #    #xds = xr.merge([xds_ocn, xds_atm, xds_ice, xds_land])
+            #    myvars = list(x for x in self.all_variables if x in xds)
+            #    
+            #    # keep attributes in order to distinguish static from time varying components
+            with xr.set_options(keep_attrs=True):
+                xds = xr.merge(xds_list)
+                myvars = [v for v in self.all_variables if v in xds]
 
-                # ice
-                xds_ice = xr.open_zarr(self.norm_urls["ice"][moment], **kwargs)
-                vars_all = self.ice_input_variables+self.ice_target_variables+self.ice_forcing_variables
-                vars_ice = list(x for x in tuple(set(vars_all)) if x in xds_ice)
-                check_missing_vars(vars_all, vars_ice, moment)
-
-                # land
-                xds_land = xr.open_zarr(self.norm_urls["land"][moment], **kwargs)
-                vars_all = self.land_input_variables+self.land_target_variables+self.land_forcing_variables
-                vars_land = list(x for x in tuple(set(vars_all)) if x in xds_land)
-                check_missing_vars(vars_all, vars_land, moment)
-
-                xds = xr.merge([xds_ocn, xds_atm, xds_ice, xds_land])
-                myvars = list(x for x in self.all_variables if x in xds)
-                
-                # keep attributes in order to distinguish static from time varying components
-                with xr.set_options(keep_attrs=True):
-
-                    if self.input_transforms is not None:
-                        for key, transform_function in self.input_transforms.items():
-
-                            # make sure e.g. log_spfh is in the dataset
-                            transformed_key = f"{transform_function.__name__}_{key}" # e.g. log_spfh
-                            assert transformed_key in xds, \
-                                    f"Emulator.set_normalization: couldn't find {transformed_key} in {moment} normalization dataset"
-                            # there's a chance the original, e.g. spfh, is not in the dataset
-                            # if it is, replace it with e.g. log_spfh
-                            if key in myvars:
-                                idx = myvars.index(key)
-                                myvars[idx] = transformed_key
+                # Apply input transforms (e.g., log transforms)
+                if self.input_transforms:
+                    for key, transform_function in self.input_transforms.items():
+                        # make sure e.g. log_spfh is in the dataset
+                        transformed_key = f"{transform_function.__name__}_{key}" # e.g. log_spfh
+                        assert transformed_key in xds, \
+                                f"Emulator.set_normalization: couldn't find {transformed_key} in {moment} normalization dataset"
+                        # there's a chance the original, e.g. spfh, is not in the dataset
+                        # if it is, replace it with e.g. log_spfh
+                        if key in myvars:
+                            idx = myvars.index(key)
+                            myvars[idx] = transformed_key
                     xds = xds[myvars]
-                    if self.input_transforms is not None:
-                        for key, transform_function in self.input_transforms.items():
-                            transformed_key = f"{transform_function.__name__}_{key}" # e.g. log_spfh
-                            idx = myvars.index(transformed_key)
-                            myvars[idx] = key
+                    # Rename transformed vars back to original names for downstream use
+                    for key, transform_function in self.input_transforms.items():
+                        transformed_key = f"{transform_function.__name__}_{key}" # e.g. log_spfh
+                        idx = myvars.index(transformed_key)
+                        myvars[idx] = key
 
-                            # necessary for graphcast.dataset to stacked operations
-                            xds = xds.rename({transformed_key: key})
-                    if "pfull" in xds.dims:
-                        xds = xds.sel(pfull=self.atm_levels)
-                    if "z_l" in xds.dims:
-                        xds = xds.sel(z_l=self.ocn_levels)
-                    xds = xds.load()
-                    if "pfull" in xds.dims:
-                        xds = xds.rename({"pfull": "level"})
+                        # necessary for graphcast.dataset to stacked operations
+                        xds = xds.rename({transformed_key: key})
+                
+                # vertical level slicing 
+                if "pfull" in xds.dims:
+                    xds = xds.sel(pfull=self.atm_levels).rename({"pfull":"level"})
+                if "z_l" in xds.dims:
+                    xds = xds.sel(z_l=self.ocn_levels)
+                
+                xds = xds.load()
+                
+                # cache to local path
                 xds.to_zarr(local_path)
-            return xds
+                
+                return xds
 
+        # Load normalization datasets for each moment
         for moment in ["mean", "std", "stddiff"]:
             self.norm[moment] = open_normalization(moment)
 
@@ -1042,7 +1093,7 @@ class ReplayCoupledEmulator:
             lat_weights = lat_weights.data[...,None][...,None]
 
             weights *= lat_weights
-            weights /= (len(xtargets["lon"]) * len(xtargets["lat"]))
+            #weights /= (len(xtargets["lon"]) * len(xtargets["lat"]))
 
 
         # 2. compute per variable weighting
