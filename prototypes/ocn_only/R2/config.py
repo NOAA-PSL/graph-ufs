@@ -6,6 +6,49 @@ class OcnTrainer(BaseOcnTrainer):
     case = "R2" 
     local_store_path = f"{_scratch}/ocn-only/{case}"
     use_half_precision = False
+    
+    norm_urls = {}
+    norm_urls["atm"] = {
+        "mean": f"/global/homes/n/nagarwal/graph-ufs/prototypes/ocn_only/statistics/6h/atm.fvstatistics.1993-2019/mean_by_level.zarr",
+        "std": f"/global/homes/n/nagarwal/graph-ufs/prototypes/ocn_only/statistics/6h/atm.fvstatistics.1993-2019/stddev_by_level.zarr",
+        "stddiff": f"/global/homes/n/nagarwal/graph-ufs/prototypes/ocn_only/statistics/6h/atm.fvstatistics.1993-2019/diffs_stddev_by_level.zarr",
+    }
+    norm_urls["ocn"] = {
+        "mean": f"/global/homes/n/nagarwal/graph-ufs/prototypes/ocn_only/statistics/6h/ocn.fvstatistics.1993-2019/mean_by_level.zarr",
+        "std": f"/global/homes/n/nagarwal/graph-ufs/prototypes/ocn_only/statistics/6h/ocn.fvstatistics.1993-2019/stddev_by_level.zarr",
+        "stddiff": f"/global/homes/n/nagarwal/graph-ufs/prototypes/ocn_only/statistics/6h/ocn.fvstatistics.1993-2019/diffs_stddev_by_level.zarr",
+    }
+    norm_urls["ice"] = {
+        "mean": "",
+        "std": "",
+        "stddiff": "",
+    }
+    norm_urls["land"] = {
+        "mean": "",
+        "std": "",
+        "stddiff": "",
+    }
+
+    # vertical interfaces
+    interfaces = {}
+    interfaces["atm"] = (950, 1000)
+    interfaces["ocn"] = (
+        0,
+        1,
+        21,
+        75,
+        120,
+        200,
+        350,
+        500,
+    )
+    interfaces["ice"] = tuple()
+    interfaces["land"] = tuple()
+    
+    # model config
+    latent_size = 192
+    lr_peak_value = 1e-4
+    weight_decay = 0.01
 
 class OcnPreprocessor(OcnTrainer):
     batch_size = 64
@@ -19,7 +62,12 @@ class OcnPreprocessed(OcnTrainer):
 
 class OcnEvaluator(OcnTrainer):
     wb2_obs_url = "gs://weatherbench2/datasets/era5/1959-2023_01_10-6h-240x121_equiangular_with_poles_conservative.zarr"
-    target_lead_time = [f"{n}h" for n in range(6, 6*4*10+1, 6)]
+    delta_t = OcnTrainer.delta_t_model # string
+    dt = int(delta_t[0]) if len(delta_t) == 2 else int(delta_t[:2]) # assuming delta_t_model to be bounded above by "99h"
+
+    fcast_days = 10
+    n_autoreg_steps = int(fcast_days*24)
+    target_lead_time = [f"{n}h" for n in range(dt, n_autoreg_steps+1, dt)]
     sample_stride = 5
     #evaluation_checkpoint_id = 64
 
