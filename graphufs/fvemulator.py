@@ -78,7 +78,10 @@ class FVEmulator(ReplayEmulator):
         ))
 
         # convert some types
-        self.delta_t_model = pd.Timedelta(self.delta_t_model)
+        try:
+            self.delta_t_model = pd.Timedelta(self.delta_t_model)
+        except AttributeError:
+            self.delta_t_model = pd.Timedelta(self.delta_t)
         self.input_duration = pd.Timedelta(self.input_duration)
         lead_times, duration = data_utils._process_target_lead_times_and_get_duration(self.target_lead_time)
         self.forecast_duration = duration
