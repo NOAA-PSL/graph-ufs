@@ -19,7 +19,7 @@ from graphcast.stacked_graphcast import StackedGraphCast
 from graphcast.stacked_casting import StackedBfloat16Cast
 from graphcast.stacked_normalization import StackedInputsAndResiduals
 
-from prototypes.atm_only.R0.config import Trainer as TrainingEmulator
+from prototypes.ocn_only.R2.config import Trainer as TrainingEmulator
 #from p0 import P0Emulator as TrainingEmulator
 from graphufs.datasets import Dataset
 from graphufs.batchloader import BatchLoader
