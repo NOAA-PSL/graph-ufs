@@ -33,17 +33,17 @@ class BaseOcnTrainer(FVCoupledEmulator):
         "std": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/06h-freq/zarr/mom6.fvstatistics.l10.1993-2019/stddev_by_level.zarr",
         "stddiff": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/06h-freq/zarr/mom6.fvstatistics.l10.1993-2019/diffs_stddev_by_level.zarr",
     }
-    data_url["ice"] = "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.zarr"
+    data_url["ice"] = ""
     norm_urls["ice"] = {
-        "mean": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/06h-freq/zarr/fv3.ice.statistics.1993-2019/mean_by_level.zarr",
-        "std": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/06h-freq/zarr/fv3.ice.statistics.1993-2019/stddev_by_level.zarr",
-        "stddiff": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/06h-freq/zarr/fv3.ice.statistics.1993-2019/diffs_stddev_by_level.zarr",
+        "mean": "",
+        "std": "",
+        "stddiff": "",
     }
-    data_url["land"] = "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/03h-freq/zarr/fv3.zarr"
+    data_url["land"] = ""
     norm_urls["land"] = {
-        "mean": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/06h-freq/zarr/fv3.land.statistics.1993-2019/mean_by_level.zarr",
-        "std": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/06h-freq/zarr/fv3.land.statistics.1993-2019/stddev_by_level.zarr",
-        "stddiff": "gcs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree-subsampled/06h-freq/zarr/fv3.land.statistics.1993-2019/diffs_stddev_by_level.zarr",
+        "mean": "",
+        "std": "",
+        "stddiff": "",
     }
 
     wb2_obs_url = "gs://weatherbench2/datasets/era5/1959-2022-6h-64x32_equiangular_conservative.zarr"
@@ -58,20 +58,21 @@ class BaseOcnTrainer(FVCoupledEmulator):
         "ugrd10m",
         "vgrd10m",
         #"tmp2m",
-        #"spfh2m",
+        "spfh2m",
         # 3D Variables
-        #"tmp",
-        #"spfh",
+        "tmp",
+        "spfh",
         #"ugrd",
         #"vgrd",
         #"dzdt",
-        "land_static",
         # Forcing Variables at input time
-        "dswrf_avetoa",
+        #"dswrf_avetoa",
         "year_progress_sin",
         "year_progress_cos",
         "day_progress_sin",
         "day_progress_cos",
+        # static
+        "land_static",
     )
     ocn_input_variables = (
         # Surface Variables
@@ -111,8 +112,8 @@ class BaseOcnTrainer(FVCoupledEmulator):
     ocn_target_variables = (
         # Surface Variables
         "SSH",
-        "LW",
-        "SW",
+        #"LW",
+        #"SW",
         # 3D Variables
         "so",
         "temp",
@@ -131,19 +132,21 @@ class BaseOcnTrainer(FVCoupledEmulator):
     atm_forcing_variables = (
         "ugrd10m",
         "vgrd10m",
-        "dswrf_avetoa",
+        "spfh2m",
+        "tmp",
+        "spfh",
         "year_progress_sin",
         "year_progress_cos",
         "day_progress_sin",
         "day_progress_cos",
     )
-    ocn_forcing_variables = ()
+    ocn_forcing_variables = ("LW","SW")
     ice_forcing_variables = ()
     land_forcing_variables = ()
 
     all_variables = tuple() # this is created in __init__
     interfaces = {}
-    interfaces["atm"] = ()
+    interfaces["atm"] = (950, 1000)
     interfaces["ocn"] = (
         0,
         1,
@@ -157,8 +160,8 @@ class BaseOcnTrainer(FVCoupledEmulator):
         350,
         500,
     )
-    interfaces["ice"] = ()
-    interfaces["land"] = ()
+    interfaces["ice"] = tuple()
+    interfaces["land"] = tuple()
 
     # transforms related
     input_transforms = {}

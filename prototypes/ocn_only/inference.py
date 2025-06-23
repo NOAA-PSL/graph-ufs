@@ -51,7 +51,7 @@ def predict(
 
             if inputs is not None:
                 # retrieve and drop t0
-                inittimes = inputs.datetime.isel(time=-1).values
+                inittimes = np.atleast_1d(inputs.datetime.isel(time=-1).values)
                 inputs = inputs.drop_vars("datetime")
                 targets = targets.drop_vars("datetime")
                 forcings = forcings.drop_vars("datetime")
