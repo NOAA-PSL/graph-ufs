@@ -1,9 +1,9 @@
 # Ocn-only run
 This is a 6hr deltaT model with more uniformly-spaced vertical levels -- to
 avoid the multicollinarity issue.  Additionally in this run we use  one time
-step as input than 2 time steps. This would presumably reduce the condition
-number of the feature matrix further. All hyperparameter values were kept same,
-i.e.,
+step as input unlike the 2 time steps used previously. This would presumably 
+reduce the condition number of the feature matrix further. All hyperparameter 
+values were kept the same, i.e.,
 
 peak learning rate: 1e-3 
 weight decay      : 0.1 

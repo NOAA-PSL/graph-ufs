@@ -153,4 +153,13 @@ Below hyperparameter changes were tested:
        irrespective whether masking is applied to noise or not. Masking the 
        noise however is very likely to guide neural networks in the right 
        direction.
-   - It makes sense to train this longer, maybe for 40 epochs like before.  
+   - It makes sense to train this longer, maybe for 40 epochs like before. 
+   
+   [T4M] Trained the T4 prototype for full 40 epochs. Below are the key
+   takeaways. 
+   - Over 40 epochs, the training loss continues to improve but the validation
+     loss starts increasing -- signalling a textbook example of overfitting.
+   - The above means that at 10% noise level, the network started learning
+     noise.
+   - This is despite a lower peak LR(= 1e-4), the same weight decay (=0.1), and
+     lower gnn_msg_passing_steps(=12).   
