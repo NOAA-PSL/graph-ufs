@@ -1,4 +1,5 @@
 from functools import partial
+import argparse
 import logging
 import os
 import sys
@@ -8,6 +9,7 @@ import numpy as np
 import dask
 import xarray as xr
 from tqdm import tqdm
+from omegaconf import OmegaConf
 
 from graphcast import rollout
 
@@ -16,6 +18,8 @@ from graphufs.batchloader import MPIExpandedBatchLoader
 from graphufs.datasets import Dataset
 from graphufs.inference import swap_batch_time_dims, store_container
 from graphufs.mpi import MPITopology
+
+from emulator import OcnEvaluator
 
 def predict(
     params,
@@ -103,10 +107,7 @@ def predict(
         progress_bar.close()
 
 
-def inference(Emulator):
-
-    topo = MPITopology(log_dir=f"{Emulator.local_store_path}/logs/inference")
-    emulator = Emulator(mpi_rank=topo.rank, mpi_size=topo.size)
+def inference(emulator):
 
     vds = Dataset(
         emulator,
@@ -141,3 +142,19 @@ def inference(Emulator):
 
     validator.shutdown()
     logging.info("Done running inference")
+
+parser = argparse.ArgumentParser(description="Ocn-only Training")
+parser.add_argument("--prototype", required=True, help="Prototype Name")  # e.g., "R1"
+
+if __name__ == "__main__":
+    args = parser.parse_args()
+    prototype = args.prototype
+    
+    script_dir = os.path.dirname(os.path.abspath(__file__)) 
+    config_path = f"{script_dir}/{prototype}/config.yaml"
+
+    # Initialize Evaluator
+    prototype_config = OmegaConf.load(config_path)
+    topo = MPITopology(log_dir=f"{prototype_config.local_store_path}/logs/inference") 
+    emulator = OcnEvaluator(prototype, mpi_rank=topo.rank, mpi_size=topo.size)
+    inference(emulator)

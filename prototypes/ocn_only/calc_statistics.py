@@ -115,7 +115,7 @@ def main(varname, comp):
 
 
 if __name__ == "__main__":
-    comp = "ocn"
+    comp = "atm"
     if comp == "atm":
         all_variables = set(Emulator.atm_input_variables + Emulator.atm_forcing_variables + Emulator.atm_target_variables)
         for key in Emulator.input_transforms.keys(): 
