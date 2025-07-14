@@ -418,7 +418,7 @@ def store_loss(
         dims=("optim_step",),
         attrs={"long_name": "loss function value"},
     )
-    loss_ds["loss_by_channel"] = xr.DataArray(
+    loss_ds["loss_by_channel_train"] = xr.DataArray(
         loss_by_channel,
         dims=("optim_step", "channel"),
     )
@@ -426,12 +426,12 @@ def store_loss(
         loss_by_channel_valid,
         dims=("epoch", "channel"),
     )
-    loss_ds["loss_avg"] = xr.DataArray(
+    loss_ds["loss_train"] = xr.DataArray(
         [np.mean(loss_values)],
         coords={"epoch": loss_ds["epoch"]},
         dims=("epoch",),
         attrs={
-            "long_name": "average loss function value",
+            "long_name": "training loss function value",
             "description": "averaged over training data once per epoch",
         },
     )
