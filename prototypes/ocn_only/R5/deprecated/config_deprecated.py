@@ -59,7 +59,7 @@ class OcnTrainer(BaseOcnTrainer):
 
     # === Hyperparameters ===
     gnn_msg_steps = 12
-    latent_size = 256
+    latent_size = 256 
     lr_peak_value = 1e-4
 
     # === Training control ===
