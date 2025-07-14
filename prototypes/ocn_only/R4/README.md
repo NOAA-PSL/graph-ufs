@@ -162,4 +162,8 @@ Below hyperparameter changes were tested:
    - The above means that at 10% noise level, the network started learning
      noise.
    - This is despite a lower peak LR(= 1e-4), the same weight decay (=0.1), and
-     lower gnn_msg_passing_steps(=12).   
+     lower gnn_msg_passing_steps(=12).
+
+   [T5] Same as T4 but noise amplitude is set to 1% of the std of each channel.
+   [T5x] T5 submitted to the debug queue.
+  

@@ -1,0 +1,2 @@
+# === overrides ===
+batch_size: 64
