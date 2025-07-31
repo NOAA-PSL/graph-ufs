@@ -65,7 +65,7 @@ def main(argv):
     # create template
     _, tds = return_bathymetry(None, source_dataset)
     #input_chunks = source_chunks.copy()
-    output_chunks = {k: v for k,v in source_chunks.items() if k not in ("pfull", "time")}
+    output_chunks = {k: v for k,v in source_chunks.items() if k not in ("pfull", "z_l", "time")}
     input_chunks=output_chunks.copy()
 
     template = xbeam.make_template(tds)
