@@ -83,7 +83,7 @@ class PackedDataset(BaseDataset):
 
         self.fraction_da.load()
         logging.info("Gaussian noise fields preloaded.")
-
+    
     def _add_gaussian_noise(self, x):
         """
         Add Gaussian noise to xr.DataArray.
@@ -140,7 +140,7 @@ class PackedDataset(BaseDataset):
                         "lon": self.inputs.coords["lon"].values},
         )
         
-        ocean_2d_vars = ["ssh", "lw", "sw"]
+        ocean_2d_vars = ["ssh", "lw", "sw", "depth"]
         land_2d_vars = ["soilm", "snowc_ave", "veg"]
         all_2d_vars = ocean_2d_vars + land_2d_vars
 
@@ -160,7 +160,7 @@ class PackedDataset(BaseDataset):
                 ch_vert, _ = search_nested_dict(landsea_mask_dict, "z_l", meta["z_l"])
                 layer_mask = self.inputs.inputs.isel(sample=0, channels=ch_vert).squeeze()
                 self.mask.loc[dict(channels=cidx)] = xr.where(layer_mask > 0, 0, 1)
-        
+
 class BatchLoader(BaseBatchLoader):
 
     def _next_data(self):

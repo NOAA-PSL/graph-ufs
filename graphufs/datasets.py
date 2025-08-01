@@ -94,7 +94,7 @@ class Dataset():
         x = self._stack(sample_input, sample_forcing)
         
         # add gaussian noise to inputs
-        if self.emulator.add_gauss_noise:
+        if self.emulator.add_gauss_noise and self.mode.lower() == "training":
             logging.info("Gaussian noise is being added to inputs")
             
             tmeta_inp = get_channel_index(sample_input)

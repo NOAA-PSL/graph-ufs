@@ -265,7 +265,10 @@ class StatisticsComputer:
         elif xda.name in ["landsea_mask", "land_static"]:
             logging.info("mask variable detected. No masking applied")
         else:
-            mask = xda.std(self.time_dims, skipna=True) > 1e-6
+            if xda.name.lower() == "depth": # bathymetry
+                mask = xr.where(xda<10, 0, 1)
+            else:
+                mask = xda.std(self.time_dims, skipna=True) > 1e-6
             # plot to check what is being diagnosed
             #fig, ax = plt.subplots(figsize=(8, 4))
             #if "z_l" in mask.dims:
