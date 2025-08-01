@@ -24,5 +24,20 @@ would predict tendencies for the 24-hour forward state.
       because it looks like the training may benefit from a higher learning rate
       here due to increased signal to noise ratio -- because of the 24h
       stepping.
-[T1M] A full-blown training of T1x.
+[T1M] A full-blown training of T1x. For some reason I deleted the loss.nc file
+      created for this prototype, but all logs for tensorboard are preserved.
+      Looking at the loss plot, it is clear that,
+      - the training for this prototype went much better with loss dropping up
+        to 0.35 for the training dataset and the validation loss following
+        closely but not overlapping. If you think about this in terms of the
+        R-square value, then 0.35 RMSE corrresponds to an R-square score of
+        0.65, which is promising. Of course, this is lesser than those compared
+        to atm-only and atm + surface ocean but this should not discourage us.
+      - There are no spikes, meaning that the bad_samples indices are working
+        perfectly.
+
+      The inferences are looking great as well. Here are the main takeaways:
+      - The 10 days forecast RMSE errors are much lower for this prototype
+        compared to the T3M prototype which uses 6 hours steps. For example, 10
+        days forecast RMSE for this prototype is      
        

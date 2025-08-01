@@ -3,7 +3,7 @@ case: R4
 local_store_path: "/pscratch/sd/n/nagarwal/ocn-only/${case}"
 use_half_precision: false
 log_tensorboard: true
-logdir: "${local_store_path}/tensorboard/T5x"
+logdir: "${local_store_path}/tensorboard/T7M"
 
 # === Time Configuration Overrides ===
 delta_t_model: 6h
@@ -42,7 +42,7 @@ num_epochs: 40
 
 # === Noise injection ===
 add_gauss_noise: true
-noise_std_as_fraction: 0.01
+noise_std_as_fraction: 0.1
 gauss_noise_seed: 100
 
 # === Evaluator Specific ===

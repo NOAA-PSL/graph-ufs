@@ -16,9 +16,13 @@ OcnPreprocessed, and OcnEvaluator.
 train.py: The training script
 inference.py: The inference script
 
-# Disclaimer
-The preprocessing script is not wired until now. This needs some modifications
-to adapt to the new design.
+# Preprocessing
+To submit preprocessing, use
+ 
+python preprocess.py --prototype R1
+
+Note that although the preproocess script accepts another argument, dt, but this
+is more of a requirement for training, not preprocessor.
 
 # Train
 To train, simply use, for e.g.: 

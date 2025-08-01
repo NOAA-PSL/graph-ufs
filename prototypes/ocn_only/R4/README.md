@@ -165,5 +165,33 @@ Below hyperparameter changes were tested:
      lower gnn_msg_passing_steps(=12).
 
    [T5] Same as T4 but noise amplitude is set to 1% of the std of each channel.
+   Before this I also tested 2% noise but the loss was way too high to begin
+   with and was not looking like the right thing to do. 
    [T5x] T5 submitted to the debug queue.
-  
+   It looks like this is a better noise amplitude than those tried before given
+   that the loss value is not too high is begin with and the network is quickly
+   learning to smoothen the noise. For example, loss here started with something
+   around 17 at the end of the first, but by the end of epoch 3 (which did not
+   complete in 30 mins), it was already hovering around 2.2. However, like with
+   1% and 2% noise amplitude, the validation loss is going high with each epoch.
+   [T5M] Fired the T5 for the whole 40 epochs. Here is the analysis:
+
+   - Noise isn't acting as a regularization:
+     * I expected the noise to regularize the problem, similar to using dropout,
+     but it looks like 1% noise is perhaps too weak and doesn't have the right
+     structure to make a meaningful impact. As a result, the strong learning
+     capability of GNNs is just memorizing this noise and failing to generalize
+     on the clean validation dataset.
+   - Maybe adding the dropout is a better way forward.
+ 
+   [T6M] To make the gaussian noise injection study more complete and
+   comprehensive, it makes sense to train another test case with 5% of std as
+   the noise amplitude. Right now, I have 1% and 10% noise outputs. We can also
+   test 20% std as the noise amplitude, but I don't think that would be a good
+   study, given that there is not enough signal in 6hr increments anyway (std of
+   6hr increments is way lower than the std of the whole field) and this would
+   significantly reduce the signal to noise ratio. 
+
+   [T7M] Same as T6M but with 0.1% of std as the gaussian noise amplitude. This
+   is, again, to make the gaussian noise study more complete and make sure there
+   is no significant impact on the performance. Maybe there is a sweet spot.      
