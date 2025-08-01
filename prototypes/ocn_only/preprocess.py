@@ -6,7 +6,10 @@ import sys
 import subprocess
 import numpy as np
 import dask
+import yaml
+import argparse
 
+from omegaconf import OmegaConf
 from graphufs.batchloader import XBatchLoader, MPIXBatchLoader
 from graphufs.datasets import Dataset
 from graphufs.log import setup_simple_log
@@ -14,26 +17,15 @@ from graphufs.progress import ProgressTracker
 from graphufs.mpi import MPITopology
 
 # in the future this could be generalized to where it just takes the following as inputs
-from config import OcnPreprocessor as Emulator
+from emulator import OcnPreprocessor
 
-_n_jobs = 1
-_n_tasks = Emulator.batch_size
-_n_cpus_per_task = 256 // _n_tasks
-_qos = "regular"
-_walltime = "06:00:00"
-_input_channel_chunks =  32
-_target_channel_chunks = 32
+def setup(mode, emulator, config, topo, level=logging.INFO):
 
-def setup(mode, level=logging.INFO):
-
-    log_dir = f"{Emulator.local_store_path}/logs/preprocessing-{mode}"
-    topo = MPITopology(log_dir=log_dir)
-    emulator = Emulator()
     if topo.is_root:
-        pt = ProgressTracker(json_file_path=f"{log_dir}/restart.{topo.rank:02d}.{topo.size:02d}.json")
+        pt = ProgressTracker(json_file_path=f"{topo.log_dir}/restart.{topo.rank:02d}.{topo.size:02d}.json")
     topo.comm.barrier()
     if not topo.is_root:
-        pt = ProgressTracker(json_file_path=f"{log_dir}/restart.{topo.rank:02d}.{topo.size:02d}.json")
+        pt = ProgressTracker(json_file_path=f"{topo.log_dir}/restart.{topo.rank:02d}.{topo.size:02d}.json")
     start = pt.get_current_iteration()
     tds = Dataset(
         emulator,
@@ -43,13 +35,13 @@ def setup(mode, level=logging.INFO):
             "sample": 1,
             "lat": -1,
             "lon": -1,
-            "channels": _input_channel_chunks,
+            "channels": config.input_channel_chunks,
         },
         target_chunks={
             "sample": 1,
             "lat": -1,
             "lon": -1,
-            "channels": _target_channel_chunks,
+            "channels": config.target_channel_chunks,
         },
     )
     loader = MPIXBatchLoader(
@@ -62,28 +54,28 @@ def setup(mode, level=logging.INFO):
         start=start,
         mpi_topo=topo,
     )
-    return emulator, tds, loader, pt
+    return tds, loader, pt
 
 
-def submit_slurm_job():
+def submit_slurm_job(config, prototype):
 
     the_code = \
         f"from preprocess import store_batch_of_samples\n"+\
-        f"store_batch_of_samples('training')\n" +\
-        f"store_batch_of_samples('validation')\n"
+        f"store_batch_of_samples('training', '{prototype}')\n" +\
+        f"store_batch_of_samples('validation', '{prototype}')\n"
 
-    slurm_dir = f"{Emulator.local_store_path}/slurm"
+    slurm_dir = f"{config.local_store_path}/slurm"
     txt = "#!/bin/bash\n\n" +\
         f"#SBATCH -J preprocess_ocn_only\n"+\
         f"#SBATCH -o {slurm_dir}/preprocess.%j.out\n"+\
         f"#SBATCH -e {slurm_dir}/preprocess.%j.err\n"+\
         f"#SBATCH --nodes=1\n"+\
-        f"#SBATCH --ntasks={_n_tasks}\n"+\
-        f"#SBATCH --cpus-per-task={_n_cpus_per_task}\n"+\
-        f"#SBATCH --qos={_qos}\n"+\
+        f"#SBATCH --ntasks={config.batch_size}\n"+\
+        f"#SBATCH --cpus-per-task={config.cpus_per_node // config.batch_size}\n"+\
+        f"#SBATCH --qos={config.qos}\n"+\
         f"#SBATCH --account=m4718\n"+\
         f"#SBATCH --constraint=cpu\n"+\
-        f"#SBATCH -t {_walltime}\n\n"+\
+        f"#SBATCH -t {config.walltime}\n\n"+\
         f"conda activate graphufs-mpi\n"+\
         f'srun python -c "{the_code}"'
 
@@ -97,15 +89,27 @@ def submit_slurm_job():
     with open(fname, "w") as f:
         f.write(txt)
 
-    if _n_jobs > 1:
-        runstr = "`for i in {1.."+f"{_n_jobs}"+"}; do sbatch --job-name=preproc --dependency=singleton "+fname+"; done`"
+    if config.n_jobs > 1:
+        runstr = "`for i in {1.."+f"{config.n_jobs}"+"}; do sbatch --job-name=preproc --dependency=singleton "+fname+"; done`"
     else:
         runstr = f"sbatch {fname}"
     subprocess.run(runstr, shell=True)
 
-def store_batch_of_samples(mode):
+def store_batch_of_samples(mode, prototype):
 
-    emulator, tds, loader, pt = setup(mode)
+    # Build config paths
+    config_trainer_path = f"./{prototype}/config.yaml"
+    config_preprocess_path = f"./{prototype}/config_preprocessor.yaml"
+
+    # Load config and initialize the emulator
+    trainer_config = OmegaConf.load(config_trainer_path)
+    preprocessor_config = OmegaConf.load(config_preprocess_path)
+
+    topo = MPITopology(log_dir=f"{trainer_config.local_store_path}/logs/preprocessing-{mode}")
+    emulator = OcnPreprocessor(prototype, mpi_rank=topo.rank, mpi_size=topo.size)
+    
+    tds, loader, pt = setup(mode, emulator, preprocessor_config, topo)
+
     start = pt.get_current_iteration()
 
     logging.info(f"Processing {len(loader)} in batch_size: {emulator.batch_size}")
@@ -145,22 +149,39 @@ def store_batch_of_samples(mode):
 
     logging.info(f"Done with mode {mode}")
 
-def make_container(mode):
+def make_container(mode, emulator, config, topo):
 
-    emulator, tds, _, _ = setup(mode)
+    tds, _, _ = setup(mode, emulator, config, topo)
 
     tds.store_containers()
     logging.info(f"Stored {mode} container")
 
+parser = argparse.ArgumentParser(description="Ocn-only Preprocessing")
+parser.add_argument("--prototype", required=True, help="Prototype Name")  # e.g., "R1"
+parser.add_argument("--dt", help="Model time step")  # e.g., 6h
 
 if __name__ == "__main__":
 
     setup_simple_log()
 
+    args = parser.parse_args()
+    prototype = args.prototype
+
+    # Build config paths
+    config_trainer_path = f"./{prototype}/config.yaml"
+    config_preprocess_path = f"./{prototype}/config_preprocessor.yaml"
+
+    # Initialize the emulator
+    trainer_config = OmegaConf.load(config_trainer_path)
+    preprocessor_config = OmegaConf.load(config_preprocess_path)
+    merged_config = OmegaConf.merge(trainer_config, preprocessor_config)
+    
     # create a container zarr store for all the data
     for mode in ["training", "validation"]:
-        make_container(mode)
+        topo = MPITopology(log_dir=f"{trainer_config.local_store_path}/logs/preprocessing-{mode}")
+        emulator = OcnPreprocessor(prototype, mpi_rank=topo.rank, mpi_size=topo.size)
+        make_container(mode, emulator, preprocessor_config, topo)
 
     # Pull the training and validation data and store to data/data.zarr
-    # Do this in one slurm job because concurrent I/O on lustre is problematic
-    submit_slurm_job()
+    # Do this in one slurm job because concurrent I/O on lustre is problematic 
+    submit_slurm_job(merged_config, prototype)
