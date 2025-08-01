@@ -15,6 +15,13 @@ job-scripts/
 *.pdf
 *.png
 *.jpeg
+figures/
+
+# movies
+*.mp4
+*.mov
+*.gif
+*.avi
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
