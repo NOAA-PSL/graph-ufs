@@ -139,7 +139,7 @@ class OcnTrainer(FVCoupledEmulator):
         dt = int(self.delta_t_model[:-1])  # in hours
 
         # total hours of forecasting
-        n_autoreg_steps = self.forecast_days * 24
+        n_autoreg_steps = int(self.forecast_days) * 24
 
         # List of target lead times: ['6h', '12h', ..., '240h']
         target_lead_time = [f"{n}h" for n in range(dt, n_autoreg_steps + 1, dt)]

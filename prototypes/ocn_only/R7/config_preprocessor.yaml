@@ -1,0 +1,8 @@
+# === overrides ===
+batch_size: 64
+cpus_per_node: 256
+n_jobs: 1
+qos: regular
+walltime: 06:00:00
+input_channel_chunks: 32
+target_channel_chunks: 32

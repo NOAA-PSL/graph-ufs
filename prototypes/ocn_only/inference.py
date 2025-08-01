@@ -150,11 +150,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
     prototype = args.prototype
     
+    # initialize topology
     script_dir = os.path.dirname(os.path.abspath(__file__)) 
     config_path = f"{script_dir}/{prototype}/config.yaml"
-
-    # Initialize Evaluator
     prototype_config = OmegaConf.load(config_path)
     topo = MPITopology(log_dir=f"{prototype_config.local_store_path}/logs/inference") 
+   
+    # instantiate the evaluator 
     emulator = OcnEvaluator(prototype, mpi_rank=topo.rank, mpi_size=topo.size)
     inference(emulator)
