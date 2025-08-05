@@ -52,7 +52,7 @@ class Dataset():
         else:
             self.dt_m_over_d = int(1.)
         input_dims = {
-                "datetime": self.dt_m_over_d*emulator.n_forecast,
+                "datetime": self.dt_m_over_d*(emulator.n_forecast-1)+1,
             }
         for key in ["lon", "lat", "level", "z_l"]:
             if key in xds.dims:
@@ -61,7 +61,7 @@ class Dataset():
             ds=xds,
             input_dims=input_dims,
             input_overlap={
-                "datetime": int(self.dt_m_over_d*emulator.n_forecast-1),
+                "datetime": int(self.dt_m_over_d*(emulator.n_forecast-1)),
             },
             preload_batch=preload_batch,
         )
