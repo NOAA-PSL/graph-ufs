@@ -118,6 +118,7 @@ weight_loss_per_channel: true
 weight_loss_per_latitude: true
 weight_loss_per_level: false  # if true, weights both atm and ocn levels
 loss_weights_per_variable: {} # weights all of them equally
+use_mahalanobis_loss: false
 
 # === rng-related ===
 grad_rng_seed: 0

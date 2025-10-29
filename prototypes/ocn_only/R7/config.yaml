@@ -3,7 +3,7 @@ case: R7
 local_store_path: "/pscratch/sd/n/nagarwal/ocn-only/${case}"
 use_half_precision: false
 log_tensorboard: true
-logdir: "${local_store_path}/tensorboard/T1xx"
+logdir: "${local_store_path}/tensorboard/T2M"
 
 # === Time Configuration Overrides ===
 delta_t_model: 24h
@@ -53,7 +53,7 @@ interfaces:
 gnn_msg_steps: 12
 latent_size: 256
 lr_peak_value: 1e-3
-num_epochs: 40
+num_epochs: 80
 
 # === Evaluator Specific ===
 wb2_obs_url: gs://weatherbench2/datasets/era5/1959-2023_01_10-6h-240x121_equiangular_with_poles_conservative.zarr

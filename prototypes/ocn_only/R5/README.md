@@ -1,4 +1,5 @@
-# Ocn-only run R5
+# Ocn-only R5
+This is 24h, 1IC, coarseTop configuration.
 In this run, we adopt the most successful configuration of 6h ocn-only model and
 test it in 24h configuration. In the hyperparameter testing done in R4, the best
 ocn-only configuration was found for:

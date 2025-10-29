@@ -1,9 +1,10 @@
 # === Experiment specific ===
 case: R4
+sub_expt: T11M
 local_store_path: "/pscratch/sd/n/nagarwal/ocn-only/${case}"
 use_half_precision: false
 log_tensorboard: true
-logdir: "${local_store_path}/tensorboard/T7M"
+logdir: "${local_store_path}/tensorboard/${sub_expt}"
 
 # === Time Configuration Overrides ===
 delta_t_model: 6h
@@ -42,7 +43,8 @@ num_epochs: 40
 
 # === Noise injection ===
 add_gauss_noise: true
-noise_std_as_fraction: 0.1
+std_inputs_zarr: "${local_store_path}/std_inputs/stddev_by_level.zarr"
+noise_std_as_fraction: 0.005
 gauss_noise_seed: 100
 
 # === Evaluator Specific ===

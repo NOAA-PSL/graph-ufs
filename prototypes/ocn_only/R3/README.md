@@ -1,9 +1,12 @@
-# Ocn-only run
-This is a 6hr deltaT model with more uniformly-spaced vertical levels -- to
+## Ocn-only R3
+This is 6h, 1IC, coarseTop configuration. 
+This 6h emulator has more uniformly-spaced vertical levels -- to
 avoid the multicollinarity issue.  Additionally in this run we use  one time
 step as input unlike the 2 time steps used previously. This would presumably 
-reduce the condition number of the feature matrix further. All hyperparameter 
-values were kept the same, i.e.,
+reduce the condition number of the feature matrix further. 
+
+## Configuration
+The hyperparameter values are,
 
 peak learning rate: 1e-3 
 weight decay      : 0.1 
@@ -15,10 +18,12 @@ num epochs	  : 64
 use half precision: False 
 mesh size         : 5
 
-## Outcome The result was overfitting, so I killed the job after epoch 50
-without running the inference, which would use the last overfitted checkpoint.
-I'm not computing the inference as of now, but if needed, we can use a
-checkpoint before overfitting, say, epoch 10, to produce inferences.
+## Outcomes
+[T1M] First training attempt. 
+The result was overfitting, so I killed the job after epoch 50 without running 
+the inference, which would use the last overfitted checkpoint. I'm not computing 
+the inference as of now, but if needed, we can use a checkpoint before overfitting, 
+say, epoch 10, to produce inferences.
 
 I also used latent size = 192 in this configuration and ran a long training, but
 the training started spitting nan values after epoch 16. Below are the take
@@ -28,8 +33,8 @@ aways from this run:
   but not catastrophic.
 - Learning rate is still decaying smoothly (cosine curve), so it's not an LR
   spike issue.  This confirms that the root cause is not overfitting, but rather
-numerical instability — likely due to activation explosions, gradient spikes, or
-poor interactions with your optimizer.
+  numerical instability — likely due to activation explosions, gradient spikes, or
+  poor interactions with the optimizer.
 
 Possible solutions:
 - Set clip_by_global_norm(1.0) instead of 32.0

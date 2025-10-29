@@ -9,6 +9,8 @@ if __name__ == "__main__":
 
     ds = xr.load_dataset("/pscratch/sd/n/nagarwal/ocn-only/R4/loss.nc")
 
+    sub_expt = "T11M"
+
     fig, axs = plt.subplots(1,2, figsize=(10,4), constrained_layout=True)
 
     axLR = axs[0].twinx()
@@ -41,4 +43,4 @@ if __name__ == "__main__":
     )
     axs[1].legend()
 
-    fig.savefig("figures/training_loss.jpeg", dpi=300)
+    fig.savefig(f"figures/training_loss_R4_{sub_expt}.jpeg", dpi=300)

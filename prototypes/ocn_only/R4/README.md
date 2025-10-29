@@ -1,6 +1,7 @@
-# Ocn-only run R4
-This is similar to run R3, i.e., with one IC and reorganized vertical levels, 
-but with changes in hyperparameters.
+# Ocn-only R4
+This is also 6h, 1IC, coarseTop configuration like R3 This is similar to run R3,
+but with changes in hyperparameters. This run directory essentially does some
+hyperparameter testing of the Run R3.
 Below hyperparameter changes were tested:
 1. [T1] Change gnn_msg_steps to 8 (from 16) to see if this improves the 
    overfitting seen in R3.
@@ -192,6 +193,19 @@ Below hyperparameter changes were tested:
    6hr increments is way lower than the std of the whole field) and this would
    significantly reduce the signal to noise ratio. 
 
-   [T7M] Same as T6M but with 0.1% of std as the gaussian noise amplitude. This
+   [T7M] Same as T6M but with 0.1 times std as the gaussian noise amplitude. This
    is, again, to make the gaussian noise study more complete and make sure there
-   is no significant impact on the performance. Maybe there is a sweet spot.      
+   is no significant impact on the performance. Maybe there is a sweet spot.
+
+   [T8M] Gaussian noise added to inputs as 0.1 times (10%) of the std, but the 
+   std here is spatial, not spatially averaged. So the noise amplitude would 
+   vary over the space.
+
+   [T9M] Gaussian noise added to inputs as 0.01 times (1%) of the std, with the
+   spatial std.
+  
+   [T10M] Same as above, i.e., gaussian noise using spatial std, but with the
+   2% amplitude. This led to poorer training with the validation loss not
+   decreasing beyond 0.7.
+
+   [T11M] Same as above but noise_std_as_fraction = 0.005, meaning 0.5%.    

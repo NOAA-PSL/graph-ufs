@@ -106,6 +106,7 @@ class OcnTrainer(FVCoupledEmulator):
 
 	# === Input Gaussian Noise === 
         self.add_gauss_noise = self.config.get("add_gauss_noise", False)
+        self.std_inputs_zarr = self.config.get("std_inputs_zarr", None)
         self.noise_std_as_fraction = self.config.get("noise_std_as_fraction", None)
         self.gauss_noise_seed = self.config.get("gauss_noise_seed", 100)
 
@@ -114,6 +115,8 @@ class OcnTrainer(FVCoupledEmulator):
         self.weight_loss_per_latitude = self.config.get("weight_loss_per_latitude", True)
         self.weight_loss_per_level = self.config.get("weight_loss_per_level", False)
         self.loss_weights_per_variable = self.config.get("loss_weights_per_variable", False)
+        self.use_mahalanobis_loss = self.config.get("use_mahalanobis_loss", False)
+        self.mah_metric_file = self.config.get("mah_metric_file", None)
 
         # === RNG Seeds ===
         self.grad_rng_seed = self.config.get("grad_rng_seed", 0)

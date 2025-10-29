@@ -30,8 +30,8 @@ if __name__ == "__main__":
     found = False
     if os.path.exists(bad_samples_path):
         found = True
-    elif args.dt and os.path.exists(f"./bad_samples_{args.dt}.yaml"):
-        bad_samples_path = f"./bad_samples_{args.dt}.yaml"
+    elif args.dt and os.path.exists(f"./bad_samples/bad_samples_{args.dt}.yaml"):
+        bad_samples_path = f"./bad_samples/bad_samples_{args.dt}.yaml"
         found = True 
     
     # Train

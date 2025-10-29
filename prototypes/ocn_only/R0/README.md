@@ -1,15 +1,17 @@
-# Ocn-only run
-This is the default ocean-only configuration with full 27 years of REPLAY data
-on 6 hours of time stepping with two time steps as inputs. Note that this
-configuration is a revamped version where more forcing from the atmosphere is
-used to mimick the physical models.  Below is the updated configuration:
+# Ocn-only R0
+This is 6h, 2IC, fineTop configuration, the first attempt to build an ocn-only
+emulator. The initial run was different but I moulded it to the new setup
+afterwards, re-generated the dataset, and re-trained everything. 
 
-## Configuration
-* Forcing: U10m, V10m, LW/SW radiation fluxes into the ocean, T_lml, spfh2m,
-* spfh_lml Prognostic: SSH, Temp, Salinity, U/V, Static/Clock: land-sea mask,
-* day/year progress
+## Base Configuration
+The base hyperparameters of this configuration are as follows:
+latent size   : 256
+peak LR       : 1e-4
+hidden layers : 1
+weight decay  : 0.1
+gnn_msg_steps : 12
+mesh size     : 5
+batch size    : 16
 
-Note that there is no bathymetry at this point. This would be added in the
-future and will be made a separate run.
-
-## Outcome
+## Prototypes and Outcomes
+[T1M] The first training attempt with the base setting.

@@ -12,11 +12,11 @@ if __name__ == "__main__":
     fig, axs = plt.subplots(1,2, figsize=(10,4), constrained_layout=True)
 
     axLR = axs[0].twinx()
-    l1 = ds.loss.plot(ax=axs[0], color="C0", label="Training Loss")
+    l1 = ds.loss.plot(ax=axs[0], color="C0", label="Training Loss",)
     l2 = ds.learning_rate.plot(ax=axLR, color="gray", label="Learning Rate")
 
-    ds.loss_avg.plot(ax=axs[1], label="Training")
-    ds.loss_valid.plot(ax=axs[1], label="Validation")
+    ds.loss_train.plot(ax=axs[1], label="Training",)
+    ds.loss_valid.plot(ax=axs[1], label="Validation",)
 
     for ax in axs:
         for key in ["right", "top"]:

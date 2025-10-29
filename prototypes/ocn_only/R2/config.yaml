@@ -1,9 +1,10 @@
 # === Experiment specific ===
 case: R2
+sub_expt: T8M
 local_store_path: "/pscratch/sd/n/nagarwal/ocn-only/${case}"
 use_half_precision: false
 log_tensorboard: true
-logdir: "${local_store_path}/tensorboard/T4M"
+logdir: "${local_store_path}/tensorboard/${sub_expt}"
 
 # === Time Configuration Overrides ===
 delta_t_model: 6h
@@ -37,13 +38,15 @@ interfaces:
 # === Training Hyperparameters ===
 gnn_msg_steps: 12
 latent_size: 256
+mesh_size: 6
 lr_peak_value: 1e-4
 num_epochs: 40
 
 # === Noise injection ===
-add_gauss_noise: true
+add_gauss_noise: false
+std_inputs_zarr: "${local_store_path}/std_inputs/stddev_by_level.zarr"
 noise_std_as_fraction: 0.05
-gauss_noise_seed: 100
+gauss_noise_seed: 100 
 
 # === Evaluator Specific ===
 wb2_obs_url: gs://weatherbench2/datasets/era5/1959-2023_01_10-6h-240x121_equiangular_with_poles_conservative.zarr

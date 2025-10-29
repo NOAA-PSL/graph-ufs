@@ -8,8 +8,8 @@ import matplotlib.pyplot as plt
 if __name__ == "__main__":
 
     # Experiments
-    expts = ["T7M","T5M", "T6M", "T4M"]
-    noise_amp =[0.1, 1, 5, 10] 
+    expts = ["T3M","T11M","T9M", "T10M",]
+    noise_amp =[0, 0.5, 1, 2,] 
     
     expt_dir = "/pscratch/sd/n/nagarwal/ocn-only/R4/"
 
@@ -26,8 +26,9 @@ if __name__ == "__main__":
         l1 = ds.loss.plot(ax=axs[0], color=f"C{i}", label=f"Training Loss - {noise_amp[i]}% noise",)
    
         # right panel
-        ds.loss_train.plot(ax=axs[1], color=f"C{i}", linestyle="-", label=f"Training - {noise_amp[i]}% noise",)
-        ds.loss_valid.plot(ax=axs[1], color=f"C{i}", linestyle="--", label=f"Validation - {noise_amp[i]}% noise",)  	
+        var_train_loss = [v for v in ["loss_avg","loss_train"] if v in ds.data_vars]
+        ds[var_train_loss[0]].plot(ax=axs[1], color=f"C{i}", linestyle="-", label=f"Training - {noise_amp[i]}% noise",)
+        ds["loss_valid"].plot(ax=axs[1], color=f"C{i}", linestyle="--", label=f"Validation - {noise_amp[i]}% noise",)  	
    
     l2 = ds.learning_rate.plot(ax=axLR, color="gray", label="Learning Rate")
 
@@ -36,8 +37,8 @@ if __name__ == "__main__":
             ax.spines[key].set_visible(False)
     axLR.spines["top"].set_visible(False)
 
-    axs[0].set_yscale("log")
-    axs[1].set_yscale("log")
+    #axs[0].set_yscale("log")
+    #axs[1].set_yscale("log")
 
     # labels and stuff
     axs[0].set(
@@ -49,13 +50,13 @@ if __name__ == "__main__":
         xlabel="Epoch",
         ylabel="Loss Value",
     )
-    #lines = [l1[0], l2[0]]
-    #axs[0].legend(
-    #    lines,
-    #    list(l.get_label() for l in lines),
-    #    loc="center right",
-    #)
+    lines = [l1[0], l2[0]]
+    axs[0].legend(
+        lines,
+        list(l.get_label() for l in lines),
+        loc="center right",
+    )
     axs[0].legend(loc="center right")
-    axs[1].legend(loc="upper right")
+    #axs[1].legend(loc="upper right")
 
-    fig.savefig("figures/training_loss_T4M_T5M_T6M_T7M.jpeg", dpi=300)
+    fig.savefig("figures/training_loss_T3M_T11M_T9M_T10M.jpeg", dpi=300)

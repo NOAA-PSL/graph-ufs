@@ -9,12 +9,7 @@ z_i = (0,
         200,
         350,
         500,)
-The above eight interfaces lead to seven layers. Additionally, the list of atm 
-variables have been changed to make sure that the forcing for ocn-only emulator 
-is aligned with the forcing used in physical ocean models. Another small detail
-is that we have removed the t2m from the list of atm variables and instead use
-the temperature at the lowest level. This is to make sure that we are not
-inheriting all the inaccuracies and approximations used in computing t2m.
+The above eight interfaces lead to seven layers. 
 
 Note that any statistics computed prior to this for ocn, land, and sea ice are
 wrong because no masking was applied while computing them. This would damp mean

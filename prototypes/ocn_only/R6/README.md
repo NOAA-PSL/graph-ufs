@@ -1,4 +1,5 @@
-# Ocn-only run R6
+# Ocn-only R6
+This is 24h, 2IC, coarseTop configuration.
 In this run, we adopt the most successful configuration of 24h ocn-only model,
 i.e., R5, and test it for 2 ICs, i.e, the ICs covering 48 hours as opposed to
 24h in R5. The hyperparameter values are as follows:

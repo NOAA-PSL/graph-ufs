@@ -6,8 +6,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 if __name__ == "__main__":
-
-    ds = xr.load_dataset("/pscratch/sd/n/nagarwal/ocn-only/R7/loss.nc")
+    
+    _expt = "R7"
+    _subexpt = "T1M"
+    ds = xr.load_dataset(f"/pscratch/sd/n/nagarwal/ocn-only/{_expt}/loss_{_subexpt}.nc")
 
     fig, axs = plt.subplots(1,2, figsize=(10,4), constrained_layout=True)
 
@@ -41,4 +43,4 @@ if __name__ == "__main__":
     )
     axs[1].legend()
 
-    fig.savefig("figures/training_loss.pdf")
+    fig.savefig(f"figures/training_loss_{_expt}_{_subexpt}.png", dpi=300)
