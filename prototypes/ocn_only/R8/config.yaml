@@ -1,0 +1,63 @@
+# === Experiment specific ===
+case: R8
+sub_expt: T2inf
+local_store_path: "/pscratch/sd/n/nagarwal/ocn-only/${case}"
+use_half_precision: false
+log_tensorboard: true
+logdir: "${local_store_path}/tensorboard/${sub_expt}"
+
+# === Time Configuration Overrides ===
+delta_t_model: 24h
+delta_t_data: 6h
+input_duration: 24h
+target_lead_time: 24h
+
+# === Base statistics directory ===
+statistics_path: "/global/homes/n/nagarwal/graph-ufs/prototypes/ocn_only/statistics/ocn_only_7L_coarseTop/${delta_t_model}"
+
+# === Norm Stats Path Override ===
+norm_urls:
+  atm:
+    mean: "${statistics_path}/atm.fvstatistics.1993-2019/mean_by_level.zarr"
+    std: "${statistics_path}/atm.fvstatistics.1993-2019/stddev_by_level.zarr"
+    stddiff: "${statistics_path}/atm.fvstatistics.1993-2019/diffs_stddev_by_level.zarr"
+  ocn:
+    mean: "${statistics_path}/ocn.fvstatistics.1993-2019/mean_by_level.zarr"
+    std: "${statistics_path}/ocn.fvstatistics.1993-2019/stddev_by_level.zarr"
+    stddiff: "${statistics_path}/ocn.fvstatistics.1993-2019/diffs_stddev_by_level.zarr"
+  ice: { mean: "", std: "", stddiff: "" }
+  land: { mean: "", std: "", stddiff: "" }
+
+# === Input/Target/Forcing ===
+# inputs/targets/forcings for the ocn                                                                                 
+#ocn_input_variables:
+#  - SSH
+#  - LW
+#  - SW
+#  - so
+#  - temp
+#  - uo
+#  - vo
+#  - depth
+#  - landsea_mask
+#
+#ocn_target_variables: [SSH, so, temp, uo, vo]
+#ocn_forcing_variables: [LW, SW]
+
+# === Interface Configuration ===
+interfaces:
+  atm: [950, 1000]
+  ocn: [0, 1, 21, 75, 120, 200, 350, 500]
+  ice: []
+  land: []
+
+# === Training Hyperparameters ===
+gnn_msg_steps: 12
+latent_size: 256
+lr_peak_value: 1e-3
+num_epochs: 40
+
+# === loss related ===
+use_mahalanobis_loss: true
+homedir: "/global/homes/n/nagarwal/"
+mah_metric_file: "${homedir}/graph-ufs/prototypes/ocn_only/tendency_correlation_ocn_only_${delta_t_model}_rm_seasonality.nc"
