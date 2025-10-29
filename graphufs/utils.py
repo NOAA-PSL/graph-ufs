@@ -74,6 +74,24 @@ def get_num_params(ckpt):
     num_per_layer = jax.tree_util.tree_map(lambda x: np.prod(x), shape)
     return np.sum(jax.tree_util.tree_flatten(num_per_layer)[0])
 
+def count_params_from_npz(filepath):
+    """
+    Computes the total number of parameters from a .npz checkpoint file.
+
+    This function directly loads the .npz file and sums the number of
+    elements in each stored array, which is the most reliable way to
+    get the total parameter count.
+
+    Args:
+        filepath (str): The path to the .npz model checkpoint file.
+
+    Returns:
+        int: The total number of trainable parameters in the model.
+    """
+    with np.load(filepath) as data:
+        total_params = sum(array.size for array in data.values())
+        
+    return total_params
 
 def get_chunk_data(generator, gen_lock, data: dict, load_chunk: bool, shuffle: bool):
     """Get multiple training batches.
