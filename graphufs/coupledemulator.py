@@ -1014,7 +1014,8 @@ class ReplayCoupledEmulator:
                 targets = targets["targets"].load()
 
             else:
-                inputs, targets = self.normalization_to_stacked(self.norm[moment], preserved_dims=tuple())
+                preserved_dims = tuple() 
+                inputs, targets = self.normalization_to_stacked(self.norm[moment], preserved_dims=preserved_dims)
                 ds = xr.Dataset()
                 inputs = inputs.load()
                 targets = targets.load()
@@ -1034,20 +1035,44 @@ class ReplayCoupledEmulator:
         """
 
         def stackit(xds, varnames, n_time, **kwargs):
-            norms = xds[[x for x in varnames if x in xds]]
-            # replicate time varying variables
+            """
+            Filters, expands, and stacks a subset of variables from xds.
+            """
+            vars_to_process = list(set(varnames) & set(xds.data_vars))
+            if not vars_to_process:
+                return xr.Dataset() # Return an empty dataset if no variables match.
+        
+            norms = xds[vars_to_process]
+            
+            # check whether the supplied stats is spatial
+            all_spatial_dims = ("lat", "lon", "grid_yt", "grid_xt")
+            is_spatial_stat = any(sdim in norms.dims for sdim in all_spatial_dims)
+                
             for key in norms.data_vars:
+                # replicate time varying variables
                 if "description" in xds[key].attrs and "time" in xds[key].attrs["description"]:
                     norms[key] = xr.concat(
                         [norms[key].copy() for _ in range(n_time)],
                         dim="time",
                     )
-            if "z_l" in xds.dims:
-                dimorder = ("batch", "time", "level", "z_l", "lat", "lon")
-            else:
-                dimorder = ("batch", "time", "level", "lat", "lon")
-            dimorder = tuple(x for x in dimorder if x in norms.dims)
-            norms = norms.transpose(*dimorder)
+
+                # if spatial stats, replicate along spatial dimensions
+                if is_spatial_stat:
+                    if {"grid_xt","grid_yt"}.intersection(set(norms[key].dims)):
+                        rename_map = {"grid_xt":"lon", "grid_yt":"lat"}
+                        norms[key] = norms[key].rename({k:v for k, v in rename_map.items() if k in norms[key].dims}) 
+                    missing_spatial_dims = {"lat","lon"} - set(norms[key].dims)
+
+                    if missing_spatial_dims:
+                        dims_to_add = {dim: xds.coords[dim] for dim in missing_spatial_dims}
+                        norms[key] = norms[key].expand_dims(dim=dims_to_add)
+
+           
+            possible_dims = ("batch", "time", "level", "z_l", "lat", "lon", "grid_xt", "grid_yt")
+            dimorder = tuple(dim for dim in possible_dims if dim in norms.dims)
+            if dimorder:
+                norms = norms.transpose(*dimorder)
+            
             return dataset_to_stacked(norms, **kwargs)
 
         input_norms = stackit(xds, self.input_variables, n_time=self.n_input, **kwargs)
