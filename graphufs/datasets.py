@@ -65,7 +65,11 @@ class Dataset():
             },
             preload_batch=preload_batch,
         )
-        
+        if emulator.use_mahalanobis_loss and emulator.mah_metric_file is not None:
+            self.mah_metric_matrix = xr.open_dataset(emulator.mah_metric_file,
+                engine="netcdf4").targets.values
+        else:
+            self.mah_metric_matrix = None 
 
     def __len__(self) -> int:
         """

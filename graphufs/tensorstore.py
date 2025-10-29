@@ -55,19 +55,20 @@ class PackedDataset(BaseDataset):
 
         logging.info("Initializing Gaussian noise...")
 
-        stacked_norm_inputs_path = os.path.join(
-            self.emulator.local_store_path,
-            "stacked-normalization", "inputs",
-            os.path.basename(self.emulator.norm_urls["atm"]["std"]),
-        )
+        #stacked_norm_inputs_path = os.path.join(
+        #    self.emulator.local_store_path,
+        #    "stacked-normalization", "inputs",
+        #    os.path.basename(self.emulator.norm_urls["atm"]["std"]),
+        #)
 
-        if not os.path.isdir(stacked_norm_inputs_path):
+        if not os.path.isdir(self.emulator.std_inputs_zarr):
             raise FileNotFoundError(
-                f"Stacked normalization statistics directory not found: {stacked_norm_inputs_path}"
+                f"Stacked input std statistics not found: {stacked_norm_inputs_path}"
             )
 
-        stddev_channels = xr.open_zarr(stacked_norm_inputs_path)
+        stddev_channels = xr.open_zarr(self.emulator.std_inputs_zarr)
         self.stddev_x = stddev_channels["inputs"].load()
+        self.stddev_x = self.stddev_x.fillna(0)
 
         # Build noise fraction mask
         omit_vars = [
@@ -108,9 +109,9 @@ class PackedDataset(BaseDataset):
             dask="allowed",
             output_dtypes=[x.dtype]
         )
-        
+         
         noise = noise * self.mask
-       
+         
         return x + noise
     
     def _init_mask(self):
