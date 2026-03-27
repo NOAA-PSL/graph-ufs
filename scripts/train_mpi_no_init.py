@@ -135,7 +135,8 @@ def train(remote_emulator, emulator, topo, missing_samples=None,):
             mpi_topo=topo,
             meta_inputs = meta_xinputs,
             meta_targets = meta_xtargets,
-            covariance=tds.mah_metric_matrix if tds.mah_metric_matrix is not None else None,            
+            covariance=tds.mah_metric_matrix,            
+            covariance_cholesky_factor_L = tds.mah_metric_matrix_cholesky_factor_L,
         )
 	
         # save weights
