@@ -72,4 +72,17 @@ However this is fine coz T7M was crazy and wrong anyway.
 [T2inf] This experiment was done to produce 6 months long lead time forecast
 using the last model checkpoint for the first two time stamps of the validation
 datetime. 
-Moved the R5 dataset back to its directory. 
+Moved the R5 dataset back to its directory.
+
+[T9M] Training the 24h, 1IC, coarseTop configuration using the Mahalanobis loss
+but with the space-dependent tendency covariance matrix. So this time the
+covariance matrix has the size (192, 384, 29, 29) as opposed to only (29, 29)
+matrix used earlier. It would be interesting to check how this works out. 
+
+[T10M] Training 24h-2IC-coarseTop configuration using the Mahalanobis loss. Note
+that the spatially averaged correlation matrix with the size (29, 29) is used
+here. 
+
+[T11M] Training 24h-1IC-fineTop configuration using the Mahalanobis loss with
+spatially averaged correlation matrix.  
+ 

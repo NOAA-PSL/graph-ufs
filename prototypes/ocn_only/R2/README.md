@@ -55,4 +55,21 @@ channels, i.e., noise_std_as_fraction = 0.005
 i.e., noise_std_as_fraction = 0.05
 
 [T8M] Same as T1M, i.e., dry run without any gaussian noise addition, but with
-mesh_size=6, i.e., 6 levels of mesh refinement just like in GraphCast.
+mesh_size=6, i.e., 6 levels of mesh refinement just like in GraphCast. I tried
+this following the new results from Josh's experiments with Anemoi where he was
+able to train a 6h emulator with success using the same data.
+
+[T9M] In this configuration, I'm using the same values of the hyperparameters
+that Josh used with Anemoi. I want to check (i) the total number of trainable 
+parameters, and (ii) the performance of the training. Below are the hyperparams
+values:
+latent size   : 512
+peak LR       : 1e-3
+hidden layers : 1
+weight decay  : 0.1
+gnn_msg_steps : 16
+mesh size     : 6
+batch size    : 16 
+
+Although Josh trained this for nearly 126 epochs by choosing 300_000 optim
+steps, I'm only training it for 64 epochs to see how things are evolving. 
