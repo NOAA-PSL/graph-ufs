@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from dask.distributed import LocalCluster, Client
-from emulator import OcnTrainer
+from prototypes.ocn_only.emulator import OcnTrainer
 from omegaconf import OmegaConf
 
 # Utility functions to understand the cluster
@@ -56,7 +56,12 @@ def print_worker_runtime_state(client: Client):
         print(f"{k}: pid={v['pid']} rss={v['rss_gb']:.3f} GB cpu_affinity={v['cpu_affinity']}")
     print("-" * 72)
 
-def cross_covariance(da: xr.DataArray, dim: str = "channels", norm: bool = False):
+def cross_covariance(da: xr.DataArray, 
+                     dim: str = "channels", 
+                     spatial_avg: bool = True,
+                     lat_dim: str = "lat", 
+                     lon_dim: str = "lon",
+                     norm: bool = False) -> xr.DataArray:
     """
     Calculates the cross-covariance or cross-correlation matrix for all pairs 
     along dim.
@@ -65,6 +70,9 @@ def cross_covariance(da: xr.DataArray, dim: str = "channels", norm: bool = False
         da (xr.DataArray): The input DataArray, which should be loaded into memory.
                            ('sample', 'lat', 'lon', 'channels').
         dim (str): The dimension along which variables are defined (e.g., "channels").
+        spatial_avg (bool): If True, spatially average the covariance/correlation.
+        lat_dim (str): Name of the latitude dimension.
+        lon_dim (str): Name of the longitude dimension.
         norm (bool): If true, compute correlation instead of covariance.
 
     Returns:
@@ -80,7 +88,7 @@ def cross_covariance(da: xr.DataArray, dim: str = "channels", norm: bool = False
         da1 = da_demeaned.rename({dim: f"{dim}_x"})
         da2 = da_demeaned.rename({dim: f"{dim}_y"})
         cov_map = xr.dot(da1, da2, dims="sample") / (n_samples - 1)
-        out_matrix = cov_map.mean(["lat", "lon"], skipna=True)
+        out_matrix = cov_map #.mean(["lat", "lon"], skipna=True)
 
     else:
         statistic = "correlation"
@@ -103,7 +111,10 @@ def cross_covariance(da: xr.DataArray, dim: str = "channels", norm: bool = False
         corr_map = xr.dot(da1, da2, dims="sample") / (n_samples - 1)
         
         # 4. Average the correlation map over spatial dimensions.
-        out_matrix = corr_map.mean(["lat", "lon"], skipna=True)
+        out_matrix = corr_map #.mean(["lat", "lon"], skipna=True)
+
+    if spatial_avg:
+        out_matrix = out_matrix.mean([lat_dim, lon_dim], skipna=True)
 
     out_matrix.attrs = {"description": f"tendency {statistic}"}
     
@@ -125,20 +136,23 @@ if __name__ == "__main__":
     parser.add_argument("--num_missing_samples", default=0, type=int, help="Number of additional missing samples")                                                                                                                            
     parser.add_argument("--norm", action="store_true", help="If set, compute correlation instead of covariance")
     parser.add_argument("--remove_seasonality", action="store_true", help="If set, remove seasonality before computing corr/cov")                                                                                                                      
+    parser.add_argument("--no_spatial_avg", action="store_true", help="If true, computes the space-dependent statistics")
     args = parser.parse_args()
  
     # Store and log
     prototype = args.prototype
     num_missing_samples = args.num_missing_samples
     norm = args.norm
+    spatial_avg = not args.no_spatial_avg 
     
     logging.basicConfig(stream=sys.stdout, level=logging.INFO)
     logging.info(f"prototype: {prototype}")
     logging.info(f"Num of missing samples: {num_missing_samples}")
     logging.info(f"Computing {'correlation' if args.norm else 'covariance'} matrix")
 
-    # Emulator 
-    config_trainer_path = f"./{prototype}/config.yaml"
+    # Emulator
+    home_dir = "/global/homes/n/nagarwal"
+    config_trainer_path = f"{home_dir}/graph-ufs/prototypes/ocn_only/{prototype}/config.yaml"
     trainer_config = OmegaConf.load(config_trainer_path)
     emulator = OcnTrainer(config=trainer_config)
     logging.info("Emulator object created")
@@ -164,9 +178,6 @@ if __name__ == "__main__":
    
     # subsample
     factor = int(target_lead_time / delta_t_data)
-    #steps_per_day = int(24 / target_lead_time)
-    #num_years = 20
-    #end_index = 365 * num_years * factor * steps_per_day if factor < 4 else None
     ds = ds.isel(sample=slice(None, None, factor)).astype("float32")
     logging.info("Targets subsampled")
 
@@ -196,7 +207,8 @@ if __name__ == "__main__":
     logging.info(f"Rechunked array in memory to have {samples_per_chunk} samples per chunk.") 
     
     logging.info("Building Dask computation graph for covariance...")
-    tendency_cov_lazy = cross_covariance(da, dim="channels", norm=norm)
+    tendency_cov_lazy = cross_covariance(da, dim="channels", spatial_avg=spatial_avg,
+                                         lat_dim="lat", lon_dim="lon", norm=norm)
     
     # --- Trigger Computation ---
     # The .compute() method tells Dask to execute the entire graph of tasks.
@@ -210,7 +222,11 @@ if __name__ == "__main__":
         
     # Save
     seasonality_suffix = "rm_seasonality" if args.remove_seasonality else "seasonality_intact"
-    output_file = f"./{prototype}/tendency_{name}_ocn_only_{emulator.target_lead_time}_{seasonality_suffix}.nc"
+    space_suffix = "spatially_averaged" if spatial_avg else "space_dependent" 
+    output_file = (
+        f"./tendency_{name}_ocn_only_{emulator.target_lead_time}"
+        f"_{seasonality_suffix}_{space_suffix}.nc"
+    )
     ds_out.to_netcdf(output_file)
     logging.info(f"Saved {name} matrix to {output_file}")
 
