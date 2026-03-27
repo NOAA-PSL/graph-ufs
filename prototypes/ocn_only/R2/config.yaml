@@ -1,6 +1,6 @@
 # === Experiment specific ===
 case: R2
-sub_expt: T8M
+sub_expt: T9M
 local_store_path: "/pscratch/sd/n/nagarwal/ocn-only/${case}"
 use_half_precision: false
 log_tensorboard: true
@@ -36,11 +36,11 @@ interfaces:
   land: []
 
 # === Training Hyperparameters ===
-gnn_msg_steps: 12
-latent_size: 256
+gnn_msg_steps: 16
+latent_size: 512
 mesh_size: 6
-lr_peak_value: 1e-4
-num_epochs: 40
+lr_peak_value: 1e-3
+num_epochs: 64
 
 # === Noise injection ===
 add_gauss_noise: false
