@@ -436,3 +436,62 @@ def search_nested_dict(data, key, value):
         if key in inner_dict and inner_dict[key] == value:
             results[idx] = inner_dict
     return list(results.keys()), results
+
+def safe_cholesky(matrix: np.ndarray) -> np.ndarray:
+    """
+    Safely computes the Cholesky decomposition.
+    
+    Checks for non-finite values (NaNs, Infs) first.
+    If finite, it tries the decomposition. If it fails
+    (not positive-definite), it also returns NaNs.
+    
+    Args:
+        matrix: Square matrix [..., n, n]
+    
+    Returns:
+        Lower triangular Cholesky factor, or NaN matrix if decomposition fails
+        """
+    # Check for any NaNs or Infs - return NaN matrix immediately
+    if not np.isfinite(matrix).all():
+        return np.full_like(matrix, np.nan)
+
+    # If it's finite, try the decomposition
+    try:
+        return np.linalg.cholesky(matrix)
+    except np.linalg.LinAlgError:
+        # Not positive definite - return NaN matrix
+        return np.full_like(matrix, np.nan)
+
+
+def cholesky_decomp(cov_matrix: xr.DataArray) -> xr.DataArray:
+    """
+    Performs Cholesky decomposition on a stack of covariance matrices.
+    
+    Handles NaN/Inf values and non-positive-definite matrices gracefully
+    by returning NaN matrices for those locations.
+    
+    Args:
+        cov_matrix (xr.DataArray): Stack of covariance matrices with 
+                                   dimensions [..., channels_x, channels_y]
+    
+    Returns:
+        xr.DataArray: Lower-triangular Cholesky factor (L) for each matrix.
+                     NaN where decomposition fails or input contains NaN/Inf.
+    """
+    # Get the names of the last two dimensions (the matrix)
+    matrix_dims = cov_matrix.dims[-2:]
+    print(f"Computing Cholesky decomposition over matrix dims: {matrix_dims}")
+
+    # Apply safe_cholesky over the stack
+    cholesky_L = xr.apply_ufunc(
+        safe_cholesky,
+        cov_matrix,
+        input_core_dims=[matrix_dims],
+        output_core_dims=[matrix_dims],
+        vectorize=True,  # Important: handles the stacking properly
+        dask="parallelized",
+        output_dtypes=[cov_matrix.dtype]
+    )
+
+    cholesky_L.attrs['description'] = 'Lower-triangular Cholesky factor (L)'
+    return cholesky_L

@@ -54,6 +54,7 @@ def optimize(
     meta_inputs=None,
     meta_targets=None,
     covariance=None,
+    covariance_cholesky_factor_L=None,
 ):
     """Optimize the model parameters by running through all optim_steps in data
 
@@ -83,7 +84,8 @@ def optimize(
         if hasattr(emulator, "ocn_input_variables") and hasattr(emulator, "atm_input_variables"):
             loss, diagnostics = predictor.loss_coupled(inputs, targets, weights=weights,
                     meta_inputs=meta_inputs, meta_targets=meta_targets,
-                    use_mahalanobis_loss=emulator.use_mahalanobis_loss, covariance=covariance)
+                    use_mahalanobis_loss=emulator.use_mahalanobis_loss,
+                    covariance=covariance, covariance_cholesky_factor_L=covariance_cholesky_factor_L)
         else:
             loss, diagnostics = predictor.loss(inputs, targets, weights=weights)
         return loss.mean(), diagnostics.mean(axis=0)

@@ -15,7 +15,7 @@ from xbatcher import BatchGenerator
 from graphcast.data_utils import extract_inputs_targets_forcings, extract_inputs_targets_forcings_coupled
 from graphcast.model_utils import dataset_to_stacked
 
-from .utils import get_channel_index
+from .utils import get_channel_index, cholesky_decomp
 from .emulator import ReplayEmulator
 from .coupledemulator import ReplayCoupledEmulator
 
@@ -66,10 +66,15 @@ class Dataset():
             preload_batch=preload_batch,
         )
         if emulator.use_mahalanobis_loss and emulator.mah_metric_file is not None:
-            self.mah_metric_matrix = xr.open_dataset(emulator.mah_metric_file,
-                engine="netcdf4").targets.values
+            da_mah_metric = xr.open_dataset(emulator.mah_metric_file, 
+                engine="netcdf4").targets
+            self.mah_metric_matrix = da_mah_metric.values
+            # Also perform the cholesky decomposition and store L 
+            cholesky_factor_L = cholesky_decomp(da_mah_metric)
+            self.mah_metric_matrix_cholesky_factor_L = cholesky_factor_L.values
         else:
             self.mah_metric_matrix = None 
+            self.mah_metric_matrix_cholesky_factor_L = None
 
     def __len__(self) -> int:
         """
@@ -385,7 +390,6 @@ class Dataset():
             if "batch" in xds:
                 xds = xds.drop_vars("batch")
             xds.to_zarr(path, compute=False, mode="w", consolidated=True)
-
 
 class PackedDataset():
     """Similar in style to the Dataset class, and to PyTorch, but no torch dependency
