@@ -8,8 +8,8 @@ import matplotlib.pyplot as plt
 if __name__ == "__main__":
 
     # Experiments
-    expts = ["T2M","T4M"]
-    expt_name = ["w/o-seasonality","with_seasonality"]
+    expts = ["T2M","T12M","T13M"]
+    expt_name = ["MLoss-original","MLoss-retrained1", "MLoss-retrained2"]
     
     expt_dir = "/pscratch/sd/n/nagarwal/ocn-only/R8/"
 
@@ -57,7 +57,7 @@ if __name__ == "__main__":
     #    list(l.get_label() for l in lines),
     #    loc="center right",
     #)
-    axs[0].legend(loc="center right")
+    axs[0].legend(loc="upper right")
     axs[1].legend(loc="upper right")
 
-    fig.savefig("figures/training_loss_T2M_T4M.jpeg", dpi=300)
+    fig.savefig("figures/training_loss_R8_T2M_T12M_T13M.jpeg", dpi=300)

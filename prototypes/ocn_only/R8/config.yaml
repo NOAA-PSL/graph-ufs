@@ -1,6 +1,6 @@
 # === Experiment specific ===
 case: R8
-sub_expt: T9M
+sub_expt: T13M
 local_store_path: "/pscratch/sd/n/nagarwal/ocn-only/${case}"
 use_half_precision: false
 log_tensorboard: true
@@ -59,6 +59,6 @@ num_epochs: 40
 
 # === loss related ===
 use_mahalanobis_loss: true
-homedir: "/global/homes/n/nagarwal/"
+tend_corr_dir: "/global/homes/n/nagarwal/graph-ufs/prototypes/ocn_only/tendency_correlations"
 #mah_metric_file: "${homedir}/graph-ufs/prototypes/ocn_only/tendency_correlations/tendency_correlation_ocn_only_${delta_t_model}_rm_seasonality.nc"
-mah_metric_file: "${homedir}/graph-ufs/prototypes/ocn_only/tendency_correlations/tendency_correlation_ocn_only_${delta_t_model}_rm_seasonality_space_dependent.nc"
+mah_metric_file: "${tend_corr_dir}/${delta_t_model}_tendency_forecast_error_correlation_ocn_only_${delta_t_model}-1IC-MLoss_emulator.nc"

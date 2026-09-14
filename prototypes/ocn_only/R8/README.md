@@ -78,6 +78,14 @@ Moved the R5 dataset back to its directory.
 but with the space-dependent tendency covariance matrix. So this time the
 covariance matrix has the size (192, 384, 29, 29) as opposed to only (29, 29)
 matrix used earlier. It would be interesting to check how this works out. 
+Diagnosis: some high-latitude grid cells have highly-correlated channels,
+making the per-location covariance matrix nearly singular there (condition
+number as high as ~1e6, worst case at lat=-64.8, vs ~55 for the global
+matrix used elsewhere in this directory). This doesn't fail Cholesky
+decomposition outright (still technically positive-definite) but can
+silently corrupt the loss/gradients via float32 inversion error. Follow-up
+work with a shrinkage-regularized covariance continues in R12 (which reuses
+this directory's preprocessed data).
 
 [T10M] Training 24h-2IC-coarseTop configuration using the Mahalanobis loss. Note
 that the spatially averaged correlation matrix with the size (29, 29) is used
@@ -85,4 +93,10 @@ here.
 
 [T11M] Training 24h-1IC-fineTop configuration using the Mahalanobis loss with
 spatially averaged correlation matrix.  
- 
+
+[T12M] Training 24h-1IC-coarseTop configuration using the Mahalanobis loss with
+the correlation matrix derived from 24 hour tendency forecast errors from the
+MSE-based Emulator. This is being done after the review of the manuscript. 
+
+[T13M] Same as T12M but here the tendency forecast errors are being drawn from
+the MLoss emulator, not the MSE-based emulator.
