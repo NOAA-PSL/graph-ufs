@@ -117,6 +117,7 @@ class OcnTrainer(FVCoupledEmulator):
         self.loss_weights_per_variable = self.config.get("loss_weights_per_variable", False)
         self.use_mahalanobis_loss = self.config.get("use_mahalanobis_loss", False)
         self.mah_metric_file = self.config.get("mah_metric_file", None)
+        self.mah_covariance_shrinkage = self.config.get("mah_covariance_shrinkage", 0.0)
 
         # === RNG Seeds ===
         self.grad_rng_seed = self.config.get("grad_rng_seed", 0)
