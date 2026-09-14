@@ -437,17 +437,50 @@ def search_nested_dict(data, key, value):
             results[idx] = inner_dict
     return list(results.keys()), results
 
-def safe_cholesky(matrix: np.ndarray) -> np.ndarray:
+def shrink_covariance(matrix: np.ndarray, shrinkage: float) -> np.ndarray:
     """
-    Safely computes the Cholesky decomposition.
-    
-    Checks for non-finite values (NaNs, Infs) first.
-    If finite, it tries the decomposition. If it fails
-    (not positive-definite), it also returns NaNs.
-    
+    Shrinks a covariance matrix towards its diagonal to improve conditioning.
+
+    Computes `(1 - shrinkage) * matrix + shrinkage * diag(diag(matrix))`, i.e.
+    a convex combination of the matrix with a diagonal target that keeps each
+    channel's own variance but zeroes out cross-channel correlation. This is
+    the standard fix for covariance matrices that are ill-conditioned because
+    some variables are nearly collinear (e.g. highly-correlated channels at
+    high latitudes): shrinking pulls the smallest eigenvalues away from zero
+    without materially disturbing well-conditioned entries when `shrinkage` is
+    small. See Ledoit & Wolf (2004), "A well-conditioned estimator for
+    large-dimensional covariance matrices."
+
     Args:
         matrix: Square matrix [..., n, n]
-    
+        shrinkage: Blend factor in [0, 1]. 0 leaves the matrix untouched;
+            1 collapses it to a purely diagonal matrix.
+
+    Returns:
+        Shrunk covariance matrix, same shape as input.
+    """
+    if shrinkage == 0.0:
+        return matrix
+    diag_part = np.zeros_like(matrix)
+    idx = np.arange(matrix.shape[-1])
+    diag_part[..., idx, idx] = matrix[..., idx, idx]
+    return (1.0 - shrinkage) * matrix + shrinkage * diag_part
+
+
+def safe_cholesky(matrix: np.ndarray, shrinkage: float = 0.0) -> np.ndarray:
+    """
+    Safely computes the Cholesky decomposition.
+
+    Checks for non-finite values (NaNs, Infs) first.
+    If finite, optionally shrinks the matrix towards its diagonal to improve
+    conditioning (see `shrink_covariance`), then tries the decomposition. If
+    it still fails (not positive-definite), it also returns NaNs.
+
+    Args:
+        matrix: Square matrix [..., n, n]
+        shrinkage: Blend factor in [0, 1] passed to `shrink_covariance` before
+            decomposition. 0 (default) reproduces the original behavior.
+
     Returns:
         Lower triangular Cholesky factor, or NaN matrix if decomposition fails
         """
@@ -455,37 +488,49 @@ def safe_cholesky(matrix: np.ndarray) -> np.ndarray:
     if not np.isfinite(matrix).all():
         return np.full_like(matrix, np.nan)
 
+    # Decompose in float64 regardless of input dtype: shrinkage/Cholesky on
+    # poorly-conditioned matrices lose most of float32's ~7 digits of
+    # precision, so accumulate in float64 and cast back at the end.
+    matrix64 = shrink_covariance(matrix.astype(np.float64), shrinkage)
+
     # If it's finite, try the decomposition
     try:
-        return np.linalg.cholesky(matrix)
+        return np.linalg.cholesky(matrix64).astype(matrix.dtype)
     except np.linalg.LinAlgError:
         # Not positive definite - return NaN matrix
         return np.full_like(matrix, np.nan)
 
 
-def cholesky_decomp(cov_matrix: xr.DataArray) -> xr.DataArray:
+def cholesky_decomp(cov_matrix: xr.DataArray, shrinkage: float = 0.0) -> xr.DataArray:
     """
     Performs Cholesky decomposition on a stack of covariance matrices.
-    
+
     Handles NaN/Inf values and non-positive-definite matrices gracefully
     by returning NaN matrices for those locations.
-    
+
     Args:
-        cov_matrix (xr.DataArray): Stack of covariance matrices with 
+        cov_matrix (xr.DataArray): Stack of covariance matrices with
                                    dimensions [..., channels_x, channels_y]
-    
+        shrinkage (float): Blend factor in [0, 1] shrinking each matrix
+            towards its diagonal before decomposition (see
+            `shrink_covariance`), to counter ill-conditioning from
+            highly-correlated channels (e.g. at high latitudes in a
+            spatially-varying covariance). 0 (default) applies no shrinkage.
+
     Returns:
         xr.DataArray: Lower-triangular Cholesky factor (L) for each matrix.
                      NaN where decomposition fails or input contains NaN/Inf.
     """
     # Get the names of the last two dimensions (the matrix)
     matrix_dims = cov_matrix.dims[-2:]
-    print(f"Computing Cholesky decomposition over matrix dims: {matrix_dims}")
+    print(f"Computing Cholesky decomposition over matrix dims: {matrix_dims} "
+          f"(shrinkage={shrinkage})")
 
     # Apply safe_cholesky over the stack
     cholesky_L = xr.apply_ufunc(
         safe_cholesky,
         cov_matrix,
+        kwargs={"shrinkage": shrinkage},
         input_core_dims=[matrix_dims],
         output_core_dims=[matrix_dims],
         vectorize=True,  # Important: handles the stacking properly
@@ -494,4 +539,5 @@ def cholesky_decomp(cov_matrix: xr.DataArray) -> xr.DataArray:
     )
 
     cholesky_L.attrs['description'] = 'Lower-triangular Cholesky factor (L)'
+    cholesky_L.attrs['shrinkage'] = shrinkage
     return cholesky_L

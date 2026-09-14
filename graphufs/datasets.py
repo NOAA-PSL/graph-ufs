@@ -66,11 +66,12 @@ class Dataset():
             preload_batch=preload_batch,
         )
         if emulator.use_mahalanobis_loss and emulator.mah_metric_file is not None:
-            da_mah_metric = xr.open_dataset(emulator.mah_metric_file, 
+            da_mah_metric = xr.open_dataset(emulator.mah_metric_file,
                 engine="netcdf4").targets
             self.mah_metric_matrix = da_mah_metric.values
-            # Also perform the cholesky decomposition and store L 
-            cholesky_factor_L = cholesky_decomp(da_mah_metric)
+            # Also perform the cholesky decomposition and store L
+            shrinkage = getattr(emulator, "mah_covariance_shrinkage", 0.0)
+            cholesky_factor_L = cholesky_decomp(da_mah_metric, shrinkage=shrinkage)
             self.mah_metric_matrix_cholesky_factor_L = cholesky_factor_L.values
         else:
             self.mah_metric_matrix = None 
