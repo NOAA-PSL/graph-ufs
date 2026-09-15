@@ -84,7 +84,7 @@ def train(remote_emulator, emulator, topo, missing_samples=None,):
         mpi_topo=topo,
     )
 
-    loss_name = f"{emulator.local_store_path}/loss.nc"
+    loss_name = f"{emulator.output_store_path}/loss.nc"
     if topo.is_root:
         emulator.save_checkpoint(params, id=0)
         if os.path.exists(loss_name):

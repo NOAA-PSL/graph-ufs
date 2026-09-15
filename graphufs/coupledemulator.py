@@ -42,6 +42,10 @@ class ReplayCoupledEmulator:
     stacked_norm = dict()
     wb2_obs_url = ""
     local_store_path = None     # directory where zarr file, model weights etc are stored
+    output_dir = None           # where model checkpoints/loss get written, if different from
+                                 # local_store_path (e.g. an experiment reusing another one's
+                                 # preprocessed data via local_store_path, but not wanting to
+                                 # write its own outputs into that other experiment's directory)
     cache_data = None           # cache or use zarr dataset downloaded from GCS on disk
 
     # these could be moved to a yaml file later
@@ -300,8 +304,12 @@ class ReplayCoupledEmulator:
         return os.path.join(self.local_store_path, "data.zarr")
 
     @property
+    def output_store_path(self):
+        return self.output_dir if self.output_dir else self.local_store_path
+
+    @property
     def checkpoint_dir(self):
-        return os.path.join(self.local_store_path, "models")
+        return os.path.join(self.output_store_path, "models")
    
     def open_atm_dataset(self, **kwargs):
         xds = xr.open_zarr(self.data_url["atm"], storage_options={"token": "anon"}, **kwargs)
