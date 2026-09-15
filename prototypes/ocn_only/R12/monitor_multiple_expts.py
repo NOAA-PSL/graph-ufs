@@ -7,13 +7,13 @@ import matplotlib.pyplot as plt
 
 if __name__ == "__main__":
 
-    # Experiments -- R12 reuses R8's local_store_path (see R12/config.yaml),
-    # so outputs live there. Compares the global-covariance baseline (T13M)
-    # against the location-based-covariance run (T1_spacecov).
-    expts = ["T13M", "T1_spacecov"]
+    # Compares the global-covariance baseline (R8/T13M) against the
+    # location-based-covariance run (R12/T1M). R12 only reuses R8's
+    # preprocessed input data (see R12/config.yaml's local_store_path) --
+    # its own model/loss/tensorboard outputs live under R12's output_dir,
+    # so each experiment needs its own directory here.
+    expts = [("R8", "T13M"), ("R12", "T1M")]
     expt_name = ["MLoss-global-cov", "MLoss-space-dependent-cov"]
-
-    expt_dir = "/pscratch/sd/n/nagarwal/ocn-only/R8/"
 
     # Initialize subplots
     fig, axs = plt.subplots(1,2, figsize=(10,4), constrained_layout=True)
@@ -21,8 +21,8 @@ if __name__ == "__main__":
     axLR = axs[0].twinx()
 
     # Loop over the experiments
-    for i, expt in enumerate(expts):
-        ds = xr.load_dataset(f"{expt_dir}/loss_{expt}.nc")
+    for i, (expt_dir, expt) in enumerate(expts):
+        ds = xr.load_dataset(f"/pscratch/sd/n/nagarwal/ocn-only/{expt_dir}/loss_{expt}.nc")
         
         # left panel
         l1 = ds.loss.plot(ax=axs[0], color=f"C{i}", 
@@ -62,4 +62,4 @@ if __name__ == "__main__":
     axs[0].legend(loc="upper right")
     axs[1].legend(loc="upper right")
 
-    fig.savefig("figures/training_loss_R12_T13M_vs_T1_spacecov.jpeg", dpi=300)
+    fig.savefig("figures/training_loss_R8_T13M_vs_R12_T1M.jpeg", dpi=300)

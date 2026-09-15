@@ -1,16 +1,21 @@
 # === Experiment specific ===
 case: R12
-sub_expt: T1_spacecov
+sub_expt: T1M
 # Reuses R8's preprocessed training/validation data (identical interfaces,
 # variables, delta_t) instead of reprocessing ~1.2TB from scratch -- only the
-# Mahalanobis loss covariance differs between R8 and R12. Model checkpoints,
-# loss files, inference output, and tensorboard logs all land under R8's
-# tree, disambiguated by `sub_expt` (T1_spacecov), matching how R8 itself
-# already separates T1M..T13M within one local_store_path.
+# Mahalanobis loss covariance differs between R8 and R12, so local_store_path
+# points at R8's tree for INPUT DATA ONLY (data.zarr/training/validation).
+# `output_dir` below overrides where model checkpoints, loss, and tensorboard
+# logs get written, so R12's own outputs stay under R12's directory instead
+# of landing in R8's (see checkpoint_dir/output_store_path in
+# graphufs/coupledemulator.py). The first run here (T1_spacecov, completed
+# 2026-09-14) predates this override and had to be moved after the fact --
+# see R12/README.md.
 local_store_path: "/pscratch/sd/n/nagarwal/ocn-only/R8"
+output_dir: "/pscratch/sd/n/nagarwal/ocn-only/${case}"
 use_half_precision: false
 log_tensorboard: true
-logdir: "${local_store_path}/tensorboard/${sub_expt}"
+logdir: "${output_dir}/tensorboard/${sub_expt}"
 
 # === Time Configuration Overrides ===
 delta_t_model: 24h

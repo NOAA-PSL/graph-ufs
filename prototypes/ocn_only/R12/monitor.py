@@ -6,9 +6,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 if __name__ == "__main__":
-    # R12 reuses R8's local_store_path (see R12/config.yaml), so outputs live there
-    _expt = "R8"
-    _subexpt = "T1_spacecov"
+    # R12's own output_dir (see R12/config.yaml) -- only preprocessed input
+    # data is reused from R8, not model/loss/tensorboard outputs
+    _expt = "R12"
+    _subexpt = "T1M"
 
     ds = xr.load_dataset(f"/pscratch/sd/n/nagarwal/ocn-only/{_expt}/loss_{_subexpt}.nc")
 

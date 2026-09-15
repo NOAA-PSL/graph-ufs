@@ -5,9 +5,22 @@ spatially-averaged (nchannels, nchannels) matrix. Everything else (interfaces,
 input/target/forcing variables, hyperparameters, delta_t) matches R8's
 current (T13M) configuration -- only the loss's covariance matrix differs, so
 `local_store_path` in config.yaml points at R8's existing preprocessed
-data/model/inference/tensorboard tree instead of reprocessing it, and
-`sub_expt` is used to keep R12's outputs from colliding with R8's own T*
-runs.
+training/validation data instead of reprocessing it (~1.2TB). Model
+checkpoints, loss, and tensorboard logs are controlled separately by
+`output_dir`, which points at R12's own directory
+(`/pscratch/sd/n/nagarwal/ocn-only/R12`) so they don't land in R8's tree.
+`sub_expt` disambiguates repeated R12 runs within that output_dir, the same
+way R8 uses it for its own T1M..T13M runs.
+
+**Note on T1_spacecov/T1M:** the `output_dir` override above didn't exist
+yet when the first run (below) was launched, so `checkpoint_dir`/loss.nc
+followed `local_store_path` and were written into R8's directory as
+`R8/models` and `R8/loss.nc`, alongside R8's own T13M outputs. They were
+moved by hand afterwards into
+`R12/models_T1M`/`R12/loss_T1M.nc`/`R12/tensorboard/T1M` and the run
+renamed from its original sub_expt (`T1_spacecov`) to `T1M`, to match this
+directory's own T-numbering and keep it out of R8's tree. `output_dir` now
+makes this automatic for future R12 runs.
 
 This was tried once before as R8/T9M using the raw space-dependent tendency
 covariance (`tendency_correlation_ocn_only_24h_rm_seasonality_space_dependent.nc`),
@@ -39,6 +52,22 @@ uniformly across all grid cells in `cholesky_decomp()`, which is called once
 the training loop.
 
 # Configurations:
-[T1_spacecov] First training with the space-dependent covariance and
+[T1M] (originally launched as sub_expt T1_spacecov, renamed after the fact --
+see note above) First training with the space-dependent covariance and
 shrinkage regularization (alpha=0.05) applied. Uses R8/T13M's architecture
 and R8's preprocessed data.
+
+Completed 2026-09-14 (job 58212660, 4 nodes x 4 GPUs, ~4h49m of the 24h
+walltime budget, all 40 epochs, exit code 0). Training loss dropped from
+1.076 (epoch 1) to 0.437 (epoch 40); validation loss from 0.974 to 0.569,
+plateauing somewhat over the last ~10 epochs as the LR schedule decayed to
+~0 -- comparable in shape to R8's other Mahalanobis runs, nothing alarming.
+Checkpoints (`model_0.npz`..`model_40.npz`) and the tensorboard log are in
+`models_T1M/` and `tensorboard/T1M/` respectively.
+
+One thing worth checking before trusting it for anything: `g_norm` logged
+as NaN for every optimization step across all 40 epochs, not just at
+ill-conditioned grid cells. Since `loss`/`loss_train`/`loss_valid` are all
+finite and behaved normally throughout, this looks like a gradient-norm
+*logging* issue rather than the shrinkage fix failing to do its job, but it
+hasn't been root-caused yet.
