@@ -1,4 +1,3 @@
-from mpi4py import MPI
 import time
 import logging
 import os
@@ -10,17 +9,16 @@ import yaml
 import argparse
 
 from omegaconf import OmegaConf
+from mpi4py import MPI
 from graphufs.batchloader import XBatchLoader, MPIXBatchLoader
 from graphufs.datasets import Dataset
 from graphufs.log import setup_simple_log
 from graphufs.progress import ProgressTracker
 from graphufs.mpi import MPITopology
-
 # in the future this could be generalized to where it just takes the following as inputs
 from emulator import OcnPreprocessor
 
 def setup(mode, emulator, config, topo, level=logging.INFO):
-
     if topo.is_root:
         pt = ProgressTracker(json_file_path=f"{topo.log_dir}/restart.{topo.rank:02d}.{topo.size:02d}.json")
     topo.comm.barrier()
@@ -61,7 +59,7 @@ def submit_slurm_job(config, prototype):
 
     the_code = \
         f"from preprocess import store_batch_of_samples\n"+\
-        f"store_batch_of_samples('training', '{prototype}')\n" +\
+        f"store_batch_of_samples('training', '{prototype}')\n"+\
         f"store_batch_of_samples('validation', '{prototype}')\n"
 
     slurm_dir = f"{config.local_store_path}/slurm"
