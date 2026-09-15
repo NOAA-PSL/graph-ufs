@@ -47,7 +47,8 @@ class BaseOcnEmulator(FVCoupledEmulator):
         self.norm_urls = self.config["norm_urls"]
         self.wb2_obs_url = self.config["wb2_obs_url"]
         self.no_cache_data = self.config["no_cache_data"]
-        self.local_store_path = self.config.get("local_store_path")	
+        self.local_store_path = self.config.get("local_store_path")
+        self.output_dir = self.config.get("output_dir", None)
 
         # === Variable Definitions ===
         self.atm_input_variables = tuple(self.config["atm_input_variables"])
