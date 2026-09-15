@@ -45,8 +45,8 @@ def predict(
     logging.info("Done Compiling Predict")
 
     hours = int(emulator.forecast_duration.value / 1e9 / 3600)
-    pname = f"{emulator.local_store_path}/inference/{batchloader.dataset.mode}/graphufs.{hours}h.zarr"
-    tname = f"{emulator.local_store_path}/inference/{batchloader.dataset.mode}/replay.{hours}h.zarr"
+    pname = f"{emulator.output_store_path}/inference/{batchloader.dataset.mode}/graphufs.{hours}h.zarr"
+    tname = f"{emulator.output_store_path}/inference/{batchloader.dataset.mode}/replay.{hours}h.zarr"
 
     n_steps = len(batchloader)
     with open(mpi_topo.progress_file, "a") as f:
@@ -107,11 +107,11 @@ def predict(
         progress_bar.close()
 
 
-def inference(emulator):
+def inference(emulator, mode):
 
     vds = Dataset(
         emulator,
-        mode="validation",
+        mode=mode,
         preload_batch=False,
     )
 
@@ -145,17 +145,20 @@ def inference(emulator):
 
 parser = argparse.ArgumentParser(description="Ocn-only Training")
 parser.add_argument("--prototype", required=True, help="Prototype Name")  # e.g., "R1"
+parser.add_argument("--mode", type=str, default="validation", help="dataset to use for inference: training/validation/testing")
 
 if __name__ == "__main__":
     args = parser.parse_args()
     prototype = args.prototype
-    
+    mode = args.mode
+
     # initialize topology
     script_dir = os.path.dirname(os.path.abspath(__file__)) 
     config_path = f"{script_dir}/{prototype}/config.yaml"
     prototype_config = OmegaConf.load(config_path)
-    topo = MPITopology(log_dir=f"{prototype_config.local_store_path}/logs/inference") 
+    output_store_path = prototype_config.get("output_dir", None) or prototype_config.local_store_path
+    topo = MPITopology(log_dir=f"{output_store_path}/logs/inference")
    
     # instantiate the evaluator 
     emulator = OcnEvaluator(prototype, mpi_rank=topo.rank, mpi_size=topo.size)
-    inference(emulator)
+    inference(emulator, mode)
